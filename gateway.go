@@ -32,7 +32,12 @@ type gatewayBot struct {
 	// Recommended number of shards to use when connecting
 	Shards int `json:"shards"`
 	// Information on the current session start limit
-	SessionStartLimit int `json:"session_start_limit"`
+	SessionStartLimit struct {
+		Total          int `json:"total"`
+		Remaining      int `json:"remaining"`
+		ResetAfter     int `json:"reset_after"`
+		MaxConcurrency int `json:"max_concurrency"`
+	} `json:"session_start_limit"`
 }
 
 func (o *gatewayBot) fillFromJson(json []byte) error {
