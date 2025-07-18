@@ -3,23 +3,29 @@
 layout: home
 
 hero:
-  name: "Yada - yada docs"
-  text: "Yet another discord API library for go lang."
-  tagline: My great project tagline
+  name: "Yada"
+  text: "Yet Another Discord API Library for Go"
+  tagline: "Fast, feature-rich, and easy to use."
   actions:
     - theme: brand
-      text: Markdown Examples
-      link: /markdown-examples
+      text: Get Started
+      link: /introduction/getting-started
     - theme: alt
-      text: API Examples
-      link: /api-examples
+      text: What is Yada?
+      link: /introduction/what-is-yada
 
 features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+  - title: Blazing Fast
+    details: Yada is designed with performance in mind, making your bots respond quickly and efficiently.
+  - title: Extremely Feature-Rich
+    details: From simple message handling to advanced gateway and REST integrations, Yada provides everything you need.
+  - title: Easy to Use
+    details: Clean, intuitive Go APIs let you build and scale Discord bots effortlessly.
+  - title: Modern & Maintained
+    details: Built for Discord's latest API versions and actively maintained to keep up with Discord changes.
+  - title: Lightweight Design
+    details: Minimal dependencies with a focus on Go idiomatic design for production-ready bots.
+  - title: Open Source
+    details: Completely open source under BSD-3-Clause for full freedom in your projects.
 ---
 

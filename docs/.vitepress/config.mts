@@ -1,28 +1,49 @@
 import { defineConfig } from 'vitepress'
 
-// https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "Yada - yada docs",
-  description: "Yet another discord API library for go lang.",
-  themeConfig: {
-    // https://vitepress.dev/reference/default-theme-config
-    nav: [
-      { text: 'Home', link: '/' },
-      { text: 'Examples', link: '/markdown-examples' }
-    ],
+  title: 'Yada',
+  description: 'Yet Another Discord API library for Go.',
 
-    sidebar: [
-      {
-        text: 'Examples',
-        items: [
-          { text: 'Markdown Examples', link: '/markdown-examples' },
-          { text: 'Runtime API Examples', link: '/api-examples' }
+  locales: {
+    root: {
+      label: 'English',
+      lang: 'en',
+      link: '/',
+      themeConfig: {
+        nav: [
+          { text: 'Home', link: '/' },
+          { text: 'Introduction', link: 'introduction/what-is-yada' }
+        ],
+        sidebar: [
+          {
+            text: 'Introduction',
+            items: [
+              { text: 'What is Yada?', link: 'introduction/what-is-yada' },
+              { text: 'Getting Started', link: 'introduction/getting-started' }
+            ]
+          }
         ]
       }
-    ],
-
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/vuejs/vitepress' }
-    ]
+    },
+    fr: {
+      label: 'Français',
+      lang: 'fr',
+      link: '/fr/',
+      themeConfig: {
+        nav: [
+          { text: 'Accueil', link: '/fr/' },
+          { text: 'Introduction', link: '/fr/introduction/what-is-yada' }
+        ],
+        sidebar: [
+          {
+            text: 'Introduction',
+            items: [
+              { text: 'Qu\'est-ce que Yada ?', link: '/fr/introduction/what-is-yada' },
+              { text: 'Guide de démarrage', link: '/fr/introduction/getting-started' }
+            ]
+          }
+        ]
+      }
+    }
   }
 })
