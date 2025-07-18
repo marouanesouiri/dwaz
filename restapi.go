@@ -21,20 +21,20 @@ import "io"
 
 // callWithData represents a REST API request returning typed decoded data.
 type callWithData[T any] struct {
-	requester       *requester
-	logger          Logger
-	method          string
-	endpoint        string
-	body            []byte
-	authNotRequired bool
-	parse           func([]byte) (*T, error)
+	requester     *requester
+	logger        Logger
+	method        string
+	endpoint      string
+	body          []byte
+	authWithToken bool
+	parse         func([]byte) (*T, error)
 }
 
-// wait executes the request synchronously and parses the response.
-func (c *callWithData[T]) wait() (*T, error) {
+// Wait executes the request synchronously and parses the response.
+func (c *callWithData[T]) Wait() (*T, error) {
 	c.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
 
-	res, err := c.requester.do(c.method, c.endpoint, c.body, c.authNotRequired)
+	res, err := c.requester.do(c.method, c.endpoint, c.body, c.authWithToken)
 	if err != nil {
 		c.logger.Error(
 			"Request failed for endpoint " + c.method + c.endpoint + ": " + err.Error(),
@@ -63,9 +63,10 @@ func (c *callWithData[T]) wait() (*T, error) {
 	return data, nil
 }
 
-// submit runs the request asynchronously and calls the provided callback.
-func (c *callWithData[T]) submit(callback func(*T, error)) {
-	go func() { callback(c.wait()) }()
+// Submit runs the request asynchronously and calls the provided callback.
+func (c *callWithData[T]) Submit(callback func(*T, error)) {
+	// TODO: run callback using a worker pool
+	go func() { callback(c.Wait()) }()
 }
 
 /***********************
@@ -74,19 +75,19 @@ func (c *callWithData[T]) submit(callback func(*T, error)) {
 
 // callWithNoData represents a REST API request with no data parsing.
 type callWithNoData struct {
-	requester       *requester
-	logger          Logger
-	method          string
-	endpoint        string
-	body            []byte
-	authNotRequired bool
+	requester     *requester
+	logger        Logger
+	method        string
+	endpoint      string
+	body          []byte
+	authWithToken bool
 }
 
-// wait executes the request synchronously.
-func (c *callWithNoData) wait() error {
+// Wait executes the request synchronously.
+func (c *callWithNoData) Wait() error {
 	c.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
 
-	res, err := c.requester.do(c.method, c.endpoint, c.body, c.authNotRequired)
+	res, err := c.requester.do(c.method, c.endpoint, c.body, c.authWithToken)
 	if err != nil {
 		c.logger.Error(
 			"Request failed for endpoint " + c.method + c.endpoint + ": " + err.Error(),
@@ -99,9 +100,10 @@ func (c *callWithNoData) wait() error {
 	return nil
 }
 
-// submit runs the request asynchronously and calls the provided callback.
-func (c *callWithNoData) submit(callback func(error)) {
-	go func() { callback(c.wait()) }()
+// Submit runs the request asynchronously and calls the provided callback.
+func (c *callWithNoData) Submit(callback func(error)) {
+	// TODO: run callback using a worker pool
+	go func() { callback(c.Wait()) }()
 }
 
 /***********************
@@ -136,11 +138,11 @@ func newRestApi(requester *requester, token string, logger Logger) *restApi {
 // getGateway returns a callWithData for the GET /gateway endpoint.
 func (r *restApi) getGateway() *callWithData[gateway] {
 	return &callWithData[gateway]{
-		requester:       r.requester,
-		logger:          r.logger,
-		method:          "GET",
-		endpoint:        "/gateway",
-		authNotRequired: true,
+		requester:     r.requester,
+		logger:        r.logger,
+		method:        "GET",
+		endpoint:      "/gateway",
+		authWithToken: false,
 		parse: func(b []byte) (*gateway, error) {
 			obj := gateway{}
 			return &obj, obj.fillFromJson(b)
@@ -151,10 +153,11 @@ func (r *restApi) getGateway() *callWithData[gateway] {
 // getGatewayBot returns a callWithData for the GET /gateway/bot endpoint.
 func (r *restApi) getGatewayBot() *callWithData[gatewayBot] {
 	return &callWithData[gatewayBot]{
-		requester: r.requester,
-		logger:    r.logger,
-		method:    "GET",
-		endpoint:  "/gateway/bot",
+		requester:     r.requester,
+		logger:        r.logger,
+		method:        "GET",
+		endpoint:      "/gateway/bot",
+		authWithToken: true,
 		parse: func(b []byte) (*gatewayBot, error) {
 			obj := gatewayBot{}
 			return &obj, obj.fillFromJson(b)
