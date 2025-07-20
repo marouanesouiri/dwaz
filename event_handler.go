@@ -14,6 +14,36 @@
 package yada
 
 /*****************************
+ *   READY Handler
+ *****************************/
+
+// readyHandlers manages all registered handlers for MESSAGE_CREATE events.
+type readyHandlers struct {
+	logger   Logger
+	handlers []func(*ReadyEvent)
+}
+
+// handleEvent parses the READY event data and calls each registered handler.
+func (h *readyHandlers) handleEvent(shardID int, data []byte) {
+	evt := ReadyEvent{ShardsID: shardID}
+	if err := evt.fillFromJson(data); err != nil {
+		h.logger.Error("readyHandlers: Failed parsing event data")
+		return
+	}
+
+	for _, handler := range h.handlers {
+		handler(&evt)
+	}
+}
+
+// addHandler registers a new READY handler function.
+//
+// This method is not thread-safe.
+func (h *readyHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(*ReadyEvent)))
+}
+
+/*****************************
  *   MESSAGE_CREATE Handler
  *****************************/
 
