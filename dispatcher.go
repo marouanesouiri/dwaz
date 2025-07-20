@@ -109,7 +109,7 @@ func (d *dispatcher) OnMessageCreate(h func(*MessageCreateEvent)) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	hm, ok := d.handlersManagers[key].(*messageCreateHandlers)
+	hm, ok := d.handlersManagers[key]
 	if !ok {
 		hm = &messageCreateHandlers{logger: d.logger}
 		d.handlersManagers[key] = hm
@@ -131,7 +131,7 @@ func (d *dispatcher) OnMessageDelete(h func(*MessageDeleteEvent)) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	hm, ok := d.handlersManagers[key].(*messageDeleteHandlers)
+	hm, ok := d.handlersManagers[key]
 	if !ok {
 		hm = &messageDeleteHandlers{logger: d.logger}
 		d.handlersManagers[key] = hm
