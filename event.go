@@ -15,6 +15,15 @@ package yada
 
 import "github.com/bytedance/sonic"
 
+// ReadyCreateEvent Shard is ready
+type ReadyEvent struct {
+	ShardsID int // shard that dispatched this event
+}
+
+func (e *ReadyEvent) fillFromJson(json []byte) error {
+	return sonic.Unmarshal(json, e)
+}
+
 // MessageCreateEvent Message was created
 type MessageCreateEvent struct {
 	ShardsID int // shard that dispatched this event
