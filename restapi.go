@@ -13,7 +13,11 @@
 
 package yada
 
-import "io"
+import (
+	"errors"
+	"io"
+	"net/http"
+)
 
 /***********************
  *	  callWithData	   *
@@ -42,6 +46,11 @@ func (c *callWithData[T]) Wait() (*T, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusUnauthorized {
+		c.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": Invalid Token")
+		return nil, errors.New("Invalid Token !!")
+	}
 
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
