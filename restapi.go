@@ -140,6 +140,18 @@ func newRestApi(requester *requester, token string, logger Logger) *restApi {
 	}
 }
 
+// Shutdown call requester.Shutdown() which gracefully closes the underlying HTTP client's idle connections.
+//
+// It should be called before exiting your application to ensure
+// that any idle connections in the HTTP transport are closed cleanly,
+// preventing resource leaks and keeping a clean shutdown process.
+func (r *restApi) Shutdown() {
+	r.logger.Info("RestAPI shutting down")
+	r.requester.Shutdown()
+	r.logger = nil
+	r.requester = nil
+}
+
 /***********************
  *   Gateway Endpoint  *
  ***********************/
@@ -160,15 +172,15 @@ func (r *restApi) getGateway() *callWithData[gateway] {
 }
 
 // getGatewayBot returns a callWithData for the GET /gateway/bot endpoint.
-func (r *restApi) getGatewayBot() *callWithData[gatewayBot] {
-	return &callWithData[gatewayBot]{
+func (r *restApi) GetGatewayBot() *callWithData[GatewayBot] {
+	return &callWithData[GatewayBot]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
 		endpoint:      "/gateway/bot",
 		authWithToken: true,
-		parse: func(b []byte) (*gatewayBot, error) {
-			obj := gatewayBot{}
+		parse: func(b []byte) (*GatewayBot, error) {
+			obj := GatewayBot{}
 			return &obj, obj.fillFromJson(b)
 		},
 	}

@@ -328,7 +328,7 @@ func (s *Shard) reconnect() {
 	backoff := time.Second
 	for {
 		time.Sleep(backoff)
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		err := s.connect(ctx)
 		cancel()
 
@@ -347,4 +347,18 @@ func (s *Shard) reconnect() {
 // Latency returns the current heartbeat latency in milliseconds
 func (s *Shard) Latency() int64 {
 	return atomic.LoadInt64(&s.latency)
+}
+
+// Shutdown cleanly closes the shard's websocket connection.
+//
+// Call this when you want to stop the shard gracefully.
+func (s *Shard) Shutdown() error {
+	if s.conn != nil {
+		s.logger.Info("Shard " + strconv.Itoa(s.shardID) + " shutting down")
+		return s.conn.Close()
+	}
+	s.conn = nil
+	s.logger = nil
+	s.dispatcher = nil
+	return nil
 }

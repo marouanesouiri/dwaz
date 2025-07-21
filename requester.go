@@ -130,6 +130,19 @@ func newRequester(client *http.Client, token string, logger Logger) *requester {
 	}
 }
 
+// Shutdown gracefully closes the underlying HTTP client's idle connections.
+//
+// It should be called before exiting your application to ensure
+// that any idle connections in the HTTP transport are closed cleanly,
+// preventing resource leaks and keeping a clean shutdown process.
+func (r *requester) Shutdown() {
+	if r.client != nil {
+		if tr, ok := r.client.Transport.(interface{ CloseIdleConnections() }); ok {
+			tr.CloseIdleConnections()
+		}
+	}
+}
+
 // updateBucket updates bucket state from headers.
 func (r *requester) updateBucket(b *ratelimitBucket, h http.Header) {
 	b.Lock()
