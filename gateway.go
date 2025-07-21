@@ -315,8 +315,8 @@ func (o *gateway) fillFromJson(json []byte) error {
 	return sonic.Unmarshal(json, o)
 }
 
-// gatewayBot is Discord Gateway Bot.
-type gatewayBot struct {
+// GatewayBot is Discord Gateway Bot.
+type GatewayBot struct {
 	// WSS URL that can be used for connecting to the Gateway
 	URL string `json:"url"`
 	// Recommended number of shards to use when connecting
@@ -330,6 +330,6 @@ type gatewayBot struct {
 	} `json:"session_start_limit"`
 }
 
-func (o *gatewayBot) fillFromJson(json []byte) error {
+func (o *GatewayBot) fillFromJson(json []byte) error {
 	return sonic.Unmarshal(json, o)
 }
