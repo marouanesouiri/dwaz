@@ -17,6 +17,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+
+	"github.com/bytedance/sonic"
 )
 
 /***********************
@@ -156,9 +158,20 @@ func (r *restApi) Shutdown() {
  *   Gateway Endpoint  *
  ***********************/
 
-// getGateway returns a callWithData for the GET /gateway endpoint.
-func (r *restApi) getGateway() *callWithData[gateway] {
-	return &callWithData[gateway]{
+// getGateway constructs a callWithData for the GET /gateway endpoint.
+//
+// This endpoint returns the WebSocket URL used to connect to the Discord Gateway.
+// No authentication token is required.
+//
+// The returned callWithData value can be executed by calling either:
+//   - Wait(): runs the request synchronously on the current goroutine (preferred).
+//   - Submit(callback): runs the request asynchronously in a new goroutine, invoking the callback upon completion.
+//
+// Returns:
+//
+//	callWithData[gateway] — a prepared request object that can be executed to fetch gateway information.
+func (r *restApi) getGateway() callWithData[gateway] {
+	return callWithData[gateway]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
@@ -166,14 +179,26 @@ func (r *restApi) getGateway() *callWithData[gateway] {
 		authWithToken: false,
 		parse: func(b []byte) (*gateway, error) {
 			obj := gateway{}
-			return &obj, obj.fillFromJson(b)
+			err := sonic.Unmarshal(b, obj)
+			return &obj, err
 		},
 	}
 }
 
-// getGatewayBot returns a callWithData for the GET /gateway/bot endpoint.
-func (r *restApi) GetGatewayBot() *callWithData[GatewayBot] {
-	return &callWithData[GatewayBot]{
+// GetGatewayBot constructs a callWithData for the GET /gateway/bot endpoint.
+//
+// This endpoint returns information about the current bot's gateway, including recommended shard count and session limits.
+// Requires authentication via bot token.
+//
+// The returned callWithData value can be executed by calling either:
+//   - Wait(): runs the request synchronously on the current goroutine (preferred).
+//   - Submit(callback): runs the request asynchronously in a new goroutine, invoking the callback upon completion.
+//
+// Returns:
+//
+//	callWithData[GatewayBot] — a prepared request object for fetching the gateway bot information.
+func (r *restApi) GetGatewayBot() callWithData[GatewayBot] {
+	return callWithData[GatewayBot]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
@@ -181,7 +206,85 @@ func (r *restApi) GetGatewayBot() *callWithData[GatewayBot] {
 		authWithToken: true,
 		parse: func(b []byte) (*GatewayBot, error) {
 			obj := GatewayBot{}
-			return &obj, obj.fillFromJson(b)
+			err := sonic.Unmarshal(b, obj)
+			return &obj, err
+		},
+	}
+}
+
+/***********************
+ *    User Endpoints    *
+ ***********************/
+
+// GetSelfUser retrieves the current user's data.
+//
+// Usage example for beginners:
+//
+//	user, err := restApi.GetSelfUser().Wait()
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("Your username:", user.Username)
+//
+// Callers can use:
+//   - Wait() to run synchronously (recommended for simplicity)
+//   - Submit(callback) to run asynchronously with a callback
+//
+// Detailed info:
+//
+//	Endpoint: GET /users/@me
+//	Requires OAuth2 identify scope; optionally includes email if email scope granted.
+//
+// Returns: callWithData[User] — prepared request object to fetch current user data.
+func (r *restApi) GetSelfUser() callWithData[User] {
+	return callWithData[User]{
+		requester:     r.requester,
+		logger:        r.logger,
+		method:        "GET",
+		endpoint:      "/users/@me",
+		authWithToken: true,
+		parse: func(b []byte) (*User, error) {
+			obj := User{restApi: r}
+			err := sonic.Unmarshal(b, obj)
+			return &obj, err
+		},
+	}
+}
+
+// GetUser retrieves a user by their Snowflake ID.
+//
+// Usage example:
+//
+//	userID := 123456789012345678
+//	user, err := restApi.GetUser(userID).Wait()
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("User username:", user.Username)
+//
+// Use Wait() for blocking call or Submit() for async callback.
+//
+// Detailed info:
+//
+//	Endpoint: GET /users/{userID}
+//	Requires authentication token.
+//
+// Parameters:
+//
+//	userID — Snowflake ID of the user.
+//
+// Returns: callWithData[User] — prepared request object to fetch user data.
+func (r *restApi) GetUser(userID Snowflake) callWithData[User] {
+	return callWithData[User]{
+		requester:     r.requester,
+		logger:        r.logger,
+		method:        "GET",
+		endpoint:      "/users/" + userID.String(),
+		authWithToken: true,
+		parse: func(b []byte) (*User, error) {
+			obj := User{restApi: r}
+			err := sonic.Unmarshal(b, obj)
+			return &obj, err
 		},
 	}
 }
