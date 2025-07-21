@@ -15,8 +15,6 @@ package yada
 
 import (
 	"encoding/json"
-
-	"github.com/bytedance/sonic"
 )
 
 // GatewayIntent represents Discord Gateway Intents.
@@ -311,10 +309,6 @@ type gateway struct {
 	URL string `json:"url"`
 }
 
-func (o *gateway) fillFromJson(json []byte) error {
-	return sonic.Unmarshal(json, o)
-}
-
 // GatewayBot is Discord Gateway Bot.
 type GatewayBot struct {
 	// WSS URL that can be used for connecting to the Gateway
@@ -328,8 +322,4 @@ type GatewayBot struct {
 		ResetAfter     int `json:"reset_after"`
 		MaxConcurrency int `json:"max_concurrency"`
 	} `json:"session_start_limit"`
-}
-
-func (o *GatewayBot) fillFromJson(json []byte) error {
-	return sonic.Unmarshal(json, o)
 }
