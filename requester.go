@@ -162,21 +162,18 @@ func (r *requester) updateBucket(b *ratelimitBucket, h http.Header) {
 
 // do sends an HTTP request with automatic rate limit and retry handling.
 func (r *requester) do(method, url string, body []byte, authenticateWithToken bool) (*http.Response, error) {
-	routeData := r.generateRouteData(method, url)
+	bucketKey := r.generateBucketKey(method, url)
 
-	queueKey := routeData.bucketRoute + ":" + routeData.majorParam
-	bucketKey := routeData.bucketRoute
-
-	// Get or create per-resource queue mutex
-	queue, _ := r.queues.LoadOrStore(queueKey, &sync.Mutex{})
-	q := queue.(*sync.Mutex)
+	// Get or create queue mutex
+	mutex, _ := r.queues.LoadOrStore(bucketKey, &sync.Mutex{})
+	mu := mutex.(*sync.Mutex)
 
 	// Get or create bucket for rate limit tracking
 	bucket, _ := r.buckets.LoadOrStore(bucketKey, &ratelimitBucket{remaining: 1})
 	b := bucket.(*ratelimitBucket)
 
-	q.Lock()
-	defer q.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
 	for tries := range maxRetries {
 		r.logger.Debug(fmt.Sprintf("Attempt #%d %s %s", tries+1, method, url))
@@ -265,38 +262,69 @@ func (r *requester) do(method, url string, body []byte, authenticateWithToken bo
 	}
 
 	r.logger.Error(fmt.Sprintf("Max retries reached for %s %s", method, url))
-	return nil, errors.New("max retries reached")
+	return nil, errors.New("max request retries reached")
 }
 
-// routeData stores normalized bucket route and major parameter.
-type routeData struct {
-	bucketRoute string
-	majorParam  string
-}
+var (
+	reSnowflake     = regexp.MustCompile(`\d{17,19}`)
+	reReactions     = regexp.MustCompile(`/reactions/.*`)
+	reWebhooksToken = regexp.MustCompile(`/webhooks/(\d{17,19})/[^/?]+`)
+)
 
-// generateRouteData normalizes the route and extracts major parameters for bucketing.
-func (r *requester) generateRouteData(method, endpoint string) routeData {
+const (
+	oldMessageCutoffMS = 14 * 24 * 60 * 60 * 1000 // 14 days in milliseconds
+)
+
+func (r *requester) generateBucketKey(method, endpoint string) string {
 	if strings.HasPrefix(endpoint, "/interactions/") && strings.HasSuffix(endpoint, "/callback") {
-		return routeData{
-			bucketRoute: method + ":/interactions/:id/:token/callback",
-			majorParam:  "global",
-		}
+		return method + ":/interactions/:id/:token/callback"
 	}
-	reSnowflake := regexp.MustCompile(`\d{17,19}`)
-	majorMatch := reSnowflake.FindString(endpoint)
-	baseRoute := reSnowflake.ReplaceAllString(endpoint, ":id")
-	baseRoute = regexp.MustCompile(`/reactions/.*`).ReplaceAllString(baseRoute, "/reactions/:reaction")
-	baseRoute = regexp.MustCompile(`/webhooks/:id/[^/?]+`).ReplaceAllString(baseRoute, "/webhooks/:id/:token")
 
-	if method == "DELETE" && strings.HasPrefix(baseRoute, "/channels/:id/messages/:id") {
-		if messageId, err := strconv.ParseInt(strings.Split(endpoint, "/")[len(strings.Split(endpoint, "/"))-1], 10, 64); err == nil {
-			if time.Now().UnixMilli()-Snowflake(messageId).Timestamp().UnixMilli() > 14*24*60*60*1000 {
-				baseRoute += "/DELETE_Old_MESSAGE"
+	majorParam := reSnowflake.FindString(endpoint)
+
+	if majorParam == "" {
+		baseRoute := reSnowflake.ReplaceAllString(endpoint, ":id")
+		baseRoute = reReactions.ReplaceAllString(baseRoute, "/reactions/:reaction")
+		baseRoute = reWebhooksToken.ReplaceAllString(baseRoute, "/webhooks/:id/:token")
+		return method + ":" + baseRoute
+	}
+
+	var b strings.Builder
+	b.Grow(len(endpoint) + 20)
+
+	start := 0
+	firstFound := false
+	for _, loc := range reSnowflake.FindAllStringIndex(endpoint, -1) {
+		b.WriteString(endpoint[start:loc[0]])
+
+		id := endpoint[loc[0]:loc[1]]
+		if !firstFound && id == majorParam {
+			b.WriteString(id)
+			firstFound = true
+		} else {
+			b.WriteString(":id")
+		}
+		start = loc[1]
+	}
+	b.WriteString(endpoint[start:])
+
+	baseRoute := b.String()
+
+	baseRoute = reReactions.ReplaceAllString(baseRoute, "/reactions/:reaction")
+	baseRoute = reWebhooksToken.ReplaceAllString(baseRoute, "/webhooks/:id/:token")
+
+	if method == "DELETE" && strings.HasPrefix(endpoint, "/channels/") && strings.Contains(endpoint, "/messages/") {
+		lastSlash := strings.LastIndex(endpoint, "/")
+		if lastSlash != -1 && lastSlash < len(endpoint)-1 {
+			messageIdStr := endpoint[lastSlash+1:]
+			if messageId, err := strconv.ParseUint(messageIdStr, 10, 64); err == nil {
+				snow := Snowflake(messageId)
+				if time.Now().UnixMilli()-snow.Timestamp().UnixMilli() > oldMessageCutoffMS {
+					baseRoute += "/oldmessage"
+				}
 			}
 		}
 	}
-	return routeData{
-		bucketRoute: method + ":" + baseRoute,
-		majorParam:  majorMatch,
-	}
+
+	return method + ":" + baseRoute
 }

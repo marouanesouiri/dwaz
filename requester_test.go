@@ -262,3 +262,47 @@ func TestRequester_ConcurrentRateLimitEnforcement(t *testing.T) {
 		t.Errorf("expected total duration at least %v due to rate limits, got %v", minExpected, elapsed)
 	}
 }
+
+func TestGenerateBucketKey(t *testing.T) {
+	r := &requester{}
+
+	// Old message snowflake (more than 14 days)
+	oldMessageID := "1363358614089371648"
+	// New message snowflake
+	newMessageID := "1396987230249029793"
+
+	cases := []struct {
+		method   string
+		endpoint string
+	}{
+		// Old message delete
+		{"DELETE", "/channels/123456789012345678/messages/" + oldMessageID},
+
+		// New message delete
+		{"DELETE", "/channels/123456789012345678/messages/" + newMessageID},
+
+		// Interaction callback
+		{"POST", "/interactions/987654321098765432/abcdef/callback"},
+
+		// Webhook with token
+		{"POST", "/webhooks/123456789012345678/abcdef1234567890"},
+
+		// Reaction add
+		{"PUT", "/channels/123456789012345678/messages/234567890123456789/reactions/XXXXXXX/@me"},
+
+		// Normal GET channel message
+		{"GET", "/channels/123456789012345678/messages/234567890123456789"},
+
+		// Other route with IDs
+		{"PATCH", "/guilds/987654321098765432/members/123456789012345678"},
+
+		// Route without IDs
+		{"GET", "/gateway/bot"},
+		{"GET", "/users/@me"},
+	}
+
+	for _, c := range cases {
+		key := r.generateBucketKey(c.method, c.endpoint)
+		fmt.Printf("Method: %s, Endpoint: %s\n => BucketKey: %s\n\n", c.method, c.endpoint, key)
+	}
+}
