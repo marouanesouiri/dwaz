@@ -33,6 +33,25 @@ const discordEpoch = 1420070400000
 // Snowflake is a Discord unique identifier.
 type Snowflake uint64
 
+func (s *Snowflake) UnmarshalJSON(data []byte) error {
+	str, err := strconv.Unquote(string(data))
+	if err != nil {
+		return err
+	}
+
+	id, err := strconv.ParseUint(str, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	*s = Snowflake(id)
+	return nil
+}
+
+func (s Snowflake) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + strconv.FormatUint(uint64(s), 10) + `"`), nil
+}
+
 // String returns the Snowflake as string.
 func (s Snowflake) String() string {
 	return strconv.FormatUint(uint64(s), 10)
