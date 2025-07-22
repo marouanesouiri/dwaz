@@ -75,6 +75,9 @@ func (c *callWithData[T]) Wait() (*T, error) {
 }
 
 // Submit runs the request asynchronously and calls the provided callback.
+//
+// Parameters:
+//   - callback — function to invoke with (*T, error) once the request completes.
 func (c *callWithData[T]) Submit(callback func(*T, error)) {
 	// TODO: run callback using a worker pool
 	go func() { callback(c.Wait()) }()
@@ -95,6 +98,8 @@ type callWithNoData struct {
 }
 
 // Wait executes the request synchronously.
+//
+// Returns: error — if the request failed.
 func (c *callWithNoData) Wait() error {
 	c.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
 
@@ -105,13 +110,21 @@ func (c *callWithNoData) Wait() error {
 		)
 		return err
 	}
-	res.Body.Close()
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusUnauthorized {
+		c.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": Invalid Token")
+		return errors.New("Invalid Token !!")
+	}
 
 	c.logger.Debug("Successfully called endpoint: " + c.method + c.endpoint)
 	return nil
 }
 
 // Submit runs the request asynchronously and calls the provided callback.
+//
+// Parameters:
+//   - callback — function to invoke with (error) once the request completes.
 func (c *callWithNoData) Submit(callback func(error)) {
 	// TODO: run callback using a worker pool
 	go func() { callback(c.Wait()) }()
@@ -142,11 +155,7 @@ func newRestApi(requester *requester, token string, logger Logger) *restApi {
 	}
 }
 
-// Shutdown call requester.Shutdown() which gracefully closes the underlying HTTP client's idle connections.
-//
-// It should be called before exiting your application to ensure
-// that any idle connections in the HTTP transport are closed cleanly,
-// preventing resource leaks and keeping a clean shutdown process.
+// Shutdown gracefully shuts down the REST API client.
 func (r *restApi) Shutdown() {
 	r.logger.Info("RestAPI shutting down")
 	r.requester.Shutdown()
@@ -160,18 +169,21 @@ func (r *restApi) Shutdown() {
 
 // getGateway constructs a callWithData for the GET /gateway endpoint.
 //
-// This endpoint returns the WebSocket URL used to connect to the Discord Gateway.
-// No authentication token is required.
+// Usage example:
 //
-// The returned callWithData value can be executed by calling either:
-//   - Wait(): runs the request synchronously on the current goroutine (preferred).
-//   - Submit(callback): runs the request asynchronously in a new goroutine, invoking the callback upon completion.
+//	gateway, err := .getGateway().Wait()
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("Gateway URL:", gateway.URL)
 //
-// Returns:
+// Callers can use:
+//   - Wait() to run synchronously.
+//   - Submit(callback) to run asynchronously with a callback.
 //
-//	callWithData[gateway] — a prepared request object that can be executed to fetch gateway information.
-func (r *restApi) getGateway() callWithData[gateway] {
-	return callWithData[gateway]{
+// Returns: *callWithData[gateway] — prepared request object to fetch gateway information.
+func (r *restApi) getGateway() *callWithData[gateway] {
+	return &callWithData[gateway]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
@@ -179,7 +191,7 @@ func (r *restApi) getGateway() callWithData[gateway] {
 		authWithToken: false,
 		parse: func(b []byte) (*gateway, error) {
 			obj := gateway{}
-			err := sonic.Unmarshal(b, obj)
+			err := sonic.Unmarshal(b, &obj)
 			return &obj, err
 		},
 	}
@@ -187,18 +199,21 @@ func (r *restApi) getGateway() callWithData[gateway] {
 
 // GetGatewayBot constructs a callWithData for the GET /gateway/bot endpoint.
 //
-// This endpoint returns information about the current bot's gateway, including recommended shard count and session limits.
-// Requires authentication via bot token.
+// Usage example:
 //
-// The returned callWithData value can be executed by calling either:
-//   - Wait(): runs the request synchronously on the current goroutine (preferred).
-//   - Submit(callback): runs the request asynchronously in a new goroutine, invoking the callback upon completion.
+//	gatewayBot, err := .GetGatewayBot().Wait()
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("Recommended shards:", gatewayBot.Shards)
 //
-// Returns:
+// Callers can use:
+//   - Wait() to run synchronously.
+//   - Submit(callback) to run asynchronously with a callback.
 //
-//	callWithData[GatewayBot] — a prepared request object for fetching the gateway bot information.
-func (r *restApi) GetGatewayBot() callWithData[GatewayBot] {
-	return callWithData[GatewayBot]{
+// Returns: *callWithData[GatewayBot] — prepared request object to fetch gateway bot information.
+func (r *restApi) GetGatewayBot() *callWithData[GatewayBot] {
+	return &callWithData[GatewayBot]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
@@ -206,38 +221,33 @@ func (r *restApi) GetGatewayBot() callWithData[GatewayBot] {
 		authWithToken: true,
 		parse: func(b []byte) (*GatewayBot, error) {
 			obj := GatewayBot{}
-			err := sonic.Unmarshal(b, obj)
+			err := sonic.Unmarshal(b, &obj)
 			return &obj, err
 		},
 	}
 }
 
 /***********************
- *    User Endpoints    *
+ *    User Endpoints   *
  ***********************/
 
 // GetSelfUser retrieves the current user's data.
 //
-// Usage example for beginners:
+// Usage example:
 //
-//	user, err := restApi.GetSelfUser().Wait()
+//	selfUser, err := .GetSelfUser().Wait()
 //	if err != nil {
 //	    // handle error
 //	}
-//	fmt.Println("Your username:", user.Username)
+//	fmt.Println("Bot username:", selfUser.Username)
 //
 // Callers can use:
-//   - Wait() to run synchronously (recommended for simplicity)
-//   - Submit(callback) to run asynchronously with a callback
+//   - Wait() to run synchronously.
+//   - Submit(callback) to run asynchronously with a callback.
 //
-// Detailed info:
-//
-//	Endpoint: GET /users/@me
-//	Requires OAuth2 identify scope; optionally includes email if email scope granted.
-//
-// Returns: callWithData[User] — prepared request object to fetch current user data.
-func (r *restApi) GetSelfUser() callWithData[User] {
-	return callWithData[User]{
+// Returns: *callWithData[User] — prepared request object to fetch self user data.
+func (r *restApi) GetSelfUser() *callWithData[User] {
+	return &callWithData[User]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
@@ -245,9 +255,84 @@ func (r *restApi) GetSelfUser() callWithData[User] {
 		authWithToken: true,
 		parse: func(b []byte) (*User, error) {
 			obj := User{restApi: r}
-			err := sonic.Unmarshal(b, obj)
+			err := sonic.Unmarshal(b, &obj)
 			return &obj, err
 		},
+	}
+}
+
+// ModifySelfUserParams defines fields to modify in the current user account.
+type ModifySelfUserParams struct {
+	// Username is the new username.
+	//
+	// Optional: leave empty to keep unchanged.
+	Username string `json:"username,omitempty"`
+
+	// Avatar is the new avatar image data.
+	//
+	// Optional: leave nil to keep unchanged.
+	Avatar *Attachment `json:"avatar,omitempty"`
+
+	// Banner is the new banner image data.
+	//
+	// Optional: leave nil to keep unchanged.
+	Banner *Attachment `json:"banner,omitempty"`
+}
+
+// MarshalJSON is a method used by yada internaly.
+func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
+	type Alias ModifySelfUserParams
+
+	aux := struct {
+		*Alias
+		Avatar *string `json:"avatar,omitempty"`
+		Banner *string `json:"banner,omitempty"`
+	}{
+		Alias: (*Alias)(p),
+	}
+
+	if p.Avatar != nil {
+		aux.Avatar = &p.Avatar.DataURI
+	}
+	if p.Banner != nil {
+		aux.Banner = &p.Banner.DataURI
+	}
+
+	return sonic.Marshal(aux)
+}
+
+// ModifySelfUser updates the current (self) user account settings.
+//
+// Usage example: (update the username and avatar and leave the current banner)
+//
+//	update := &ModifySelfUserParams{
+//	    Username: "new_username",
+//	    Avatar:   yada.NewAttachment("path/to/avatar.png"),
+//	}
+//	user, err := .ModifySelfUser(update).Wait()
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("Updated username:", user.Username)
+//
+// Callers can use:
+//   - Wait() to run synchronously.
+//   - Submit(callback) to run asynchronously with a callback.
+//
+// Parameters:
+//   - update — pointer to ModifySelfUserParams containing fields to update.
+//
+// Returns: *callWithNoData — prepared request object to modify self user data.
+func (r *restApi) ModifySelfUser(update *ModifySelfUserParams) *callWithNoData {
+	body, _ := sonic.Marshal(update)
+
+	return &callWithNoData{
+		requester:     r.requester,
+		logger:        r.logger,
+		method:        "PATCH",
+		endpoint:      "/users/@me",
+		authWithToken: true,
+		body:          body,
 	}
 }
 
@@ -256,26 +341,22 @@ func (r *restApi) GetSelfUser() callWithData[User] {
 // Usage example:
 //
 //	userID := 123456789012345678
-//	user, err := restApi.GetUser(userID).Wait()
+//	user, err := .GetUser(userID).Wait()
 //	if err != nil {
 //	    // handle error
 //	}
 //	fmt.Println("User username:", user.Username)
 //
-// Use Wait() for blocking call or Submit() for async callback.
-//
-// Detailed info:
-//
-//	Endpoint: GET /users/{userID}
-//	Requires authentication token.
+// Callers can use:
+//   - Wait() to run synchronously.
+//   - Submit(callback) to run asynchronously with a callback.
 //
 // Parameters:
+//   - userID — Snowflake ID of the user.
 //
-//	userID — Snowflake ID of the user.
-//
-// Returns: callWithData[User] — prepared request object to fetch user data.
-func (r *restApi) GetUser(userID Snowflake) callWithData[User] {
-	return callWithData[User]{
+// Returns: *callWithData[User] — prepared request object to fetch user data.
+func (r *restApi) GetUser(userID Snowflake) *callWithData[User] {
+	return &callWithData[User]{
 		requester:     r.requester,
 		logger:        r.logger,
 		method:        "GET",
@@ -283,7 +364,7 @@ func (r *restApi) GetUser(userID Snowflake) callWithData[User] {
 		authWithToken: true,
 		parse: func(b []byte) (*User, error) {
 			obj := User{restApi: r}
-			err := sonic.Unmarshal(b, obj)
+			err := sonic.Unmarshal(b, &obj)
 			return &obj, err
 		},
 	}
