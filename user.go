@@ -13,6 +13,10 @@
 
 package yada
 
+import (
+	"strconv"
+)
+
 // UserFlags represents flags on a Discord user account.
 //
 // Reference: https://discord.com/developers/docs/resources/user#user-object-user-flags
@@ -20,49 +24,49 @@ type UserFlags int
 
 const (
 	// Discord Employee
-	UserFlagStaff UserFlags = 1 << 0
+	UserFlag_Staff UserFlags = 1 << 0
 
 	// Partnered Server Owner
-	UserFlagPartner UserFlags = 1 << 1
+	UserFlag_Partner UserFlags = 1 << 1
 
 	// HypeSquad Events Member
-	UserFlagHypeSquad UserFlags = 1 << 2
+	UserFlag_HypeSquad UserFlags = 1 << 2
 
 	// Bug Hunter Level 1
-	UserFlagBugHunterLevel1 UserFlags = 1 << 3
+	UserFlag_BugHunterLevel1 UserFlags = 1 << 3
 
 	// House Bravery Member
-	UserFlagHypeSquadOnlineHouse1 UserFlags = 1 << 6
+	UserFlag_HypeSquadOnlineHouse1 UserFlags = 1 << 6
 
 	// House Brilliance Member
-	UserFlagHypeSquadOnlineHouse2 UserFlags = 1 << 7
+	UserFlag_HypeSquadOnlineHouse2 UserFlags = 1 << 7
 
 	// House Balance Member
-	UserFlagHypeSquadOnlineHouse3 UserFlags = 1 << 8
+	UserFlag_HypeSquadOnlineHouse3 UserFlags = 1 << 8
 
 	// Early Nitro Supporter
-	UserFlagPremiumEarlySupporter UserFlags = 1 << 9
+	UserFlag_PremiumEarlySupporter UserFlags = 1 << 9
 
 	// User is a team
-	UserFlagTeamPseudoUser UserFlags = 1 << 10
+	UserFlag_TeamPseudoUser UserFlags = 1 << 10
 
 	// Bug Hunter Level 2
-	UserFlagBugHunterLevel2 UserFlags = 1 << 14
+	UserFlag_BugHunterLevel2 UserFlags = 1 << 14
 
 	// Verified Bot
-	UserFlagVerifiedBot UserFlags = 1 << 16
+	UserFlag_VerifiedBot UserFlags = 1 << 16
 
 	// Early Verified Bot Developer
-	UserFlagVerifiedDeveloper UserFlags = 1 << 17
+	UserFlag_VerifiedDeveloper UserFlags = 1 << 17
 
 	// Moderator Programs Alumni
-	UserFlagCertifiedModerator UserFlags = 1 << 18
+	UserFlag_CertifiedModerator UserFlags = 1 << 18
 
 	// Bot uses only HTTP interactions and is shown in the online member list
-	UserFlagBotHTTPInteractions UserFlags = 1 << 19
+	UserFlag_BotHTTPInteractions UserFlags = 1 << 19
 
 	// User is an Active Developer
-	UserFlagActiveDeveloper UserFlags = 1 << 22
+	UserFlag_ActiveDeveloper UserFlags = 1 << 22
 )
 
 // Has returns true if all provided flags are set.
@@ -165,10 +169,24 @@ type AvatarDecorationData struct {
 	SkuID Snowflake `json:"sku_id"`
 }
 
+// UserPremiumType is the type of premium (nitro) subscription a user has (see UserPremiumType* consts).
+// https://discord.com/developers/docs/resources/user#user-object-premium-types
+type UserPremiumType int
+
+// Valid UserPremiumType values.
+const (
+	UserPremium_TypeNone         UserPremiumType = 0
+	UserPremium_TypeNitroClassic UserPremiumType = 1
+	UserPremium_TypeNitro        UserPremiumType = 2
+	UserPremium_TypeNitroBasic   UserPremiumType = 3
+)
+
 // User represents a Discord user object.
 //
 // Reference: https://discord.com/developers/docs/resources/user#user-object-user-structure
 type User struct {
+	restApi *restApi `json:"-"`
+
 	// ID is the user's unique Discord snowflake ID.
 	//
 	// Always present.
@@ -249,21 +267,18 @@ type User struct {
 
 	// Flags are internal user account flags.
 	//
-	// Optional:
-	// - May be nil if flags are not present.
-	Flags *UserFlags `json:"flags,omitempty"`
+	// Always present.
+	Flags UserFlags `json:"flags,omitempty"`
 
 	// PremiumType is the Nitro subscription type.
 	//
-	// Optional:
-	// - Nil if user has no Nitro.
-	PremiumType *int `json:"premium_type,omitempty"`
+	// Always present.
+	PremiumType UserPremiumType `json:"premium_type,omitempty"`
 
 	// PublicFlags are the public flags on the user account.
 	//
-	// Optional:
-	// - May be nil if no public flags.
-	PublicFlags *UserFlags `json:"public_flags,omitempty"`
+	// Always present.
+	PublicFlags UserFlags `json:"public_flags,omitempty"`
 
 	// AvatarDecorationData holds avatar decoration info.
 	//
@@ -280,7 +295,91 @@ type User struct {
 	// PrimaryGuild holds the user's primary guild info.
 	//
 	// Optional:
+	// - May be nil if user is a bot.
 	// - May be nil if no primary guild set.
 	// - May be nil if identity cleared due to guild tag or privacy settings.
 	PrimaryGuild *UserPrimaryGuild `json:"primary_guild,omitempty"`
+}
+
+// Mention returns a Discord mention string for the user.
+//
+// Example output: "<@123456789012345678>"
+func (u *User) Mention() string {
+	return "<@" + u.ID.String() + ">"
+}
+
+// DisplayAvatarURL returns the URL to the user's avatar image.
+//
+// If the user has a custom avatar set, it returns the URL to that avatar.
+// By default, it uses GIF format if the avatar is animated, otherwise PNG,
+// with a default size of 1024.
+//
+// If the user has no custom avatar, it returns the URL to their default avatar
+// based on their discriminator or ID, using PNG format.
+//
+// Example usage:
+//
+//	url := user.DisplayAvatarURL()
+func (u *User) DisplayAvatarURL() string {
+	if u.Avatar != "" {
+		return UserAvatarURL(u.ID, u.Avatar, UserAvatarFormat_GIF, ImageSize_1024)
+	}
+	return DefaultUserAvatarURL(u.DefaultAvatarIndex())
+}
+
+// DisplayAvatarURLWith returns the URL to the user's avatar image,
+// allowing explicit specification of image format and size.
+//
+// If the user has a custom avatar set, it returns the URL to that avatar
+// using the provided format and size.
+//
+// If the user has no custom avatar, it returns the URL to their default avatar,
+// using PNG format (size parameter is ignored for default avatars).
+//
+// Example usage:
+//
+//	url := user.DisplayAvatarURLWith(UserAvatarFormat_WebP, ImageSize_512)
+func (u *User) DisplayAvatarURLWith(format UserAvatarFormat, size ImageSize) string {
+	if u.Avatar != "" {
+		return UserAvatarURL(u.ID, u.Avatar, format, size)
+	}
+	return DefaultUserAvatarURL(u.DefaultAvatarIndex())
+}
+
+// DisplayName returns the user's global name if set,
+// otherwise it returns their username.
+//
+// The global name is their profile display name visible across Discord,
+// while Username is their original account username.
+//
+// Example usage:
+//
+//	name := user.DisplayName()
+func (u *User) DisplayName() string {
+	if u.GlobalName != "" {
+		return u.GlobalName
+	}
+	return u.Username
+}
+
+// DefaultAvatarIndex returns the index (0-5) used to determine
+// which default avatar is assigned to the user.
+//
+// For users with discriminator "0" (new Discord usernames),
+// it uses the user's snowflake ID shifted right by 22 bits modulo 6.
+//
+// For legacy users with a numeric discriminator, it parses the discriminator
+// as an integer and returns modulo 5.
+//
+// This logic follows Discord's default avatar assignment rules.
+//
+// Example usage:
+//
+//	index := user.DefaultAvatarIndex()
+func (u *User) DefaultAvatarIndex() int {
+	if u.Discriminator == "0" {
+		return int((u.ID >> 22) % 6)
+	}
+	id, _ := strconv.Atoi(u.Discriminator)
+	return id % 5
 }
