@@ -179,7 +179,7 @@ func (s *Shard) readLoop() {
 		}
 
 		switch payload.Op {
-		case gatewayOpcode_Dispatch:
+		case gatewayOpcodeDispatch:
 			atomic.StoreInt64(&s.seq, payload.S)
 			s.dispatcher.dispatch(s.shardID, payload.T, msg)
 
@@ -194,11 +194,11 @@ func (s *Shard) readLoop() {
 				s.logger.Debug("Shard " + strconv.Itoa(s.shardID) + " session established")
 			}
 
-		case gatewayOpcode_Reconnect:
+		case gatewayOpcodeReconnect:
 			s.logger.Info("Shard " + strconv.Itoa(s.shardID) + " RECONNECT received")
 			s.reconnect()
 
-		case gatewayOpcode_InvalidSession:
+		case gatewayOpcodeInvalidSession:
 			var resumable bool
 			sonic.Unmarshal(payload.D, &resumable)
 			time.Sleep(time.Second)
@@ -212,7 +212,7 @@ func (s *Shard) readLoop() {
 				s.sendIdentify()
 			}
 
-		case gatewayOpcode_Hello:
+		case gatewayOpcodeHello:
 			var hello struct {
 				HeartbeatInterval float64 `json:"heartbeat_interval"`
 			}
@@ -229,12 +229,12 @@ func (s *Shard) readLoop() {
 				s.sendIdentify()
 			}
 
-		case gatewayOpcode_HeartbeatACK:
+		case gatewayOpcodeHeartbeatACK:
 			s.lastHeartbeatACK.Store(true)
 			atomic.StoreInt64(&s.latency, time.Now().UnixMilli())
 			s.logger.Debug("Shard " + strconv.Itoa(s.shardID) + " heartbeatACK received")
 
-		case gatewayOpcode_Heartbeat:
+		case gatewayOpcodeHeartbeat:
 			s.sendHeartbeat()
 		}
 	}
@@ -247,7 +247,7 @@ func (s *Shard) readLoop() {
 // Identify payloads are rate limited via identifyLimiter.
 func (s *Shard) sendIdentify() error {
 	payload, _ := sonic.Marshal(map[string]any{
-		"op": gatewayOpcode_Identify,
+		"op": gatewayOpcodeIdentify,
 		"d": map[string]any{
 			"token": s.token,
 			"properties": map[string]string{
@@ -268,7 +268,7 @@ func (s *Shard) sendIdentify() error {
 // This attempts to resume a previous session using sessionID and sequence number.
 func (s *Shard) sendResume() error {
 	payload, _ := sonic.Marshal(map[string]any{
-		"op": gatewayOpcode_Resume,
+		"op": gatewayOpcodeResume,
 		"d": map[string]any{
 			"token":      s.token,
 			"session_id": s.sessionID,
@@ -283,7 +283,7 @@ func (s *Shard) sendResume() error {
 // The payload data is the last sequence number received.
 func (s *Shard) sendHeartbeat() error {
 	payload, _ := sonic.Marshal(map[string]any{
-		"op": gatewayOpcode_Heartbeat,
+		"op": gatewayOpcodeHeartbeat,
 		"d":  atomic.LoadInt64(&s.seq),
 	})
 	return wsutil.WriteClientMessage(s.conn, ws.OpText, payload)

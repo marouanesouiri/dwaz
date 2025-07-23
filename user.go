@@ -327,7 +327,7 @@ func (u *User) Mention() string {
 //	url := user.DisplayAvatarURL()
 func (u *User) DisplayAvatarURL() string {
 	if u.Avatar != "" {
-		return UserAvatarURL(u.ID, u.Avatar, UserAvatarFormat_GIF, ImageSize_1024)
+		return UserAvatarURL(u.ID, u.Avatar, UserAvatarFormatGIF, ImageSize1024)
 	}
 	return DefaultUserAvatarURL(u.DefaultAvatarIndex())
 }
@@ -343,7 +343,7 @@ func (u *User) DisplayAvatarURL() string {
 //
 // Example usage:
 //
-//	url := user.DisplayAvatarURLWith(UserAvatarFormat_WebP, ImageSize_512)
+//	url := user.DisplayAvatarURLWith(UserAvatarFormatWebP, ImageSize512)
 func (u *User) DisplayAvatarURLWith(format UserAvatarFormat, size ImageSize) string {
 	if u.Avatar != "" {
 		return UserAvatarURL(u.ID, u.Avatar, format, size)

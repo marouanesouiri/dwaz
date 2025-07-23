@@ -26,22 +26,22 @@ import (
 // instead use a different base URL for serving content.
 
 const (
-	ImageBaseUrl = "https://cdn.discordapp.com/"
-	MediaBaseUrl = "https://media.discordapp.net/"
+	ImageBaseURL = "https://cdn.discordapp.com/"
+	MediaBaseURL = "https://media.discordapp.net/"
 )
 
 type ImageSize int
 
 const (
-	ImageSize_16   ImageSize = 16
-	ImageSize_32   ImageSize = 32
-	ImageSize_64   ImageSize = 64
-	ImageSize_128  ImageSize = 128
-	ImageSize_256  ImageSize = 256
-	ImageSize_512  ImageSize = 512
-	ImageSize_1024 ImageSize = 1024
-	ImageSize_2048 ImageSize = 2048
-	ImageSize_4096 ImageSize = 4096
+	ImageSize16   ImageSize = 16
+	ImageSize32   ImageSize = 32
+	ImageSize64   ImageSize = 64
+	ImageSize128  ImageSize = 128
+	ImageSize256  ImageSize = 256
+	ImageSize512  ImageSize = 512
+	ImageSize1024 ImageSize = 1024
+	ImageSize2048 ImageSize = 2048
+	ImageSize4096 ImageSize = 4096
 )
 
 /***********************
@@ -51,15 +51,15 @@ const (
 type EmojiFormat string
 
 const (
-	EmojiFormat_PNG  EmojiFormat = ".png"
-	EmojiFormat_JPEG EmojiFormat = ".jpeg"
-	EmojiFormat_WebP EmojiFormat = ".webp"
-	EmojiFormat_GIF  EmojiFormat = ".gif"
-	EmojiFormat_AVIF EmojiFormat = ".avif"
+	EmojiFormatPNG  EmojiFormat = ".png"
+	EmojiFormatJPEG EmojiFormat = ".jpeg"
+	EmojiFormatWebP EmojiFormat = ".webp"
+	EmojiFormatGIF  EmojiFormat = ".gif"
+	EmojiFormatAVIF EmojiFormat = ".avif"
 )
 
-func EmojiURL(EmojiID Snowflake, format EmojiFormat, size ImageSize) string {
-	return ImageBaseUrl + "emojis/" + EmojiID.String() + string(format) + "?size=" + strconv.Itoa(int(size))
+func EmojiURL(emojiID Snowflake, format EmojiFormat, size ImageSize) string {
+	return ImageBaseURL + "emojis/" + emojiID.String() + string(format) + "?size=" + strconv.Itoa(int(size))
 }
 
 /***********************
@@ -69,20 +69,20 @@ func EmojiURL(EmojiID Snowflake, format EmojiFormat, size ImageSize) string {
 type GuildIconFormat string
 
 const (
-	GuildIconFormat_PNG  GuildIconFormat = ".png"
-	GuildIconFormat_JPEG GuildIconFormat = ".jpeg"
-	GuildIconFormat_WebP GuildIconFormat = ".webp"
-	GuildIconFormat_GIF  GuildIconFormat = ".gif"
+	GuildIconFormatPNG  GuildIconFormat = ".png"
+	GuildIconFormatJPEG GuildIconFormat = ".jpeg"
+	GuildIconFormatWebP GuildIconFormat = ".webp"
+	GuildIconFormatGIF  GuildIconFormat = ".gif"
 )
 
 func GuildIconURL(guildID Snowflake, iconHash string, format GuildIconFormat, size ImageSize) string {
-	if format == GuildIconFormat_GIF && (len(iconHash) < 2 || iconHash[:2] != "a_") {
-		format = GuildIconFormat_PNG
+	if format == GuildIconFormatGIF && (len(iconHash) < 2 || iconHash[:2] != "a_") {
+		format = GuildIconFormatPNG
 	}
 
-	url := ImageBaseUrl + "icons/" + guildID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	url := ImageBaseURL + "icons/" + guildID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
 
-	if format == GuildIconFormat_WebP && len(iconHash) >= 2 && iconHash[:2] == "a_" {
+	if format == GuildIconFormatWebP && len(iconHash) >= 2 && iconHash[:2] == "a_" {
 		url += "&animated=true"
 	}
 
@@ -92,32 +92,32 @@ func GuildIconURL(guildID Snowflake, iconHash string, format GuildIconFormat, si
 type GuildSplashFormat string
 
 const (
-	GuildSplashFormat_PNG  GuildSplashFormat = ".png"
-	GuildSplashFormat_JPEG GuildSplashFormat = ".jpeg"
-	GuildSplashFormat_WebP GuildSplashFormat = ".webp"
+	GuildSplashFormatPNG  GuildSplashFormat = ".png"
+	GuildSplashFormatJPEG GuildSplashFormat = ".jpeg"
+	GuildSplashFormatWebP GuildSplashFormat = ".webp"
 )
 
 func GuildSplashURL(guildID Snowflake, splashHash string, format GuildSplashFormat, size ImageSize) string {
-	return ImageBaseUrl + "splashes/" + guildID.String() + "/" + splashHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	return ImageBaseURL + "splashes/" + guildID.String() + "/" + splashHash + string(format) + "?size=" + strconv.Itoa(int(size))
 }
 
 type GuildBannerFormat string
 
 const (
-	GuildBannerFormat_PNG  GuildBannerFormat = ".png"
-	GuildBannerFormat_JPEG GuildBannerFormat = ".jpeg"
-	GuildBannerFormat_WebP GuildBannerFormat = ".webp"
-	GuildBannerFormat_GIF  GuildBannerFormat = ".gif"
+	GuildBannerFormatPNG  GuildBannerFormat = ".png"
+	GuildBannerFormatJPEG GuildBannerFormat = ".jpeg"
+	GuildBannerFormatWebP GuildBannerFormat = ".webp"
+	GuildBannerFormatGIF  GuildBannerFormat = ".gif"
 )
 
 func GuildBannerURL(guildID Snowflake, bannerHash string, format GuildBannerFormat, size ImageSize) string {
-	if format == GuildBannerFormat_GIF && (len(bannerHash) < 2 || bannerHash[:2] != "a_") {
-		format = GuildBannerFormat_PNG
+	if format == GuildBannerFormatGIF && (len(bannerHash) < 2 || bannerHash[:2] != "a_") {
+		format = GuildBannerFormatPNG
 	}
 
-	url := ImageBaseUrl + "banners/" + guildID.String() + "/" + bannerHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	url := ImageBaseURL + "banners/" + guildID.String() + "/" + bannerHash + string(format) + "?size=" + strconv.Itoa(int(size))
 
-	if format == GuildBannerFormat_WebP && len(bannerHash) >= 2 && bannerHash[:2] == "a_" {
+	if format == GuildBannerFormatWebP && len(bannerHash) >= 2 && bannerHash[:2] == "a_" {
 		url += "&animated=true"
 	}
 
@@ -131,20 +131,20 @@ func GuildBannerURL(guildID Snowflake, bannerHash string, format GuildBannerForm
 type UserAvatarFormat string
 
 const (
-	UserAvatarFormat_PNG  UserAvatarFormat = ".png"
-	UserAvatarFormat_JPEG UserAvatarFormat = ".jpeg"
-	UserAvatarFormat_WebP UserAvatarFormat = ".webp"
-	UserAvatarFormat_GIF  UserAvatarFormat = ".gif"
+	UserAvatarFormatPNG  UserAvatarFormat = ".png"
+	UserAvatarFormatJPEG UserAvatarFormat = ".jpeg"
+	UserAvatarFormatWebP UserAvatarFormat = ".webp"
+	UserAvatarFormatGIF  UserAvatarFormat = ".gif"
 )
 
 func UserAvatarURL(userID Snowflake, avatarHash string, format UserAvatarFormat, size ImageSize) string {
-	if format == UserAvatarFormat_GIF && (len(avatarHash) < 2 || avatarHash[:2] != "a_") {
-		format = UserAvatarFormat_PNG
+	if format == UserAvatarFormatGIF && (len(avatarHash) < 2 || avatarHash[:2] != "a_") {
+		format = UserAvatarFormatPNG
 	}
 
-	url := ImageBaseUrl + "avatars/" + userID.String() + "/" + avatarHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	url := ImageBaseURL + "avatars/" + userID.String() + "/" + avatarHash + string(format) + "?size=" + strconv.Itoa(int(size))
 
-	if format == UserAvatarFormat_WebP && len(avatarHash) >= 2 && avatarHash[:2] == "a_" {
+	if format == UserAvatarFormatWebP && len(avatarHash) >= 2 && avatarHash[:2] == "a_" {
 		url += "&animated=true"
 	}
 
@@ -154,20 +154,20 @@ func UserAvatarURL(userID Snowflake, avatarHash string, format UserAvatarFormat,
 type UserBannerFormat string
 
 const (
-	UserBannerFormat_PNG  UserBannerFormat = ".png"
-	UserBannerFormat_JPEG UserBannerFormat = ".jpeg"
-	UserBannerFormat_WebP UserBannerFormat = ".webp"
-	UserBannerFormat_GIF  UserBannerFormat = ".gif"
+	UserBannerFormatPNG  UserBannerFormat = ".png"
+	UserBannerFormatJPEG UserBannerFormat = ".jpeg"
+	UserBannerFormatWebP UserBannerFormat = ".webp"
+	UserBannerFormatGIF  UserBannerFormat = ".gif"
 )
 
 func UserBannerURL(userID Snowflake, bannerHash string, format UserBannerFormat, size ImageSize) string {
-	if format == UserBannerFormat_GIF && (len(bannerHash) < 2 || bannerHash[:2] != "a_") {
-		format = UserBannerFormat_PNG
+	if format == UserBannerFormatGIF && (len(bannerHash) < 2 || bannerHash[:2] != "a_") {
+		format = UserBannerFormatPNG
 	}
 
-	url := ImageBaseUrl + "banners/" + userID.String() + "/" + bannerHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	url := ImageBaseURL + "banners/" + userID.String() + "/" + bannerHash + string(format) + "?size=" + strconv.Itoa(int(size))
 
-	if format == UserBannerFormat_WebP && len(bannerHash) >= 2 && bannerHash[:2] == "a_" {
+	if format == UserBannerFormatWebP && len(bannerHash) >= 2 && bannerHash[:2] == "a_" {
 		url += "&animated=true"
 	}
 
@@ -181,25 +181,25 @@ func UserBannerURL(userID Snowflake, bannerHash string, format UserBannerFormat,
 type ApplicationIconFormat string
 
 const (
-	ApplicationIconFormat_PNG  ApplicationIconFormat = ".png"
-	ApplicationIconFormat_JPEG ApplicationIconFormat = ".jpeg"
-	ApplicationIconFormat_WebP ApplicationIconFormat = ".webp"
+	ApplicationIconFormatPNG  ApplicationIconFormat = ".png"
+	ApplicationIconFormatJPEG ApplicationIconFormat = ".jpeg"
+	ApplicationIconFormatWebP ApplicationIconFormat = ".webp"
 )
 
 func ApplicationIconURL(appID Snowflake, iconHash string, format ApplicationIconFormat, size ImageSize) string {
-	return ImageBaseUrl + "app-icons/" + appID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	return ImageBaseURL + "app-icons/" + appID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
 }
 
 type ApplicationCoverFormat string
 
 const (
-	ApplicationCoverFormat_PNG  ApplicationCoverFormat = ".png"
-	ApplicationCoverFormat_JPEG ApplicationCoverFormat = ".jpeg"
-	ApplicationCoverFormat_WebP ApplicationCoverFormat = ".webp"
+	ApplicationCoverFormatPNG  ApplicationCoverFormat = ".png"
+	ApplicationCoverFormatJPEG ApplicationCoverFormat = ".jpeg"
+	ApplicationCoverFormatWebP ApplicationCoverFormat = ".webp"
 )
 
 func ApplicationCoverURL(appID Snowflake, coverHash string, format ApplicationCoverFormat, size ImageSize) string {
-	return ImageBaseUrl + "app-icons/" + appID.String() + "/" + coverHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	return ImageBaseURL + "app-icons/" + appID.String() + "/" + coverHash + string(format) + "?size=" + strconv.Itoa(int(size))
 }
 
 /***********************
@@ -209,47 +209,47 @@ func ApplicationCoverURL(appID Snowflake, coverHash string, format ApplicationCo
 type StickerFormat string
 
 const (
-	StickerFormat_PNG    StickerFormat = ".png"
-	StickerFormat_GIF    StickerFormat = ".gif"
-	StickerFormat_Lottie StickerFormat = ".json"
+	StickerFormatPNG    StickerFormat = ".png"
+	StickerFormatGIF    StickerFormat = ".gif"
+	StickerFormatLottie StickerFormat = ".json"
 )
 
-// Stickers with GIF format are served from MediaBaseUrl, not CDN base.
+// Stickers with GIF format are served from MediaBaseURL, not CDN base.
 func StickerURL(stickerID Snowflake, format StickerFormat) string {
-	base := ImageBaseUrl + "stickers/" + stickerID.String()
-	if format == StickerFormat_GIF {
-		base = MediaBaseUrl + "stickers/" + stickerID.String()
+	base := ImageBaseURL + "stickers/" + stickerID.String()
+	if format == StickerFormatGIF {
+		base = MediaBaseURL + "stickers/" + stickerID.String()
 	}
 	return base + string(format)
 }
 
 /***********************
- *      Other Endpoints  *
+ *   Other Endpoints   *
  ***********************/
 
-// Default User Avatar: embed/avatars/index.png
-// Size param ignored, fixed size only
+// DefaultUserAvatarURL returns the default user avatar URL.
+// Size param ignored, fixed size only.
 func DefaultUserAvatarURL(index int) string {
-	return ImageBaseUrl + "embed/avatars/" + strconv.Itoa(index) + ".png"
+	return ImageBaseURL + "embed/avatars/" + strconv.Itoa(index) + ".png"
 }
 
 type GuildMemberAvatarFormat string
 
 const (
-	GuildMemberAvatarFormat_PNG  GuildMemberAvatarFormat = ".png"
-	GuildMemberAvatarFormat_JPEG GuildMemberAvatarFormat = ".jpeg"
-	GuildMemberAvatarFormat_WebP GuildMemberAvatarFormat = ".webp"
-	GuildMemberAvatarFormat_GIF  GuildMemberAvatarFormat = ".gif"
+	GuildMemberAvatarFormatPNG  GuildMemberAvatarFormat = ".png"
+	GuildMemberAvatarFormatJPEG GuildMemberAvatarFormat = ".jpeg"
+	GuildMemberAvatarFormatWebP GuildMemberAvatarFormat = ".webp"
+	GuildMemberAvatarFormatGIF  GuildMemberAvatarFormat = ".gif"
 )
 
 func GuildMemberAvatarURL(guildID, userID Snowflake, avatarHash string, format GuildMemberAvatarFormat, size ImageSize) string {
-	if format == GuildMemberAvatarFormat_GIF && (len(avatarHash) < 2 || avatarHash[:2] != "a_") {
-		format = GuildMemberAvatarFormat_PNG
+	if format == GuildMemberAvatarFormatGIF && (len(avatarHash) < 2 || avatarHash[:2] != "a_") {
+		format = GuildMemberAvatarFormatPNG
 	}
 
-	url := ImageBaseUrl + "guilds/" + guildID.String() + "/users/" + userID.String() + "/avatars/" + avatarHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	url := ImageBaseURL + "guilds/" + guildID.String() + "/users/" + userID.String() + "/avatars/" + avatarHash + string(format) + "?size=" + strconv.Itoa(int(size))
 
-	if format == GuildMemberAvatarFormat_WebP && len(avatarHash) >= 2 && avatarHash[:2] == "a_" {
+	if format == GuildMemberAvatarFormatWebP && len(avatarHash) >= 2 && avatarHash[:2] == "a_" {
 		url += "&animated=true"
 	}
 
@@ -259,11 +259,11 @@ func GuildMemberAvatarURL(guildID, userID Snowflake, avatarHash string, format G
 type RoleIconFormat string
 
 const (
-	RoleIconFormat_PNG  RoleIconFormat = ".png"
-	RoleIconFormat_JPEG RoleIconFormat = ".jpeg"
-	RoleIconFormat_WebP RoleIconFormat = ".webp"
+	RoleIconFormatPNG  RoleIconFormat = ".png"
+	RoleIconFormatJPEG RoleIconFormat = ".jpeg"
+	RoleIconFormatWebP RoleIconFormat = ".webp"
 )
 
 func RoleIconURL(roleID Snowflake, iconHash string, format RoleIconFormat, size ImageSize) string {
-	return ImageBaseUrl + "role-icons/" + roleID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
+	return ImageBaseURL + "role-icons/" + roleID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
 }
