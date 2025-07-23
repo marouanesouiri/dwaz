@@ -24,49 +24,49 @@ type UserFlags int
 
 const (
 	// Discord Employee
-	UserFlag_Staff UserFlags = 1 << 0
+	UserFlagStaff UserFlags = 1 << 0
 
 	// Partnered Server Owner
-	UserFlag_Partner UserFlags = 1 << 1
+	UserFlagPartner UserFlags = 1 << 1
 
 	// HypeSquad Events Member
-	UserFlag_HypeSquad UserFlags = 1 << 2
+	UserFlagHypeSquad UserFlags = 1 << 2
 
 	// Bug Hunter Level 1
-	UserFlag_BugHunterLevel1 UserFlags = 1 << 3
+	UserFlagBugHunterLevel1 UserFlags = 1 << 3
 
 	// House Bravery Member
-	UserFlag_HypeSquadOnlineHouse1 UserFlags = 1 << 6
+	UserFlagHypeSquadOnlineHouse1 UserFlags = 1 << 6
 
 	// House Brilliance Member
-	UserFlag_HypeSquadOnlineHouse2 UserFlags = 1 << 7
+	UserFlagHypeSquadOnlineHouse2 UserFlags = 1 << 7
 
 	// House Balance Member
-	UserFlag_HypeSquadOnlineHouse3 UserFlags = 1 << 8
+	UserFlagHypeSquadOnlineHouse3 UserFlags = 1 << 8
 
 	// Early Nitro Supporter
-	UserFlag_PremiumEarlySupporter UserFlags = 1 << 9
+	UserFlagPremiumEarlySupporter UserFlags = 1 << 9
 
 	// User is a team
-	UserFlag_TeamPseudoUser UserFlags = 1 << 10
+	UserFlagTeamPseudoUser UserFlags = 1 << 10
 
 	// Bug Hunter Level 2
-	UserFlag_BugHunterLevel2 UserFlags = 1 << 14
+	UserFlagBugHunterLevel2 UserFlags = 1 << 14
 
 	// Verified Bot
-	UserFlag_VerifiedBot UserFlags = 1 << 16
+	UserFlagVerifiedBot UserFlags = 1 << 16
 
 	// Early Verified Bot Developer
-	UserFlag_VerifiedDeveloper UserFlags = 1 << 17
+	UserFlagVerifiedDeveloper UserFlags = 1 << 17
 
 	// Moderator Programs Alumni
-	UserFlag_CertifiedModerator UserFlags = 1 << 18
+	UserFlagCertifiedModerator UserFlags = 1 << 18
 
 	// Bot uses only HTTP interactions and is shown in the online member list
-	UserFlag_BotHTTPInteractions UserFlags = 1 << 19
+	UserFlagBotHTTPInteractions UserFlags = 1 << 19
 
 	// User is an Active Developer
-	UserFlag_ActiveDeveloper UserFlags = 1 << 22
+	UserFlagActiveDeveloper UserFlags = 1 << 22
 )
 
 // Has returns true if all provided flags are set.
@@ -175,11 +175,16 @@ type UserPremiumType int
 
 // Valid UserPremiumType values.
 const (
-	UserPremium_TypeNone         UserPremiumType = 0
-	UserPremium_TypeNitroClassic UserPremiumType = 1
-	UserPremium_TypeNitro        UserPremiumType = 2
-	UserPremium_TypeNitroBasic   UserPremiumType = 3
+	UserPremiumTypeNone         UserPremiumType = 0
+	UserPremiumTypeNitroClassic UserPremiumType = 1
+	UserPremiumTypeNitro        UserPremiumType = 2
+	UserPremiumTypeNitroBasic   UserPremiumType = 3
 )
+
+// Is returns true if the user's premium type matches the provided premium type.
+func (t UserPremiumType) Is(premiumType UserPremiumType) bool {
+	return t == premiumType
+}
 
 // User represents a Discord user object.
 //
