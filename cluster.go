@@ -96,11 +96,11 @@ func WithLogger(logger Logger) clusterOption {
 //
 // Usage:
 //
-//	y := yada.New(yada.WithIntents(GatewayIntent_Guilds, GatewayIntent_MessageContent))
+//	y := yada.New(yada.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent))
 //
 // Also supports bitwise OR usage:
 //
-//	y := yada.New(yada.WithIntents(GatewayIntent_Guilds | GatewayIntent_MessageContent))
+//	y := yada.New(yada.WithIntents(GatewayIntentGuilds | GatewayIntentMessageContent))
 func WithIntents(intents ...GatewayIntent) clusterOption {
 	var totalIntents GatewayIntent
 	for _, intent := range intents {
@@ -121,13 +121,13 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
 //
 //	y := yada.New(
 //	    yada.WithToken("my_bot_token"),
-//	    yada.WithIntents(GatewayIntent_Guilds, GatewayIntent_MessageContent),
+//	    yada.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent),
 //	    yada.WithLogger(myLogger),
 //	)
 //
 // Defaults:
 //   - Logger: stdout logger at Info level.
-//   - Intents: GatewayIntent_Guilds | GatewayIntent_GuildMessages
+//   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages
 func New(options ...clusterOption) *Cluster {
 	cluster := &Cluster{
 		Logger:  NewDefaultLogger(os.Stdout, LogLevel_InfoLevel),
