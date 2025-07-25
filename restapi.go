@@ -25,22 +25,22 @@ import (
  *       RestAPI       *
  ***********************/
 
-// RestAPI provides methods for Discord REST API endpoints.
-type RestAPI struct {
+// restApi provides methods for Discord REST API endpoints.
+type restApi struct {
 	req    *requester
 	logger Logger
 }
 
-// newRestAPI creates a new RestAPI instance with optional custom requester and logger.
-func newRestAPI(req *requester, token string, logger Logger) *RestAPI {
-	return &RestAPI{
+// newRestApi creates a new RestAPI instance with optional custom requester and logger.
+func newRestApi(req *requester, logger Logger) *restApi {
+	return &restApi{
 		req:    req,
 		logger: logger,
 	}
 }
 
 // Shutdown gracefully shuts down the REST API client.
-func (r *RestAPI) Shutdown() {
+func (r *restApi) Shutdown() {
 	r.logger.Info("RestAPI shutting down")
 	r.req.Shutdown()
 	r.logger = nil
@@ -53,7 +53,7 @@ func (r *RestAPI) Shutdown() {
 
 // call contains common HTTP request data and logic.
 type call struct {
-	api           *RestAPI
+	api           *restApi
 	method        string
 	endpoint      string
 	body          []byte
@@ -162,7 +162,7 @@ func (c *CallDecoded[T]) Wait() (T, error) {
 		return zero, err
 	}
 
-	if withAPI, ok := any(&obj).(interface{ setRestApi(*RestAPI) }); ok {
+	if withAPI, ok := any(&obj).(interface{ setRestApi(*restApi) }); ok {
 		withAPI.setRestApi(c.api)
 	}
 
@@ -189,7 +189,7 @@ func (c *CallDecoded[T]) Submit(callback func(T, error)) {
 //   - Submit(callback) to execute asynchronously with a callback.
 //
 // Returns: *Call[GatewayBot] — prepared request object to fetch gateway bot info.
-func (r *RestAPI) GetGatewayBot() *Call[GatewayBot] {
+func (r *restApi) GetGatewayBot() *Call[GatewayBot] {
 	return &Call[GatewayBot]{
 		call: call{
 			api:           r,
@@ -211,7 +211,7 @@ func (r *RestAPI) GetGatewayBot() *Call[GatewayBot] {
 //	fmt.Println("Bot username:", user.Username)
 //
 // Returns: *Call[User] — prepared request object to fetch self user data.
-func (r *RestAPI) GetSelfUser() *Call[User] {
+func (r *restApi) GetSelfUser() *Call[User] {
 	return &Call[User]{
 		call: call{
 			api:           r,
@@ -270,7 +270,7 @@ func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
 //	fmt.Println("User updated successfully")
 //
 // Returns: *CallNoData — prepared request object to modify self user data.
-func (r *RestAPI) ModifySelfUser(update *ModifySelfUserParams) *CallNoData {
+func (r *restApi) ModifySelfUser(update *ModifySelfUserParams) *CallNoData {
 	body, _ := sonic.Marshal(update)
 
 	return &CallNoData{
@@ -295,7 +295,7 @@ func (r *RestAPI) ModifySelfUser(update *ModifySelfUserParams) *CallNoData {
 //	fmt.Println("Username:", user.Username)
 //
 // Returns: *Call[User] — prepared request object to fetch user data.
-func (r *RestAPI) GetUser(userID Snowflake) *Call[User] {
+func (r *restApi) GetUser(userID Snowflake) *Call[User] {
 	return &Call[User]{
 		call: call{
 			api:           r,
@@ -318,7 +318,7 @@ func (r *RestAPI) GetUser(userID Snowflake) *Call[User] {
 //	fmt.Println("Channel ID:", channel.GetID())
 //
 // Returns: *CallDecoded[Channel] — prepared request object to fetch channel data.
-func (r *RestAPI) GetChannel(channelID Snowflake) *CallDecoded[Channel] {
+func (r *restApi) GetChannel(channelID Snowflake) *CallDecoded[Channel] {
 	return &CallDecoded[Channel]{
 		call: call{
 			api:           r,
