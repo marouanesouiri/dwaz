@@ -190,8 +190,6 @@ func (t UserPremiumType) Is(premiumType UserPremiumType) bool {
 //
 // Reference: https://discord.com/developers/docs/resources/user#user-object-user-structure
 type User struct {
-	restApi *restApi `json:"-"`
-
 	// ID is the user's unique Discord snowflake ID.
 	//
 	// Always present.
