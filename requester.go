@@ -42,6 +42,7 @@ const (
 	headerResetAfter = "X-RateLimit-Reset-After"
 	headerBucket     = "X-RateLimit-Bucket"
 	headerScope      = "X-RateLimit-Scope"
+	headerReason     = "X-Audit-Log-Reason"
 )
 
 var retryableStatusCodes = map[int]struct{}{
@@ -161,7 +162,7 @@ func (r *requester) updateBucket(b *ratelimitBucket, h http.Header) {
 }
 
 // do sends an HTTP request with automatic rate limit and retry handling.
-func (r *requester) do(method, url string, body []byte, authenticateWithToken bool) (*http.Response, error) {
+func (r *requester) do(method, url string, body []byte, authenticateWithToken bool, reason string) (*http.Response, error) {
 	bucketKey := r.generateBucketKey(method, url)
 
 	// Get or create queue mutex
@@ -215,6 +216,10 @@ func (r *requester) do(method, url string, body []byte, authenticateWithToken bo
 			req.Header.Set("Content-Type", "application/json")
 		}
 		req.Header.Set("Accept", "application/json")
+
+		if reason != "" {
+			req.Header.Set(headerReason, reason)
+		}
 
 		// Execute request
 		resp, err := r.client.Do(req)
