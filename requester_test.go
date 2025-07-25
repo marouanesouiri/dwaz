@@ -61,7 +61,7 @@ func TestRequester_Do_Success(t *testing.T) {
 		}), nil
 	})
 
-	resp, err := r.do("GET", "/channels/123/messages", nil, true)
+	resp, err := r.do("GET", "/channels/123/messages", nil, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestRequester_Do_RateLimitRetry(t *testing.T) {
 		}), nil
 	})
 
-	resp, err := r.do("GET", "/channels/123/messages", nil, true)
+	resp, err := r.do("GET", "/channels/123/messages", nil, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestRequester_Do_GlobalRateLimit(t *testing.T) {
 		return newMockResponse(200, `{"ok":true}`, nil), nil
 	})
 
-	resp, err := r.do("GET", "/channels/123/messages", nil, true)
+	resp, err := r.do("GET", "/channels/123/messages", nil, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestRequester_Do_RetryableStatusCodes(t *testing.T) {
 		return newMockResponse(200, `{"ok":true}`, nil), nil
 	})
 
-	resp, err := r.do("GET", "/channels/123/messages", nil, true)
+	resp, err := r.do("GET", "/channels/123/messages", nil, true, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestRequester_Do_MaxRetriesExceeded(t *testing.T) {
 		return newMockResponse(503, "Service Unavailable", nil), nil
 	})
 
-	_, err := r.do("GET", "/channels/123/messages", nil, true)
+	_, err := r.do("GET", "/channels/123/messages", nil, true, "")
 	if err == nil || !strings.Contains(err.Error(), "max retries") {
 		t.Fatalf("expected max retries error, got %v", err)
 	}
@@ -176,7 +176,7 @@ func TestRequester_ConcurrencyStress(t *testing.T) {
 		func() {
 			defer wg.Done()
 			for range requestsPerGoroutine {
-				resp, err := r.do("GET", "/channels/123/messages", nil, true)
+				resp, err := r.do("GET", "/channels/123/messages", nil, true, "")
 				if err != nil {
 					t.Errorf("request error: %v", err)
 					return
@@ -244,7 +244,7 @@ func TestRequester_ConcurrentRateLimitEnforcement(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range requestsPerGoroutine {
-				resp, err := r.do("GET", "/channels/123/messages", nil, true)
+				resp, err := r.do("GET", "/channels/123/messages", nil, true, "")
 				if err != nil {
 					t.Errorf("request error: %v", err)
 					return
