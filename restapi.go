@@ -22,264 +22,218 @@ import (
 )
 
 /***********************
- *	  callWithData	   *
- ***********************/
-
-// callWithData represents a REST API request returning typed decoded data.
-type callWithData[T any] struct {
-	requester     *requester
-	logger        Logger
-	method        string
-	endpoint      string
-	body          []byte
-	authWithToken bool
-	parse         func([]byte) (*T, error)
-}
-
-// Wait executes the request synchronously and parses the response.
-func (c *callWithData[T]) Wait() (*T, error) {
-	c.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
-
-	res, err := c.requester.do(c.method, c.endpoint, c.body, c.authWithToken)
-	if err != nil {
-		c.logger.Error(
-			"Request failed for endpoint " + c.method + c.endpoint + ": " + err.Error(),
-		)
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusUnauthorized {
-		c.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": Invalid Token")
-		return nil, errors.New("Invalid Token !!")
-	}
-
-	bodyBytes, err := io.ReadAll(res.Body)
-	if err != nil {
-		c.logger.Error(
-			"Failed reading response body for endpoint " + c.method + c.endpoint + ": " + err.Error(),
-		)
-		return nil, err
-	}
-
-	data, err := c.parse(bodyBytes)
-	if err != nil {
-		c.logger.Error(
-			"Failed parsing response for endpoint " + c.method + c.endpoint + ": " + err.Error(),
-		)
-		return nil, err
-	}
-
-	c.logger.Debug("Successfully called endpoint: " + c.method + c.endpoint)
-	return data, nil
-}
-
-// Submit runs the request asynchronously and calls the provided callback.
-//
-// Parameters:
-//   - callback — function to invoke with (*T, error) once the request completes.
-func (c *callWithData[T]) Submit(callback func(*T, error)) {
-	// TODO: run callback using a worker pool
-	go func() { callback(c.Wait()) }()
-}
-
-/***********************
- *	 callWithNoData	   *
- ***********************/
-
-// callWithNoData represents a REST API request with no data parsing.
-type callWithNoData struct {
-	requester     *requester
-	logger        Logger
-	method        string
-	endpoint      string
-	body          []byte
-	authWithToken bool
-}
-
-// Wait executes the request synchronously.
-//
-// Returns: error — if the request failed.
-func (c *callWithNoData) Wait() error {
-	c.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
-
-	res, err := c.requester.do(c.method, c.endpoint, c.body, c.authWithToken)
-	if err != nil {
-		c.logger.Error(
-			"Request failed for endpoint " + c.method + c.endpoint + ": " + err.Error(),
-		)
-		return err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode == http.StatusUnauthorized {
-		c.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": Invalid Token")
-		return errors.New("Invalid Token !!")
-	}
-
-	c.logger.Debug("Successfully called endpoint: " + c.method + c.endpoint)
-	return nil
-}
-
-// Submit runs the request asynchronously and calls the provided callback.
-//
-// Parameters:
-//   - callback — function to invoke with (error) once the request completes.
-func (c *callWithNoData) Submit(callback func(error)) {
-	// TODO: run callback using a worker pool
-	go func() { callback(c.Wait()) }()
-}
-
-/***********************
  *       RestAPI       *
  ***********************/
 
-// restApi provides methods for Discord REST API endpoints.
-type restApi struct {
-	requester *requester
-	logger    Logger
+// RestAPI provides methods for Discord REST API endpoints.
+type RestAPI struct {
+	req    *requester
+	logger Logger
 }
 
-// newRestApi creates a new restApi instance with optional custom requester and logger.
-func newRestApi(requester *requester, token string, logger Logger) *restApi {
-	if logger == nil {
-		logger = NewDefaultLogger(nil, LogLevel_DebugLevel)
-	}
-	if requester == nil {
-		requester = newRequester(nil, token, logger)
-	}
-
-	return &restApi{
-		requester: requester,
-		logger:    logger,
+// newRestAPI creates a new RestAPI instance with optional custom requester and logger.
+func newRestAPI(req *requester, token string, logger Logger) *RestAPI {
+	return &RestAPI{
+		req:    req,
+		logger: logger,
 	}
 }
 
 // Shutdown gracefully shuts down the REST API client.
-func (r *restApi) Shutdown() {
+func (r *RestAPI) Shutdown() {
 	r.logger.Info("RestAPI shutting down")
-	r.requester.Shutdown()
+	r.req.Shutdown()
 	r.logger = nil
-	r.requester = nil
+	r.req = nil
 }
 
 /***********************
- *   Gateway Endpoint  *
+ *       Calls         *
  ***********************/
 
-// getGateway constructs a callWithData for the GET /gateway endpoint.
+// call contains common HTTP request data and logic.
+type call struct {
+	api           *RestAPI
+	method        string
+	endpoint      string
+	body          []byte
+	authWithToken bool
+	reason        string
+}
+
+// doRequest performs the HTTP request and returns the response body bytes.
+func (c *call) doRequest() ([]byte, error) {
+	c.api.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
+
+	res, err := c.api.req.do(c.method, c.endpoint, c.body, c.authWithToken, c.reason)
+	if err != nil {
+		c.api.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": " + err.Error())
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusUnauthorized {
+		c.api.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": Invalid Token")
+		return nil, errors.New("invalid token")
+	}
+
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		c.api.logger.Error("Failed reading response body for endpoint " + c.method + c.endpoint + ": " + err.Error())
+		return nil, err
+	}
+
+	c.api.logger.Debug("Successfully called endpoint: " + c.method + c.endpoint)
+	return bodyBytes, nil
+}
+
+/***********************
+ *      Call[T]        *
+ ***********************/
+
+// Call represents a REST API request returning typed decoded data.
+type Call[T any] struct {
+	call
+}
+
+// Wait executes the request synchronously and parses the response into type T.
+func (c *Call[T]) Wait() (*T, error) {
+	body, err := c.doRequest()
+	if err != nil {
+		return nil, err
+	}
+
+	var obj T
+	if err := sonic.Unmarshal(body, &obj); err != nil {
+		c.api.logger.Error("Failed parsing response for endpoint " + c.method + c.endpoint + ": " + err.Error())
+		return nil, err
+	}
+
+	return &obj, nil
+}
+
+// Submit runs the request asynchronously and calls the provided callback.
+func (c *Call[T]) Submit(callback func(*T, error)) {
+	go func() { callback(c.Wait()) }()
+}
+
+/***********************
+ *    CallNoData       *
+ ***********************/
+
+// CallNoData represents a REST API request with no data parsing.
+type CallNoData struct {
+	call
+}
+
+// Wait executes the request synchronously.
+func (c *CallNoData) Wait() error {
+	_, err := c.doRequest()
+	return err
+}
+
+// Submit runs the request asynchronously and calls the provided callback.
+func (c *CallNoData) Submit(callback func(error)) {
+	go func() { callback(c.Wait()) }()
+}
+
+/***********************
+ *   CallDecoded[T]    *
+ ***********************/
+
+// CallDecoded represents a REST API request returning decoded data via custom decode function.
+type CallDecoded[T any] struct {
+	call
+	decode func([]byte) (T, error)
+}
+
+// Wait executes the request synchronously and parses the response.
+func (c *CallDecoded[T]) Wait() (T, error) {
+	var zero T
+
+	body, err := c.doRequest()
+	if err != nil {
+		return zero, err
+	}
+
+	obj, err := c.decode(body)
+	if err != nil {
+		c.api.logger.Error("Failed decoding response for endpoint " + c.method + c.endpoint + ": " + err.Error())
+		return zero, err
+	}
+
+	if withAPI, ok := any(&obj).(interface{ setRestApi(*RestAPI) }); ok {
+		withAPI.setRestApi(c.api)
+	}
+
+	return obj, nil
+}
+
+// Submit runs the request asynchronously and calls the provided callback.
+func (c *CallDecoded[T]) Submit(callback func(T, error)) {
+	go func() { callback(c.Wait()) }()
+}
+
+// GetGatewayBot retrieves bot gateway information including recommended shard count and session limits.
 //
 // Usage example:
 //
-//	gateway, err := .getGateway().Wait()
+//	gateway, err := api.GetGatewayBot().Wait()
 //	if err != nil {
 //	    // handle error
 //	}
-//	fmt.Println("Gateway URL:", gateway.URL)
+//	fmt.Println("Recommended shards:", gateway.Shards)
 //
 // Callers can use:
-//   - Wait() to run synchronously.
-//   - Submit(callback) to run asynchronously with a callback.
+//   - Wait() to execute synchronously.
+//   - Submit(callback) to execute asynchronously with a callback.
 //
-// Returns: *callWithData[gateway] — prepared request object to fetch gateway information.
-func (r *restApi) getGateway() *callWithData[gateway] {
-	return &callWithData[gateway]{
-		requester:     r.requester,
-		logger:        r.logger,
-		method:        "GET",
-		endpoint:      "/gateway",
-		authWithToken: false,
-		parse: func(b []byte) (*gateway, error) {
-			obj := gateway{}
-			err := sonic.Unmarshal(b, &obj)
-			return &obj, err
+// Returns: *Call[GatewayBot] — prepared request object to fetch gateway bot info.
+func (r *RestAPI) GetGatewayBot() *Call[GatewayBot] {
+	return &Call[GatewayBot]{
+		call: call{
+			api:           r,
+			method:        "GET",
+			endpoint:      "/gateway/bot",
+			authWithToken: true,
 		},
 	}
 }
 
-// GetGatewayBot constructs a callWithData for the GET /gateway/bot endpoint.
+// GetSelfUser retrieves the current bot user's data including username, ID, avatar, and flags.
 //
 // Usage example:
 //
-//	gatewayBot, err := .GetGatewayBot().Wait()
+//	user, err := api.GetSelfUser().Wait()
 //	if err != nil {
 //	    // handle error
 //	}
-//	fmt.Println("Recommended shards:", gatewayBot.Shards)
+//	fmt.Println("Bot username:", user.Username)
 //
-// Callers can use:
-//   - Wait() to run synchronously.
-//   - Submit(callback) to run asynchronously with a callback.
-//
-// Returns: *callWithData[GatewayBot] — prepared request object to fetch gateway bot information.
-func (r *restApi) GetGatewayBot() *callWithData[GatewayBot] {
-	return &callWithData[GatewayBot]{
-		requester:     r.requester,
-		logger:        r.logger,
-		method:        "GET",
-		endpoint:      "/gateway/bot",
-		authWithToken: true,
-		parse: func(b []byte) (*GatewayBot, error) {
-			obj := GatewayBot{}
-			err := sonic.Unmarshal(b, &obj)
-			return &obj, err
-		},
-	}
-}
-
-/***********************
- *    User Endpoints   *
- ***********************/
-
-// GetSelfUser retrieves the current user's data.
-//
-// Usage example:
-//
-//	selfUser, err := .GetSelfUser().Wait()
-//	if err != nil {
-//	    // handle error
-//	}
-//	fmt.Println("Bot username:", selfUser.Username)
-//
-// Callers can use:
-//   - Wait() to run synchronously.
-//   - Submit(callback) to run asynchronously with a callback.
-//
-// Returns: *callWithData[User] — prepared request object to fetch self user data.
-func (r *restApi) GetSelfUser() *callWithData[User] {
-	return &callWithData[User]{
-		requester:     r.requester,
-		logger:        r.logger,
-		method:        "GET",
-		endpoint:      "/users/@me",
-		authWithToken: true,
-		parse: func(b []byte) (*User, error) {
-			obj := User{restApi: r}
-			err := sonic.Unmarshal(b, &obj)
-			return &obj, err
+// Returns: *Call[User] — prepared request object to fetch self user data.
+func (r *RestAPI) GetSelfUser() *Call[User] {
+	return &Call[User]{
+		call: call{
+			api:           r,
+			method:        "GET",
+			endpoint:      "/users/@me",
+			authWithToken: true,
 		},
 	}
 }
 
 // ModifySelfUserParams defines fields to modify in the current user account.
+//
+// Fields:
+//   - Username: new username (optional).
+//   - Avatar: new avatar image data as Attachment (optional).
+//   - Banner: new banner image data as Attachment (optional).
 type ModifySelfUserParams struct {
-	// Username is the new username.
-	//
-	// Optional: leave empty to keep unchanged.
-	Username string `json:"username,omitempty"`
-
-	// Avatar is the new avatar image data.
-	//
-	// Optional: leave nil to keep unchanged.
-	Avatar *Attachment `json:"avatar,omitempty"`
-
-	// Banner is the new banner image data.
-	//
-	// Optional: leave nil to keep unchanged.
-	Banner *Attachment `json:"banner,omitempty"`
+	Username string      `json:"username,omitempty"`
+	Avatar   *Attachment `json:"avatar,omitempty"`
+	Banner   *Attachment `json:"banner,omitempty"`
 }
 
-// MarshalJSON is a method used by yada internaly.
 func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
 	type Alias ModifySelfUserParams
 
@@ -301,71 +255,131 @@ func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
 	return sonic.Marshal(aux)
 }
 
-// ModifySelfUser updates the current (self) user account settings.
+// ModifySelfUser updates the current bot user's username, avatar, or banner.
 //
-// Usage example: (update the username and avatar and leave the current banner)
+// Usage example:
 //
 //	update := &ModifySelfUserParams{
 //	    Username: "new_username",
 //	    Avatar:   yada.NewAttachment("path/to/avatar.png"),
 //	}
-//	user, err := .ModifySelfUser(update).Wait()
+//	err := api.ModifySelfUser(update).Wait()
 //	if err != nil {
 //	    // handle error
 //	}
-//	fmt.Println("Updated username:", user.Username)
+//	fmt.Println("User updated successfully")
 //
-// Callers can use:
-//   - Wait() to run synchronously.
-//   - Submit(callback) to run asynchronously with a callback.
-//
-// Parameters:
-//   - update — pointer to ModifySelfUserParams containing fields to update.
-//
-// Returns: *callWithNoData — prepared request object to modify self user data.
-func (r *restApi) ModifySelfUser(update *ModifySelfUserParams) *callWithNoData {
+// Returns: *CallNoData — prepared request object to modify self user data.
+func (r *RestAPI) ModifySelfUser(update *ModifySelfUserParams) *CallNoData {
 	body, _ := sonic.Marshal(update)
 
-	return &callWithNoData{
-		requester:     r.requester,
-		logger:        r.logger,
-		method:        "PATCH",
-		endpoint:      "/users/@me",
-		authWithToken: true,
-		body:          body,
+	return &CallNoData{
+		call: call{
+			api:           r,
+			method:        "PATCH",
+			endpoint:      "/users/@me",
+			authWithToken: true,
+			body:          body,
+		},
 	}
 }
 
-// GetUser retrieves a user by their Snowflake ID.
+// GetUser retrieves a user by their Snowflake ID including username, avatar, and flags.
 //
 // Usage example:
 //
-//	userID := 123456789012345678
-//	user, err := .GetUser(userID).Wait()
+//	user, err := api.GetUser(123456789012345678).Wait()
 //	if err != nil {
 //	    // handle error
 //	}
-//	fmt.Println("User username:", user.Username)
+//	fmt.Println("Username:", user.Username)
 //
-// Callers can use:
-//   - Wait() to run synchronously.
-//   - Submit(callback) to run asynchronously with a callback.
+// Returns: *Call[User] — prepared request object to fetch user data.
+func (r *RestAPI) GetUser(userID Snowflake) *Call[User] {
+	return &Call[User]{
+		call: call{
+			api:           r,
+			method:        "GET",
+			endpoint:      "/users/" + userID.String(),
+			authWithToken: true,
+		},
+	}
+}
+
+// GetChannel retrieves a channel by its Snowflake ID and decodes it into its concrete type
+// (e.g. TextChannel, VoiceChannel, CategoryChannel).
 //
-// Parameters:
-//   - userID — Snowflake ID of the user.
+// Usage example:
 //
-// Returns: *callWithData[User] — prepared request object to fetch user data.
-func (r *restApi) GetUser(userID Snowflake) *callWithData[User] {
-	return &callWithData[User]{
-		requester:     r.requester,
-		logger:        r.logger,
-		method:        "GET",
-		endpoint:      "/users/" + userID.String(),
-		authWithToken: true,
-		parse: func(b []byte) (*User, error) {
-			obj := User{restApi: r}
-			err := sonic.Unmarshal(b, &obj)
-			return &obj, err
+//	channel, err := api.GetChannel(123456789012345678).Wait()
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("Channel ID:", channel.GetID())
+//
+// Returns: *CallDecoded[Channel] — prepared request object to fetch channel data.
+func (r *RestAPI) GetChannel(channelID Snowflake) *CallDecoded[Channel] {
+	return &CallDecoded[Channel]{
+		call: call{
+			api:           r,
+			method:        "GET",
+			endpoint:      "/channels/" + channelID.String(),
+			authWithToken: true,
+		},
+		decode: func(body []byte) (Channel, error) {
+			var u struct{ Type ChannelType }
+			if err := sonic.Unmarshal(body, &u); err != nil {
+				return nil, err
+			}
+
+			var obj Channel
+			var err error
+
+			switch u.Type {
+			case ChannelTypeGuildCategory:
+				var c CategoryChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeGuildText:
+				var c TextChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeGuildVoice:
+				var c VoiceChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeGuildAnnouncement:
+				var c AnnouncementChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeGuildStageVoice:
+				var c StageVoiceChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeGuildForum:
+				var c ForumChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeGuildMedia:
+				var c MediaChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypeAnnouncementThread:
+				var c AnnouncementThreadChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypePrivateThread:
+				var c PrivateThreadChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			case ChannelTypePublicThread:
+				var c PublicThreadChannel
+				err = sonic.Unmarshal(body, &c)
+				obj = &c
+			default:
+				err = errors.New("unknown channel type")
+			}
+			return obj, err
 		},
 	}
 }
