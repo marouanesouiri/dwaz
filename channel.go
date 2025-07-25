@@ -61,6 +61,11 @@ const (
 	ChannelTypeGuildMedia ChannelType = 16
 )
 
+// Is returns true if the channel's Type matches the provided one.
+func (t ChannelType) Is(channelType ChannelType) bool {
+	return t == channelType
+}
+
 // Channel is the interface representing a Discord channel.
 type Channel interface {
 	GetID() Snowflake
