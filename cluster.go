@@ -138,7 +138,10 @@ func New(options ...clusterOption) *Cluster {
 		option(cluster)
 	}
 
-	cluster.restApi = newRestApi(nil, cluster.token, cluster.Logger)
+	cluster.restApi = newRestApi(
+		newRequester(nil, cluster.token, cluster.Logger),
+		cluster.Logger,
+	)
 	cluster.dispatcher = newDispatcher(cluster.Logger)
 	return cluster
 }
