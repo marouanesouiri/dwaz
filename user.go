@@ -246,7 +246,7 @@ type User struct {
 	//
 	// Optional:
 	// - May be nil if no accent color is set.
-	AccentColor *int `json:"accent_color"`
+	AccentColor *Color `json:"accent_color"`
 
 	// Locale is the user's chosen language/locale.
 	//
