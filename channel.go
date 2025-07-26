@@ -66,26 +66,6 @@ func (t ChannelType) Is(channelType ChannelType) bool {
 	return t == channelType
 }
 
-// Channel is the interface representing a Discord channel.
-type Channel interface {
-	GetID() Snowflake
-	GetType() ChannelType
-}
-
-// baseChannel contains only fields present in all channel types.
-//
-// Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
-type baseChannel struct {
-	// ID is the unique Discord snowflake ID of the channel.
-	ID Snowflake `json:"id"`
-
-	// Type is the type of the channel.
-	Type ChannelType `json:"type"`
-}
-
-func (c *baseChannel) GetID() Snowflake     { return c.ID }
-func (c *baseChannel) GetType() ChannelType { return c.Type }
-
 // ChannelFlags represents Discord channel flags combined as a bitfield.
 //
 // Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-flags
@@ -134,6 +114,45 @@ const (
 	PermissionOverwriteTypeMember PermissionOverwriteType = 1
 )
 
+// ForumPostsSortOrder defines the sort order type used to order posts in forum/media channels.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#channel-object-sort-order-types
+type ForumPostsSortOrder int
+
+const (
+	// ForumPostsSortOrderLatestActivity sorts posts by latest activity (default).
+	ForumPostsSortOrderLatestActivity ForumPostsSortOrder = 0
+
+	// ForumPostsSortOrderCreationDate sorts posts by creation time (most recent to oldest).
+	ForumPostsSortOrderCreationDate ForumPostsSortOrder = 1
+)
+
+// Is returns true if the channel's SortOrder type matches the provided one.
+func (t ForumPostsSortOrder) Is(sortOrderType ForumPostsSortOrder) bool {
+	return t == sortOrderType
+}
+
+// ForumLayout defines the layout type used to place posts in forum/media channels.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#channel-object-forum-layout-types
+type ForumLayout int
+
+const (
+	// ForumLayoutNotSet indicates no default has been set for forum channel.
+	ForumLayoutNotSet ForumLayout = 0
+
+	// ForumLayoutListView displays posts as a list.
+	ForumLayoutListView ForumLayout = 1
+
+	// ForumLayoutGalleryView displays posts as a collection of tiles.
+	ForumLayoutGalleryView ForumLayout = 2
+)
+
+// Is returns true if the channel's PostsLayout type matches the provided one.
+func (t ForumLayout) Is(layoutType ForumLayout) bool {
+	return t == layoutType
+}
+
 // PermissionOverwrite represents a permission overwrite for a role or member.
 //
 // Used to grant or deny specific permissions in a channel.
@@ -153,6 +172,13 @@ type PermissionOverwrite struct {
 	Deny Permissions `json:"deny"`
 }
 
+// Channel is the interface representing a Discord channel.
+type Channel interface {
+	GetID() Snowflake
+	GetType() ChannelType
+	Mention() string
+}
+
 // GuildChannel represents a guild-specific channel.
 type GuildChannel interface {
 	Channel
@@ -161,6 +187,28 @@ type GuildChannel interface {
 	GetPosition() int
 	GetPermissionOverwrites() []PermissionOverwrite
 	GetFlags() ChannelFlags
+	JumpURL() string
+}
+
+// baseChannel contains only fields present in all channel types.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
+type baseChannel struct {
+	// ID is the unique Discord snowflake ID of the channel.
+	ID Snowflake `json:"id"`
+
+	// Type is the type of the channel.
+	Type ChannelType `json:"type"`
+}
+
+func (c *baseChannel) GetID() Snowflake     { return c.ID }
+func (c *baseChannel) GetType() ChannelType { return c.Type }
+
+// Mention returns a Discord mention string for the channel.
+//
+// Example output: "<#123456789012345678>"
+func (c *baseChannel) Mention() string {
+	return "<#" + c.ID.String() + ">"
 }
 
 // baseGuildChannel embeds baseChannel and adds fields present in guild channels only.
@@ -202,6 +250,9 @@ func (c *baseGuildChannel) GetPermissionOverwrites() []PermissionOverwrite {
 	return c.PermissionOverwrites
 }
 func (c *baseGuildChannel) GetFlags() ChannelFlags { return c.Flags }
+func (c *baseGuildChannel) JumpURL() string {
+	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
+}
 
 // CategoryChannel represents a guild category channel.
 type CategoryChannel struct {
@@ -320,45 +371,6 @@ type ForumTag struct {
 	// - Empty string means it is not set.
 	// - If EmojiID is zero (not set), then EmojiName must be set (non-empty).
 	EmojiName string `json:"emoji_name"`
-}
-
-// ForumPostsSortOrder defines the sort order type used to order posts in forum/media channels.
-//
-// Reference: https://discord.com/developers/docs/resources/channel#channel-object-sort-order-types
-type ForumPostsSortOrder int
-
-const (
-	// ForumPostsSortOrderLatestActivity sorts posts by latest activity (default).
-	ForumPostsSortOrderLatestActivity ForumPostsSortOrder = 0
-
-	// ForumPostsSortOrderCreationDate sorts posts by creation time (most recent to oldest).
-	ForumPostsSortOrderCreationDate ForumPostsSortOrder = 1
-)
-
-// Is returns true if the channel's SortOrder type matches the provided one.
-func (t ForumPostsSortOrder) Is(sortOrderType ForumPostsSortOrder) bool {
-	return t == sortOrderType
-}
-
-// ForumLayout defines the layout type used to place posts in forum/media channels.
-//
-// Reference: https://discord.com/developers/docs/resources/channel#channel-object-forum-layout-types
-type ForumLayout int
-
-const (
-	// ForumLayoutNotSet indicates no default has been set for forum channel.
-	ForumLayoutNotSet ForumLayout = 0
-
-	// ForumLayoutListView displays posts as a list.
-	ForumLayoutListView ForumLayout = 1
-
-	// ForumLayoutGalleryView displays posts as a collection of tiles.
-	ForumLayoutGalleryView ForumLayout = 2
-)
-
-// Is returns true if the channel's PostsLayout type matches the provided one.
-func (t ForumLayout) Is(layoutType ForumLayout) bool {
-	return t == layoutType
 }
 
 // ForumChannel represents a guild forum channel.
