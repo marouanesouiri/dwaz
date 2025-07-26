@@ -48,186 +48,96 @@ func (r *restApi) Shutdown() {
 }
 
 /***********************
- *       Calls         *
+ *      Helpers        *
  ***********************/
 
-// call contains common HTTP request data and logic.
-type call struct {
-	api           *restApi
-	method        string
-	endpoint      string
-	body          []byte
-	authWithToken bool
-	reason        string
-}
+func (r *restApi) doRequest(method, endpoint string, body []byte, authWithToken bool, reason string) ([]byte, error) {
+	r.logger.Debug("Calling endpoint: " + method + endpoint)
 
-// doRequest performs the HTTP request and returns the response body bytes.
-func (c *call) doRequest() ([]byte, error) {
-	c.api.logger.Debug("Calling endpoint: " + c.method + c.endpoint)
-
-	res, err := c.api.req.do(c.method, c.endpoint, c.body, c.authWithToken, c.reason)
+	res, err := r.req.do(method, endpoint, body, authWithToken, reason)
 	if err != nil {
-		c.api.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": " + err.Error())
+		r.logger.Error("Request failed for endpoint " + method + endpoint + ": " + err.Error())
 		return nil, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode == http.StatusUnauthorized {
-		c.api.logger.Error("Request failed for endpoint " + c.method + c.endpoint + ": Invalid Token")
+		r.logger.Error("Request failed for endpoint " + method + endpoint + ": Invalid Token")
 		return nil, errors.New("invalid token")
 	}
 
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
-		c.api.logger.Error("Failed reading response body for endpoint " + c.method + c.endpoint + ": " + err.Error())
+		r.logger.Error("Failed reading response body for endpoint " + method + endpoint + ": " + err.Error())
 		return nil, err
 	}
 
-	c.api.logger.Debug("Successfully called endpoint: " + c.method + c.endpoint)
+	r.logger.Debug("Successfully called endpoint: " + method + endpoint)
 	return bodyBytes, nil
 }
 
 /***********************
- *      Call[T]        *
+ *      Endpoints      *
  ***********************/
 
-// Call represents a REST API request returning typed decoded data.
-type Call[T any] struct {
-	call
-}
-
-// Wait executes the request synchronously and parses the response into type T.
-func (c *Call[T]) Wait() (*T, error) {
-	body, err := c.doRequest()
-	if err != nil {
-		return nil, err
-	}
-
-	var obj T
-	if err := sonic.Unmarshal(body, &obj); err != nil {
-		c.api.logger.Error("Failed parsing response for endpoint " + c.method + c.endpoint + ": " + err.Error())
-		return nil, err
-	}
-
-	return &obj, nil
-}
-
-// Submit runs the request asynchronously and calls the provided callback.
-func (c *Call[T]) Submit(callback func(*T, error)) {
-	go func() { callback(c.Wait()) }()
-}
-
-/***********************
- *    CallNoData       *
- ***********************/
-
-// CallNoData represents a REST API request with no data parsing.
-type CallNoData struct {
-	call
-}
-
-// Wait executes the request synchronously.
-func (c *CallNoData) Wait() error {
-	_, err := c.doRequest()
-	return err
-}
-
-// Submit runs the request asynchronously and calls the provided callback.
-func (c *CallNoData) Submit(callback func(error)) {
-	go func() { callback(c.Wait()) }()
-}
-
-/***********************
- *   CallDecoded[T]    *
- ***********************/
-
-// CallDecoded represents a REST API request returning decoded data via custom decode function.
-type CallDecoded[T any] struct {
-	call
-	decode func([]byte) (T, error)
-}
-
-// Wait executes the request synchronously and parses the response.
-func (c *CallDecoded[T]) Wait() (T, error) {
-	var zero T
-
-	body, err := c.doRequest()
-	if err != nil {
-		return zero, err
-	}
-
-	obj, err := c.decode(body)
-	if err != nil {
-		c.api.logger.Error("Failed decoding response for endpoint " + c.method + c.endpoint + ": " + err.Error())
-		return zero, err
-	}
-
-	if withAPI, ok := any(&obj).(interface{ setRestApi(*restApi) }); ok {
-		withAPI.setRestApi(c.api)
-	}
-
-	return obj, nil
-}
-
-// Submit runs the request asynchronously and calls the provided callback.
-func (c *CallDecoded[T]) Submit(callback func(T, error)) {
-	go func() { callback(c.Wait()) }()
-}
-
-// GetGatewayBot retrieves bot gateway information including recommended shard count and session limits.
+// FetchGatewayBot retrieves bot gateway information including recommended shard count and session limits.
 //
 // Usage example:
 //
-//	gateway, err := api.GetGatewayBot().Wait()
+//	gateway, err := api.FetchGatewayBot()
 //	if err != nil {
 //	    // handle error
 //	}
 //	fmt.Println("Recommended shards:", gateway.Shards)
 //
-// Callers can use:
-//   - Wait() to execute synchronously.
-//   - Submit(callback) to execute asynchronously with a callback.
-//
-// Returns: *Call[GatewayBot] — prepared request object to fetch gateway bot info.
-func (r *restApi) GetGatewayBot() *Call[GatewayBot] {
-	return &Call[GatewayBot]{
-		call: call{
-			api:           r,
-			method:        "GET",
-			endpoint:      "/gateway/bot",
-			authWithToken: true,
-		},
+// Returns:
+//   - GatewayBot: the bot gateway information.
+//   - error: if the request failed or decoding failed.
+func (r *restApi) FetchGatewayBot() (GatewayBot, error) {
+	body, err := r.doRequest("GET", "/gateway/bot", nil, true, "")
+	if err != nil {
+		return GatewayBot{}, err
 	}
+
+	var obj GatewayBot
+	if err := sonic.Unmarshal(body, &obj); err != nil {
+		r.logger.Error("Failed parsing response for /gateway/bot: " + err.Error())
+		return GatewayBot{}, err
+	}
+	return obj, nil
 }
 
-// GetSelfUser retrieves the current bot user's data including username, ID, avatar, and flags.
+// FetchSelfUser retrieves the current bot user's data including username, ID, avatar, and flags.
 //
 // Usage example:
 //
-//	user, err := api.GetSelfUser().Wait()
+//	user, err := api.FetchSelfUser()
 //	if err != nil {
 //	    // handle error
 //	}
 //	fmt.Println("Bot username:", user.Username)
 //
-// Returns: *Call[User] — prepared request object to fetch self user data.
-func (r *restApi) GetSelfUser() *Call[User] {
-	return &Call[User]{
-		call: call{
-			api:           r,
-			method:        "GET",
-			endpoint:      "/users/@me",
-			authWithToken: true,
-		},
+// Returns:
+//   - User: the current user data.
+//   - error: if the request failed or decoding failed.
+func (r *restApi) FetchSelfUser() (User, error) {
+	body, err := r.doRequest("GET", "/users/@me", nil, true, "")
+	if err != nil {
+		return User{}, err
 	}
+
+	var obj User
+	if err := sonic.Unmarshal(body, &obj); err != nil {
+		r.logger.Error("Failed parsing response for /users/@me: " + err.Error())
+		return User{}, err
+	}
+	return obj, nil
 }
 
-// ModifySelfUserParams defines fields to modify in the current user account.
+// ModifySelfUserParams defines the parameters to update the current user account.
 //
-// Fields:
-//   - Username: new username (optional).
-//   - Avatar: new avatar image data as Attachment (optional).
-//   - Banner: new banner image data as Attachment (optional).
+// All fields are optional:
+//   - If a field is not set (left nil or empty), it will remain unchanged.
 type ModifySelfUserParams struct {
 	Username string      `json:"username,omitempty"`
 	Avatar   *Attachment `json:"avatar,omitempty"`
@@ -263,123 +173,114 @@ func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
 //	    Username: "new_username",
 //	    Avatar:   yada.NewAttachment("path/to/avatar.png"),
 //	}
-//	err := api.ModifySelfUser(update).Wait()
+//	err := api.ModifySelfUser(update)
 //	if err != nil {
 //	    // handle error
 //	}
 //	fmt.Println("User updated successfully")
 //
-// Returns: *CallNoData — prepared request object to modify self user data.
-func (r *restApi) ModifySelfUser(update *ModifySelfUserParams) *CallNoData {
+// Returns:
+//   - error: if the request failed.
+func (r *restApi) ModifySelfUser(update *ModifySelfUserParams) error {
 	body, _ := sonic.Marshal(update)
-
-	return &CallNoData{
-		call: call{
-			api:           r,
-			method:        "PATCH",
-			endpoint:      "/users/@me",
-			authWithToken: true,
-			body:          body,
-		},
-	}
+	_, err := r.doRequest("PATCH", "/users/@me", body, true, "")
+	return err
 }
 
-// GetUser retrieves a user by their Snowflake ID including username, avatar, and flags.
+// FetchUser retrieves a user by their Snowflake ID including username, avatar, and flags.
 //
 // Usage example:
 //
-//	user, err := api.GetUser(123456789012345678).Wait()
+//	user, err := api.FetchUser(123456789012345678)
 //	if err != nil {
 //	    // handle error
 //	}
 //	fmt.Println("Username:", user.Username)
 //
-// Returns: *Call[User] — prepared request object to fetch user data.
-func (r *restApi) GetUser(userID Snowflake) *Call[User] {
-	return &Call[User]{
-		call: call{
-			api:           r,
-			method:        "GET",
-			endpoint:      "/users/" + userID.String(),
-			authWithToken: true,
-		},
+// Returns:
+//   - User: the user data.
+//   - error: if the request failed or decoding failed.
+func (r *restApi) FetchUser(userID Snowflake) (User, error) {
+	body, err := r.doRequest("GET", "/users/"+userID.String(), nil, true, "")
+	if err != nil {
+		return User{}, err
 	}
+
+	var obj User
+	if err := sonic.Unmarshal(body, &obj); err != nil {
+		r.logger.Error("Failed parsing response for /users/{id}: " + err.Error())
+		return User{}, err
+	}
+	return obj, nil
 }
 
-// GetChannel retrieves a channel by its Snowflake ID and decodes it into its concrete type
+// FetchChannel retrieves a channel by its Snowflake ID and decodes it into its concrete type
 // (e.g. TextChannel, VoiceChannel, CategoryChannel).
 //
 // Usage example:
 //
-//	channel, err := api.GetChannel(123456789012345678).Wait()
+//	channel, err := api.FetchChannel(123456789012345678)
 //	if err != nil {
 //	    // handle error
 //	}
 //	fmt.Println("Channel ID:", channel.GetID())
 //
-// Returns: *CallDecoded[Channel] — prepared request object to fetch channel data.
-func (r *restApi) GetChannel(channelID Snowflake) *CallDecoded[Channel] {
-	return &CallDecoded[Channel]{
-		call: call{
-			api:           r,
-			method:        "GET",
-			endpoint:      "/channels/" + channelID.String(),
-			authWithToken: true,
-		},
-		decode: func(body []byte) (Channel, error) {
-			var u struct{ Type ChannelType }
-			if err := sonic.Unmarshal(body, &u); err != nil {
-				return nil, err
-			}
+// Returns:
+//   - Channel: the decoded channel object.
+//   - error: if the request failed or the type is unknown or decoding failed.
+func (r *restApi) FetchChannel(channelID Snowflake) (Channel, error) {
+	body, err := r.doRequest("GET", "/channels/"+channelID.String(), nil, true, "")
+	if err != nil {
+		return nil, err
+	}
 
-			var obj Channel
-			var err error
+	var meta struct{ Type ChannelType }
+	if err := sonic.Unmarshal(body, &meta); err != nil {
+		return nil, err
+	}
 
-			switch u.Type {
-			case ChannelTypeGuildCategory:
-				var c CategoryChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeGuildText:
-				var c TextChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeGuildVoice:
-				var c VoiceChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeGuildAnnouncement:
-				var c AnnouncementChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeGuildStageVoice:
-				var c StageVoiceChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeGuildForum:
-				var c ForumChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeGuildMedia:
-				var c MediaChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypeAnnouncementThread:
-				var c AnnouncementThreadChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypePrivateThread:
-				var c PrivateThreadChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			case ChannelTypePublicThread:
-				var c PublicThreadChannel
-				err = sonic.Unmarshal(body, &c)
-				obj = &c
-			default:
-				err = errors.New("unknown channel type")
-			}
-			return obj, err
-		},
+	switch meta.Type {
+	case ChannelTypeGuildCategory:
+		var c CategoryChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeGuildText:
+		var c TextChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeGuildVoice:
+		var c VoiceChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeGuildAnnouncement:
+		var c AnnouncementChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeGuildStageVoice:
+		var c StageVoiceChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeGuildForum:
+		var c ForumChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeGuildMedia:
+		var c MediaChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypeAnnouncementThread:
+		var c AnnouncementThreadChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypePrivateThread:
+		var c PrivateThreadChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	case ChannelTypePublicThread:
+		var c PublicThreadChannel
+		err = sonic.Unmarshal(body, &c)
+		return &c, err
+	default:
+		return nil, errors.New("unknown channel type")
 	}
 }
