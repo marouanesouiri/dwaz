@@ -31,7 +31,7 @@ type Color int64
 //	c := Color(0x1ABC9C)
 //	fmt.Println(c.String()) // prints: "#1ABC9C"
 func (c Color) String() string {
-	return fmt.Sprintf("#%06X", c)
+	return fmt.Sprintf("#%06X", int64(c))
 }
 
 // ParseColor parses a hex color string "#RRGGBB" (or without "#") and returns it as Color.
