@@ -187,7 +187,7 @@ func (c *Cluster) Start(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	gatewayBotData, err := c.restApi.GetGatewayBot().Wait()
+	gatewayBotData, err := c.restApi.FetchGatewayBot()
 	if err != nil {
 		return err
 	}
