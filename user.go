@@ -15,6 +15,8 @@ package yada
 
 import (
 	"strconv"
+
+	"github.com/bytedance/sonic"
 )
 
 // UserFlags represents flags on a Discord user account.
@@ -385,4 +387,35 @@ func (u *User) DefaultAvatarIndex() int {
 	}
 	id, _ := strconv.Atoi(u.Discriminator)
 	return id % 5
+}
+
+// ModifySelfUserParams defines the parameters to update the current user account.
+//
+// All fields are optional:
+//   - If a field is not set (left nil or empty), it will remain unchanged.
+type ModifySelfUserParams struct {
+	Username string      `json:"username,omitempty"`
+	Avatar   *Attachment `json:"avatar,omitempty"`
+	Banner   *Attachment `json:"banner,omitempty"`
+}
+
+func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
+	type Alias ModifySelfUserParams
+
+	aux := struct {
+		*Alias
+		Avatar *string `json:"avatar,omitempty"`
+		Banner *string `json:"banner,omitempty"`
+	}{
+		Alias: (*Alias)(p),
+	}
+
+	if p.Avatar != nil {
+		aux.Avatar = &p.Avatar.DataURI
+	}
+	if p.Banner != nil {
+		aux.Banner = &p.Banner.DataURI
+	}
+
+	return sonic.Marshal(aux)
 }

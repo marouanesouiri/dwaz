@@ -134,37 +134,6 @@ func (r *restApi) FetchSelfUser() (User, error) {
 	return obj, nil
 }
 
-// ModifySelfUserParams defines the parameters to update the current user account.
-//
-// All fields are optional:
-//   - If a field is not set (left nil or empty), it will remain unchanged.
-type ModifySelfUserParams struct {
-	Username string      `json:"username,omitempty"`
-	Avatar   *Attachment `json:"avatar,omitempty"`
-	Banner   *Attachment `json:"banner,omitempty"`
-}
-
-func (p *ModifySelfUserParams) MarshalJSON() ([]byte, error) {
-	type Alias ModifySelfUserParams
-
-	aux := struct {
-		*Alias
-		Avatar *string `json:"avatar,omitempty"`
-		Banner *string `json:"banner,omitempty"`
-	}{
-		Alias: (*Alias)(p),
-	}
-
-	if p.Avatar != nil {
-		aux.Avatar = &p.Avatar.DataURI
-	}
-	if p.Banner != nil {
-		aux.Banner = &p.Banner.DataURI
-	}
-
-	return sonic.Marshal(aux)
-}
-
 // ModifySelfUser updates the current bot user's username, avatar, or banner.
 //
 // Usage example:
