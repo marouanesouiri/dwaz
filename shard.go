@@ -181,7 +181,7 @@ func (s *Shard) readLoop() {
 		switch payload.Op {
 		case gatewayOpcodeDispatch:
 			atomic.StoreInt64(&s.seq, payload.S)
-			s.dispatcher.dispatch(s.shardID, payload.T, msg)
+			s.dispatcher.dispatch(s.shardID, payload.T, payload.D)
 
 			if payload.T == "READY" {
 				var ready struct {
