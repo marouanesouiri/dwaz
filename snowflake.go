@@ -52,6 +52,11 @@ func (s Snowflake) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + strconv.FormatUint(uint64(s), 10) + `"`), nil
 }
 
+// UnSet returns true if the Snowflake is zero (unset).
+func (s Snowflake) UnSet() bool {
+	return s == 0
+}
+
 // String returns the Snowflake as string.
 func (s Snowflake) String() string {
 	return strconv.FormatUint(uint64(s), 10)
