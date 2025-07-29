@@ -1,4 +1,4 @@
-/************************************************************************************
+/***********************************************************************************
  *
  * yada (yet another discord api), A Lightweight Go library for Discord API
  *
@@ -102,6 +102,11 @@ type Embed struct {
 	// Optional, max 25 fields.
 	// field.name max 256 characters, field.value max 1024 characters
 	Fields []EmbedField `json:"fields,omitempty"`
+}
+
+// Builder returns a new EmbedBuilder initialized with a copy of the current embed.
+func (e *Embed) Builder() EmbedBuilder {
+	return EmbedBuilder{embed: *e}
 }
 
 // EmbedFooter represents the footer object of an embed.
@@ -368,6 +373,22 @@ func (b *EmbedBuilder) AddField(name, value string, inline bool) *EmbedBuilder {
 		Value:  value,
 		Inline: inline,
 	})
+	return b
+}
+
+// SetFields sets all embed fields at once.
+//
+// Note: This method does not enforce field limits or length constraints.
+// It's recommended to use EmbedBuilder.AddField for validation.
+func (e *EmbedBuilder) SetFields(fields ...EmbedField) {
+	e.embed.Fields = fields
+}
+
+// RemoveField removes a field from the EmbedBuilder
+func (b *EmbedBuilder) RemoveField(i int) *EmbedBuilder {
+	if len(b.embed.Fields) > i {
+		b.embed.Fields = append(b.embed.Fields[:i], b.embed.Fields[i+1:]...)
+	}
 	return b
 }
 
