@@ -15,6 +15,7 @@ package yada
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/bytedance/sonic"
 )
@@ -229,15 +230,8 @@ type User struct {
 	// System indicates if the user is an official Discord system user.
 	//
 	// Optional:
-	// - Omitted if false.
-	// Only applicable for special system users.
+	//  - Only applicable for special system users.
 	System bool `json:"system,omitempty"`
-
-	// MFAEnabled indicates if the user has two-factor authentication enabled.
-	//
-	// Optional:
-	// - Omitted if false or not applicable.
-	MFAEnabled bool `json:"mfa_enabled,omitempty"`
 
 	// Banner is the user's banner hash.
 	//
@@ -249,31 +243,6 @@ type User struct {
 	// Optional:
 	// - May be nil if no accent color is set.
 	AccentColor *Color `json:"accent_color"`
-
-	// Locale is the user's chosen language/locale.
-	//
-	// Optional:
-	// - May be omitted for bots or partial user objects.
-	Locale *string `json:"locale,omitempty"`
-
-	// Verified indicates if the user's email is verified.
-	//
-	// Optional:
-	// - Present only in OAuth2 user objects with `email` scope.
-	// - Nil if not present or scope not granted.
-	Verified *bool `json:"verified,omitempty"`
-
-	// Email is the user's email address.
-	//
-	// Optional:
-	// - Present only in OAuth2 user objects with `email` scope.
-	// - Nil if not present or scope not granted.
-	Email *string `json:"email"`
-
-	// Flags are internal user account flags.
-	//
-	// Always present.
-	Flags UserFlags `json:"flags,omitempty"`
 
 	// PremiumType is the Nitro subscription type.
 	//
@@ -306,11 +275,48 @@ type User struct {
 	PrimaryGuild *UserPrimaryGuild `json:"primary_guild,omitempty"`
 }
 
+type OAuth2User struct {
+	User
+
+	// Flags are internal user account flags.
+	Flags UserFlags `json:"flags"`
+
+	// Locale is the user's chosen language/locale.
+	Locale string `json:"locale"`
+
+	// MFAEnabled indicates if the user has two-factor authentication enabled.
+	MFAEnabled bool `json:"mfa_enabled"`
+
+	// Verified indicates if the user's email is verified.
+	Verified bool `json:"verified"`
+
+	// Email is the user's email address.
+	Email *string `json:"email"`
+}
+
+// Tag returns the user's tag in the format "username#discriminator".
+//
+// Example output: "bob#1337"
+//
+// Note: For users with no discriminator (new Discord accounts),
+// this returns only the username (Example output: "bob").
+func (u *User) Tag() string {
+	if u.Discriminator != "0" {
+		return u.Username + "#" + u.Discriminator
+	}
+	return u.Username
+}
+
 // Mention returns a Discord mention string for the user.
 //
 // Example output: "<@123456789012345678>"
 func (u *User) Mention() string {
 	return "<@" + u.ID.String() + ">"
+}
+
+// CreatedAt returns the time when this user account is created.
+func (u *User) CreatedAt() time.Time {
+	return u.ID.Timestamp()
 }
 
 // DisplayAvatarURL returns the URL to the user's avatar image.
