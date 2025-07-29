@@ -13,6 +13,8 @@
 
 package yada
 
+import "time"
+
 // Emoji represents a custom emoji object used within a Discord guild.
 //
 // Reference: https://discord.com/developers/docs/resources/emoji#emoji-object
@@ -21,29 +23,28 @@ type Emoji struct {
 	//
 	// Optional:
 	// - May be nil (zero value) for unicode emojis
-	ID Snowflake `json:"id"`
+	ID Snowflake `json:"id,omitempty"`
 
 	// Name is the emoji's name.
 	//
 	// Optional:
-	// - May be empty in reaction emoji objects.
-	// - Always present in full emoji objects returned from guild endpoints.
-	Name string `json:"name"`
+	// - May be empty in deleted emojis.
+	Name string `json:"name,omitempty"`
 
 	// Roles is a list of role IDs allowed to use this emoji.
-	Roles []Snowflake `json:"roles"`
+	Roles []Snowflake `json:"roles,omitempty"`
 
 	// RequireColons indicates whether the emoji must be wrapped in colons to be used.
-	RequireColons bool `json:"require_colons"`
+	RequireColons bool `json:"require_colons,omitempty"`
 
 	// Managed indicates whether the emoji is managed by an integration.
-	Managed bool `json:"managed"`
+	Managed bool `json:"managed,omitempty"`
 
 	// Animated indicates whether the emoji is an animated emoji (.gif).
-	Animated bool `json:"animated"`
+	Animated bool `json:"animated,omitempty"`
 
 	// Available indicates whether the emoji can currently be used.
-	Available bool `json:"available"`
+	Available bool `json:"available,omitempty"`
 }
 
 // Mention returns a Discord mention string for the emoji.
@@ -56,4 +57,12 @@ func (e *Emoji) Mention() string {
 	}
 	mention += e.Name + ":" + e.ID.String() + ":>"
 	return mention
+}
+
+// CreatedAt returns the time when this emojis is created at.
+func (e Emoji) CreatedAt() time.Time {
+	if e.ID == 0 {
+		return time.Time{}
+	}
+	return e.ID.Timestamp()
 }
