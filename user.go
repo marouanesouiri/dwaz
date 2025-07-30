@@ -291,7 +291,7 @@ type OAuth2User struct {
 	Verified bool `json:"verified"`
 
 	// Email is the user's email address.
-	Email *string `json:"email"`
+	Email string `json:"email"`
 }
 
 // Tag returns the user's tag in the format "username#discriminator".
