@@ -87,13 +87,9 @@ func (f UserFlags) Has(flags ...UserFlags) bool {
 // Reference: https://discord.com/developers/docs/resources/user#nameplate
 type Nameplate struct {
 	// SkuID is the Discord snowflake ID of the nameplate SKU.
-	//
-	// Always present.
 	SkuID Snowflake `json:"sku_id"`
 
 	// Asset is the path to the nameplate asset.
-	//
-	// Always present.
 	Asset string `json:"asset"`
 
 	// Label is the label of this nameplate.
@@ -103,8 +99,7 @@ type Nameplate struct {
 
 	// Palette is the background color of the nameplate.
 	//
-	// Always present.
-	// Allowed values:
+	// Values possible:
 	// "crimson", "berry", "sky", "teal", "forest",
 	// "bubble_gum", "violet", "cobalt", "clover", "lemon", "white"
 	Palette string `json:"palette"`
@@ -117,7 +112,8 @@ type Nameplate struct {
 type Collectibles struct {
 	// Nameplate is the user's nameplate collectible data.
 	//
-	// Optional, may be nil if the user has no nameplate collectible.
+	// Optional:
+	//  - may be nil if the user has no nameplate collectible.
 	Nameplate *Nameplate `json:"nameplate,omitempty"`
 }
 
@@ -130,30 +126,29 @@ type UserPrimaryGuild struct {
 	// IdentityGuildID is the Discord snowflake ID of the user's primary guild.
 	//
 	// Optional:
-	// - May be nil if the user has no primary guild set.
-	// - May be nil if the system cleared the identity due to guild tag support removal or privacy.
+	//  - May be nil if the user has no primary guild set.
+	//  - May be nil if the system cleared the identity due to guild tag support removal or privacy.
 	IdentityGuildID *Snowflake `json:"identity_guild_id,omitempty"`
 
 	// IdentityEnabled indicates if the user currently displays the primary guild's server tag.
 	//
 	// Optional:
-	// - May be nil if the identity was cleared by the system (e.g., guild tag disabled).
-	// - May be false if the user explicitly disabled showing the tag.
+	//  - May be nil if the identity was cleared by the system (e.g., guild tag disabled).
+	//  - May be false if the user explicitly disabled showing the tag.
 	IdentityEnabled *bool `json:"identity_enabled,omitempty"`
 
 	// Tag is the text of the user's server tag.
 	//
 	// Optional:
-	// - May be nil or empty string if no tag is set.
-	// - Limited to 4 characters.
-	// - May be cleared if tag data is invalid or unavailable.
+	//  - May be nil or empty string if no tag is set.
+	//  - Limited to 4 characters.
+	//  - May be cleared if tag data is invalid or unavailable.
 	Tag *string `json:"tag,omitempty"`
 
 	// Badge is the hash string of the user's server tag badge.
 	//
 	// Optional:
-	// - May be nil if user has no badge or badge info unavailable.
-	// - Appearance depends on guild config or Discord rollout.
+	//  - May be nil if user has no badge or badge info unavailable.
 	Badge *string `json:"badge,omitempty"`
 }
 
@@ -162,13 +157,9 @@ type UserPrimaryGuild struct {
 // Reference: https://discord.com/developers/docs/resources/user#avatar-decoration-object
 type AvatarDecorationData struct {
 	// Asset is the avatar decoration hash.
-	//
-	// Always present.
 	Asset string `json:"asset"`
 
 	// SkuID is the Discord snowflake ID of the avatar decoration SKU.
-	//
-	// Always present.
 	SkuID Snowflake `json:"sku_id"`
 }
 
@@ -194,76 +185,61 @@ func (t UserPremiumType) Is(premiumType UserPremiumType) bool {
 // Reference: https://discord.com/developers/docs/resources/user#user-object-user-structure
 type User struct {
 	// ID is the user's unique Discord snowflake ID.
-	//
-	// Always present.
 	ID Snowflake `json:"id"`
 
 	// Username is the user's username (not unique).
-	//
-	// Always present.
 	Username string `json:"username"`
 
 	// Discriminator is the user's 4-digit Discord tag suffix.
-	//
-	// Always present.
 	Discriminator string `json:"discriminator"`
 
 	// GlobalName is the user's display name.
-	//
-	// Always present, may be empty string if unset.
 	// For bots, this is the application name.
+	//
+	// Optional:
+	//  - May be empty string if unset.
 	GlobalName string `json:"global_name"`
 
 	// Avatar is the user's avatar hash.
 	//
-	// Always present, may be empty string if no avatar.
+	// Optional:
+	//  - May be empty string if no avatar.
 	Avatar string `json:"avatar"`
 
 	// Bot indicates if the user is a bot account.
-	//
-	// Optional:
-	// - Omitted or false for normal users.
-	// - Present and true for bot accounts.
-	// When true, bot-only fields may be accessed safely without nil checks.
 	Bot bool `json:"bot,omitempty"`
 
 	// System indicates if the user is an official Discord system user.
-	//
-	// Optional:
-	//  - Only applicable for special system users.
 	System bool `json:"system,omitempty"`
 
 	// Banner is the user's banner hash.
 	//
-	// Always present, may be empty string if no banner.
+	// Optional:
+	//  - May be empty string if no banner.
 	Banner string `json:"banner"`
 
 	// AccentColor is the user's banner color encoded as an integer.
 	//
 	// Optional:
-	// - May be nil if no accent color is set.
+	//  - May be nil if no accent color is set.
 	AccentColor *Color `json:"accent_color"`
 
 	// PremiumType is the Nitro subscription type.
-	//
-	// Always present.
 	PremiumType UserPremiumType `json:"premium_type,omitempty"`
 
 	// PublicFlags are the public flags on the user account.
-	//
-	// Always present.
 	PublicFlags UserFlags `json:"public_flags,omitempty"`
 
 	// AvatarDecorationData holds avatar decoration info.
 	//
 	// Optional:
-	// - May be nil if user has no avatar decoration.
+	//  - May be nil if user has no avatar decoration.
 	AvatarDecorationData *AvatarDecorationData `json:"avatar_decoration_data,omitempty"`
 
 	// Collectibles holds user's collectibles.
 	//
 	// Optional:
-	// - May be nil if user has no collectibles.
+	//  - May be nil if user has no collectibles.
 	Collectibles *Collectibles `json:"collectibles,omitempty"`
 
 	// PrimaryGuild holds the user's primary guild info.
