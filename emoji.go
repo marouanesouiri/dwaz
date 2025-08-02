@@ -51,6 +51,9 @@ type Emoji struct {
 //
 // Example output: "<:sliming:123456789012345678>"
 func (e *Emoji) Mention() string {
+	if e.ID == 0 { // (no id == unicode emoji)
+		return e.Name
+	}
 	mention := "<"
 	if e.Animated {
 		mention += "a"
