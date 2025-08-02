@@ -203,7 +203,7 @@ func ApplicationCoverURL(appID Snowflake, coverHash string, format ApplicationCo
 }
 
 /***********************
- *     Sticker Endpoints *
+ *   Sticker Endpoints *
  ***********************/
 
 type StickerFormat string
@@ -221,6 +221,18 @@ func StickerURL(stickerID Snowflake, format StickerFormat) string {
 		base = MediaBaseURL + "stickers/" + stickerID.String()
 	}
 	return base + string(format)
+}
+
+type StickerPackBannerFormat string
+
+const (
+	StickerPackBannerFormatPNG    StickerPackBannerFormat = ".png"
+	StickerPackBannerFormatGIF    StickerPackBannerFormat = ".gif"
+	StickerPackBannerFormatLottie StickerPackBannerFormat = ".json"
+)
+
+func StickerPackBannerURL(stickerPackBannerAssetID Snowflake, format StickerPackBannerFormat, size ImageSize) string {
+	return ImageBaseURL + "app-assets/710982414301790216/store/" + stickerPackBannerAssetID.String() + "/" + string(format) + "?size=" + strconv.Itoa(int(size))
 }
 
 /***********************
