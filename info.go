@@ -15,5 +15,5 @@ package yada
 
 const (
 	LIB_NAME    = "yada"
-	LIB_VERSION = "0.9.2"
+	LIB_VERSION = "0.10.1"
 )
