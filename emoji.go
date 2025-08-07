@@ -63,9 +63,26 @@ func (e *Emoji) Mention() string {
 }
 
 // CreatedAt returns the time when this emojis is created at.
-func (e Emoji) CreatedAt() time.Time {
+func (e *Emoji) CreatedAt() time.Time {
 	if e.ID == 0 {
 		return time.Time{}
 	}
 	return e.ID.Timestamp()
 }
+
+
+// URL returns the URL to the emoji's image.
+func (e *Emoji) URL() string {
+	var format EmojiFormat = EmojiFormatPNG
+	if e.Animated {
+		format = EmojiFormatGIF
+	}
+	return EmojiURL(e.ID, format, ImageSize32)
+}
+
+// URLWith returns the URL to the emoji's image.
+// allowing explicit specification of image format and size.
+func (e *Emoji) URLWith(format EmojiFormat, size ImageSize) string {
+	return EmojiURL(e.ID, format, size)
+}
+
