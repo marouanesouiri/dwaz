@@ -138,11 +138,11 @@ func (r *restApi) FetchSelfUser() (User, error) {
 //
 // Usage example:
 //
-//	update := &ModifySelfUserParams{
+// 	newAvatar, _ := yada.NewImageFile("path/to/avatar.png")
+//	err := api.ModifySelfUser(ModifySelfUserParams{
 //	    Username: "new_username",
-//	    Avatar:   yada.NewAttachment("path/to/avatar.png"),
-//	}
-//	err := api.ModifySelfUser(update)
+//	    Avatar:   avatar,
+//	})
 //	if err != nil {
 //	    // handle error
 //	}
@@ -150,7 +150,7 @@ func (r *restApi) FetchSelfUser() (User, error) {
 //
 // Returns:
 //   - error: if the request failed.
-func (r *restApi) ModifySelfUser(update *ModifySelfUserParams) error {
+func (r *restApi) ModifySelfUser(update ModifySelfUserParams) error {
 	body, _ := sonic.Marshal(update)
 	_, err := r.doRequest("PATCH", "/users/@me", body, true, "")
 	return err
