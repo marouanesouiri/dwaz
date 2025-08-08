@@ -36,6 +36,7 @@ import (
 // Create a Cluster using yada.New() with desired options, then call Start().
 type Cluster struct {
 	Logger      Logger        // logger used throughout the cluster
+	workerPool  WorkerPool    // worker pool used to run tasks asynchronously
 	token       string        // bot token (without "Bot " prefix)
 	intents     GatewayIntent // configured Gateway intents
 	shards      []*Shard      // managed Gateway shards
@@ -92,6 +93,22 @@ func WithLogger(logger Logger) clusterOption {
 	}
 }
 
+// WithWorkerPool sets a custom workerpool implementation for your cluster.
+//
+// Usage:
+//
+//	y := yada.New(yada.WithWorkerPool(myWorkerPool))
+//
+// Logs fatal and exits if workerpool is nil.
+func WithWorkerPool(workerPool WorkerPool) clusterOption {
+	if workerPool == nil {
+		log.Fatal("WithWorkerPool: workerPool must not be nil")
+	}
+	return func(c *Cluster) {
+		c.workerPool = workerPool
+	}
+}
+
 // WithIntents sets Gateway intents for the cluster shards.
 //
 // Usage:
@@ -130,19 +147,22 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
 //   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages
 func New(options ...clusterOption) *Cluster {
 	cluster := &Cluster{
-		Logger:  NewDefaultLogger(os.Stdout, LogLevel_InfoLevel),
-		intents: GatewayIntentGuilds | GatewayIntentGuildMessages,
+		Logger: NewDefaultLogger(os.Stdout, LogLevel_InfoLevel),
+		intents: GatewayIntentGuilds |
+			GatewayIntentGuildMessages |
+			GatewayIntentGuildMembers,
 	}
 
 	for _, option := range options {
 		option(cluster)
 	}
 
+	cluster.workerPool = NewDefaultWorkerPool(cluster.Logger)
 	cluster.restApi = newRestApi(
 		newRequester(nil, cluster.token, cluster.Logger),
 		cluster.Logger,
 	)
-	cluster.dispatcher = newDispatcher(cluster.Logger)
+	cluster.dispatcher = newDispatcher(cluster.Logger, cluster.workerPool)
 	return cluster
 }
 
@@ -228,6 +248,7 @@ func (c *Cluster) Shutdown() {
 	c.restApi.Shutdown()
 	c.restApi = nil
 	c.Logger = nil
+	c.workerPool = nil
 	for _, shard := range c.shards {
 		shard.Shutdown()
 	}
