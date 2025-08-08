@@ -372,7 +372,7 @@ func (u *User) DefaultAvatarIndex() int {
 // ModifySelfUserParams defines the parameters to update the current user account.
 //
 // All fields are optional:
-//   - If a field is not set (left nil or empty), it will remain unchanged.
+//   - If a field is not set (left empty), it will remain unchanged.
 type ModifySelfUserParams struct {
 	Username string      `json:"username,omitempty"`
 	Avatar   Base64Image `json:"avatar,omitempty"`
