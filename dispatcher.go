@@ -44,11 +44,9 @@ type EventhandlersManager interface {
 //   - This implementation is not fully thread-safe for handler registration. You must register
 //     all handlers sequentially before starting event dispatching (usually at startup).
 //   - Dispatching handlers is done asynchronously in separate goroutines for each event.
-//
-// TODO:
-// - Add worker pool support to control concurrency and reduce goroutine overhead.
 type dispatcher struct {
 	logger           Logger
+	workerPool       WorkerPool
 	handlersManagers map[string]EventhandlersManager
 	mu               sync.RWMutex
 }
@@ -75,12 +73,9 @@ func newDispatcher(logger Logger) *dispatcher {
 // The eventName must exactly match the Discord event string (e.g., "MESSAGE_CREATE").
 //
 // This method spawns a new goroutine for each dispatch to avoid blocking the main event loop.
-//
-// TODO:
-// - Use a worker pool to controle goroutine creation.
 func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
 	d.logger.Debug("Event '" + eventName + "' dispatched")
-	go func() {
+	if !d.workerPool.Submit(func() {
 		d.mu.RLock()
 		hm, ok := d.handlersManagers[eventName]
 		d.mu.RUnlock()
@@ -88,7 +83,9 @@ func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
 		if ok {
 			hm.handleEvent(shardID, data)
 		}
-	}()
+	}) {
+		d.logger.Warn("Dispatcher: dropped event '" + eventName + "' due to full queue")
+	}
 }
 
 /*****************************
