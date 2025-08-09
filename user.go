@@ -434,6 +434,20 @@ func (u *User) AvatarDecorationURLWith(size ImageSize) string {
 	return ""
 }
 
+// GuildTagBadgeURL returns the URL to the user's PrimaryGuild badge image.
+//
+// If the user has no PrimaryGuild badge, it returns an empty string.
+//
+// Example usage:
+//
+//	url := user.GuildTagBadgeURL()
+func (u *User) GuildTagBadgeURL() string {
+	if u.PrimaryGuild != nil && u.PrimaryGuild.IdentityGuildID != nil && u.PrimaryGuild.Badge != nil {
+		return GuildTagBadgeURL(*u.PrimaryGuild.IdentityGuildID, *u.PrimaryGuild.Badge,GuildTagBadgeFormatPNG, ImageSize128)
+	}
+	return ""
+}
+
 // ModifySelfUserParams defines the parameters to update the current user account.
 //
 // All fields are optional:
