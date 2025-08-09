@@ -306,3 +306,17 @@ const (
 func RoleIconURL(roleID Snowflake, iconHash string, format RoleIconFormat, size ImageSize) string {
 	return ImageBaseURL + "role-icons/" + roleID.String() + "/" + iconHash + string(format) + "?size=" + strconv.Itoa(int(size))
 }
+
+/***********************
+ *  Avatar Decoration  *
+ ***********************/
+
+type AvatarDecorationIconFormat string
+
+const (
+	AvatarDecorationIconFormatPNG AvatarDecorationIconFormat = ".png"
+)
+
+func AvatarDecorationURL(asset string, size ImageSize) string {
+	return ImageBaseURL + "avatar-decoration-presets/" + asset + string(AvatarDecorationIconFormatPNG) + "?size=" + strconv.Itoa(int(size))
+}
