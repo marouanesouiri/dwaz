@@ -405,6 +405,35 @@ func (u *User) DefaultAvatarIndex() int {
 	return id % 5
 }
 
+// AvatarDecorationURL returns the URL to the user's avatar decoration.
+//
+// If the user has no avatar decoration, it returns an empty string.
+//
+// Example usage:
+//
+//	url := user.AvatarDecorationURL()
+func (u *User) AvatarDecorationURL() string {
+	if u.AvatarDecorationData != nil {
+		AvatarDecorationURL(u.AvatarDecorationData.Asset, ImageSize1024)
+	}
+	return ""
+}
+
+// AvatarDecorationURLWith returns the URL to the user's avatar decoration,
+// allowing explicit specification of image size.
+//
+// If the user has no avatar decoration, it returns an empty string.
+//
+// Example usage:
+//
+//	url := user.AvatarDecorationURL(ImageSize512)
+func (u *User) AvatarDecorationURLWith(size ImageSize) string {
+	if u.AvatarDecorationData != nil {
+		AvatarDecorationURL(u.AvatarDecorationData.Asset, size)
+	}
+	return ""
+}
+
 // ModifySelfUserParams defines the parameters to update the current user account.
 //
 // All fields are optional:
