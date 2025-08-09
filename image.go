@@ -124,6 +124,18 @@ func GuildBannerURL(guildID Snowflake, bannerHash string, format GuildBannerForm
 	return url
 }
 
+type GuildTagBadgeFormat string
+
+const (
+	GuildTagBadgeFormatPNG  GuildTagBadgeFormat = ".png"
+	GuildTagBadgeFormatJPEG GuildTagBadgeFormat = ".jpeg"
+	GuildTagBadgeFormatWebP GuildTagBadgeFormat = ".webp"
+)
+
+func GuildTagBadgeURL(guildID Snowflake, badgeHash string, format GuildTagBadgeFormat, size ImageSize) string {
+	return ImageBaseURL + "guild-tag-badges/" + badgeHash + string(format) + "?size=" + strconv.Itoa(int(size))
+}
+
 /***********************
  *         User        *
  ***********************/
