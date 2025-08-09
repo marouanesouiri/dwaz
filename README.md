@@ -1,0 +1,8 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/marouanesouiri/yada.svg)](https://pkg.go.dev/github.com/marouanesouiri/yada)
+[![Go Report](https://goreportcard.com/badge/github.com/marouanesouiri/yada)](https://goreportcard.com/report/github.com/marouanesouiri/yada)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/marouanesouiri/yada)](https://golang.org/doc/devel/release.html)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/marouanesouiri/yada/blob/master/LICENSE)
+[![Yada Version](https://img.shields.io/github/v/tag/marouanesouiri/yada?label=release)](https://github.com/marouanesouiri/yada/releases/latest)
+[![Issues](https://img.shields.io/github/issues/marouanesouiri/yada)](https://github.com/marouanesouiri/yada/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/marouanesouiri/yada)](https://github.com/marouanesouiri/yada/commits/main)
+[![Lines of Code](https://tokei.rs/b1/github/marouanesouiri/yada)](https://github.com/marouanesouiri/yada)
