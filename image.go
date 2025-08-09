@@ -45,7 +45,7 @@ const (
 )
 
 /***********************
- *    Emoji Endpoints   *
+ *        Emoji        *
  ***********************/
 
 type EmojiFormat string
@@ -63,7 +63,7 @@ func EmojiURL(emojiID Snowflake, format EmojiFormat, size ImageSize) string {
 }
 
 /***********************
- *   Guild Endpoints    *
+ *   	  Guild        *
  ***********************/
 
 type GuildIconFormat string
@@ -125,8 +125,14 @@ func GuildBannerURL(guildID Snowflake, bannerHash string, format GuildBannerForm
 }
 
 /***********************
- *    User Endpoints    *
+ *         User        *
  ***********************/
+
+// DefaultUserAvatarURL returns the default user avatar URL.
+// Size param ignored, fixed size only.
+func DefaultUserAvatarURL(index int) string {
+	return ImageBaseURL + "embed/avatars/" + strconv.Itoa(index) + ".png"
+}
 
 type UserAvatarFormat string
 
@@ -175,7 +181,7 @@ func UserBannerURL(userID Snowflake, bannerHash string, format UserBannerFormat,
 }
 
 /***********************
- * Application Endpoints *
+ * 	   Application     *
  ***********************/
 
 type ApplicationIconFormat string
@@ -203,7 +209,7 @@ func ApplicationCoverURL(appID Snowflake, coverHash string, format ApplicationCo
 }
 
 /***********************
- *   Sticker Endpoints *
+ *   	Sticker  	   *
  ***********************/
 
 type StickerFormat string
@@ -236,14 +242,8 @@ func StickerPackBannerURL(stickerPackBannerAssetID Snowflake, format StickerPack
 }
 
 /***********************
- *   Other Endpoints   *
+ *	  Guild Member     *
  ***********************/
-
-// DefaultUserAvatarURL returns the default user avatar URL.
-// Size param ignored, fixed size only.
-func DefaultUserAvatarURL(index int) string {
-	return ImageBaseURL + "embed/avatars/" + strconv.Itoa(index) + ".png"
-}
 
 type GuildMemberAvatarFormat string
 
@@ -267,6 +267,33 @@ func GuildMemberAvatarURL(guildID, userID Snowflake, avatarHash string, format G
 
 	return url
 }
+
+type GuildMemberBannerFormat string
+
+const (
+	GuildMemberBannerFormatPNG  GuildMemberBannerFormat = ".png"
+	GuildMemberBannerFormatJPEG GuildMemberBannerFormat = ".jpeg"
+	GuildMemberBannerFormatWebP GuildMemberBannerFormat = ".webp"
+	GuildMemberBannerFormatGIF  GuildMemberBannerFormat = ".gif"
+)
+
+func GuildMemberBannerURL(guildID, userID Snowflake, bannerHash string, format GuildMemberBannerFormat, size ImageSize) string {
+	if format == GuildMemberBannerFormatGIF && (len(bannerHash) < 2 || bannerHash[:2] != "a_") {
+		format = GuildMemberBannerFormatPNG
+	}
+
+	url := ImageBaseURL + "guilds/" + guildID.String() + "/users/" + userID.String() + "/banners/" + bannerHash + string(format) + "?size=" + strconv.Itoa(int(size))
+
+	if format == GuildMemberBannerFormatWebP && len(bannerHash) >= 2 && bannerHash[:2] == "a_" {
+		url += "&animated=true"
+	}
+
+	return url
+}
+
+/***********************
+ *	    Guild Role     *
+ ***********************/
 
 type RoleIconFormat string
 
