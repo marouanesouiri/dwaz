@@ -70,7 +70,6 @@ func (e *Emoji) CreatedAt() time.Time {
 	return e.ID.Timestamp()
 }
 
-
 // URL returns the URL to the emoji's image.
 func (e *Emoji) URL() string {
 	var format EmojiFormat = EmojiFormatPNG
@@ -85,4 +84,3 @@ func (e *Emoji) URL() string {
 func (e *Emoji) URLWith(format EmojiFormat, size ImageSize) string {
 	return EmojiURL(e.ID, format, size)
 }
-
