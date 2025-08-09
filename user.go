@@ -293,7 +293,7 @@ func (u *User) CreatedAt() time.Time {
 	return u.ID.Timestamp()
 }
 
-// DisplayAvatarURL returns the URL to the user's avatar image.
+// AvatarURL returns the URL to the user's avatar image.
 //
 // If the user has a custom avatar set, it returns the URL to that avatar.
 // By default, it uses GIF format if the avatar is animated, otherwise PNG,
@@ -304,15 +304,15 @@ func (u *User) CreatedAt() time.Time {
 //
 // Example usage:
 //
-//	url := user.DisplayAvatarURL()
-func (u *User) DisplayAvatarURL() string {
+//	url := user.AvatarURL()
+func (u *User) AvatarURL() string {
 	if u.Avatar != "" {
 		return UserAvatarURL(u.ID, u.Avatar, UserAvatarFormatGIF, ImageSize1024)
 	}
 	return DefaultUserAvatarURL(u.DefaultAvatarIndex())
 }
 
-// DisplayAvatarURLWith returns the URL to the user's avatar image,
+// AvatarURLWith returns the URL to the user's avatar image,
 // allowing explicit specification of image format and size.
 //
 // If the user has a custom avatar set, it returns the URL to that avatar
@@ -323,12 +323,48 @@ func (u *User) DisplayAvatarURL() string {
 //
 // Example usage:
 //
-//	url := user.DisplayAvatarURLWith(UserAvatarFormatWebP, ImageSize512)
-func (u *User) DisplayAvatarURLWith(format UserAvatarFormat, size ImageSize) string {
+//	url := user.AvatarURLWith(UserAvatarFormatWebP, ImageSize512)
+func (u *User) AvatarURLWith(format UserAvatarFormat, size ImageSize) string {
 	if u.Avatar != "" {
 		return UserAvatarURL(u.ID, u.Avatar, format, size)
 	}
 	return DefaultUserAvatarURL(u.DefaultAvatarIndex())
+}
+
+// BannerURL returns the URL to the user's banner image.
+//
+// If the user has a custom banner set, it returns the URL to that banner.
+// By default, it uses GIF format if the banner is animated, otherwise PNG,
+// with a default size of 1024.
+//
+// If the user has no custom banner, it returns an empty string.
+//
+// Example usage:
+//
+//	url := user.BannerURL()
+func (u *User) BannerURL() string {
+	if u.Avatar != "" {
+		return UserBannerURL(u.ID, u.Avatar, UserBannerFormatGIF, ImageSize1024)
+	}
+	return ""
+}
+
+// BannerURLWith returns the URL to the member's avatar image,
+// allowing explicit specification of image format and size.
+//
+// If the user has a custom banner set, it returns the URL to that banner
+// using the provided format and size.
+//
+// If the user has no custom baner, it returns an empty string.
+//
+// Example usage:
+//
+//	url := user.BannerURLWith(UserBannerFormatWebP, ImageSize512)
+func (u *User) BannerURLWith(format UserBannerFormat, size ImageSize) string {
+	if u.Avatar != "" {
+		return UserBannerURL(u.ID, u.Avatar, format, size)
+	}
+	return ""
 }
 
 // DisplayName returns the user's global name if set,
