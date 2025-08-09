@@ -138,10 +138,10 @@ func (r *restApi) FetchSelfUser() (User, error) {
 //
 // Usage example:
 //
-// 	newAvatar, _ := yada.NewImageFile("path/to/avatar.png")
+//	newAvatar, _ := yada.NewImageFile("path/to/avatar.png")
 //	err := api.ModifySelfUser(ModifySelfUserParams{
 //	    Username: "new_username",
-//	    Avatar:   avatar,
+//	    Avatar:   newAvatar,
 //	})
 //	if err != nil {
 //	    // handle error
