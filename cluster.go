@@ -144,7 +144,7 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
 //
 // Defaults:
 //   - Logger: stdout logger at Info level.
-//   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages
+//   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages | GatewayIntentGuildMembers
 func New(options ...clusterOption) *Cluster {
 	cluster := &Cluster{
 		Logger: NewDefaultLogger(os.Stdout, LogLevel_InfoLevel),
