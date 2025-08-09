@@ -75,6 +75,9 @@ func (f MemberFlags) Has(flags ...MemberFlags) bool {
 
 // Member is a discord GuildMember
 type Member struct {
+	// ID is the user's unique Discord snowflake ID.
+	ID Snowflake `json:"id"`
+
 	// GuildID is the member's guild id.
 	GuildID Snowflake `json:"guild_id"`
 
@@ -138,12 +141,12 @@ type Member struct {
 //
 // Example output: "<@123456789012345678>"
 func (m *Member) Mention() string {
-	return m.User.Mention()
+	return "<@" + m.ID.String() + ">"
 }
 
 // CreatedAt returns the time when this member account is created.
 func (m *Member) CreatedAt() time.Time {
-	return m.User.CreatedAt()
+	return m.ID.Timestamp()
 }
 
 // DisplayName returns the member's nickname if set,
@@ -176,7 +179,7 @@ func (m *Member) DisplayName() string {
 //	url := member.AvatarURL()
 func (m *Member) AvatarURL() string {
 	if m.Avatar != "" {
-		return GuildMemberAvatarURL(m.GuildID, m.User.ID, m.Avatar, GuildMemberAvatarFormatGIF, ImageSize1024)
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, GuildMemberAvatarFormatGIF, ImageSize1024)
 	}
 	return m.User.AvatarURL()
 }
@@ -192,12 +195,12 @@ func (m *Member) AvatarURL() string {
 //	url := member.AvatarURLWith(GuildMemberAvatarFormatWebP, ImageSize512)
 func (m *Member) AvatarURLWith(format GuildMemberAvatarFormat, size ImageSize) string {
 	if m.Avatar != "" {
-		return GuildMemberAvatarURL(m.GuildID, m.User.ID, m.Avatar, format, size)
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, format, size)
 	}
 	return m.User.AvatarURLWith(UserAvatarFormat(format), size)
 }
 
-// BannerURL returns the URL to the members's banner image.
+// BannerURL returns the URL to the member's banner image.
 //
 // If the member has a custom banner set, it returns the URL to that banner.
 // Otherwise it returns their global user banner URL,
@@ -209,7 +212,7 @@ func (m *Member) AvatarURLWith(format GuildMemberAvatarFormat, size ImageSize) s
 //	url := member.BannerURL()
 func (m *Member) BannerURL() string {
 	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.User.ID, m.Avatar, GuildMemberBannerFormatGIF, ImageSize1024)
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, GuildMemberBannerFormatGIF, ImageSize1024)
 	}
 	return m.User.BannerURL()
 }
@@ -225,7 +228,36 @@ func (m *Member) BannerURL() string {
 //	url := member.BannerURLWith()
 func (m *Member) BannerURLWith(format GuildMemberBannerFormat, size ImageSize) string {
 	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.User.ID, m.Avatar, format, size)
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
 	}
 	return m.User.BannerURLWith(UserBannerFormat(format), size)
+}
+
+// AvatarDecorationURL returns the URL to the member's avatar decoration image.
+//
+// If the member has no avatar decoration, it returns an empty string.
+//
+// Example usage:
+//
+//	url := member.AvatarDecorationURL()
+func (m *Member) AvatarDecorationURL() string {
+	if m.AvatarDecorationData != nil {
+		AvatarDecorationURL(m.AvatarDecorationData.Asset, ImageSize1024)
+	}
+	return ""
+}
+
+// AvatarDecorationURLWith returns the URL to the member's avatar decoration image,
+// allowing explicit specification of image size.
+//
+// If the member has no avatar decoration, it returns an empty string.
+//
+// Example usage:
+//
+//	url := member.AvatarDecorationURLWith(ImageSize512)
+func (m *Member) AvatarDecorationURLWith(size ImageSize) string {
+	if m.AvatarDecorationData != nil {
+		AvatarDecorationURL(m.AvatarDecorationData.Asset, size)
+	}
+	return ""
 }
