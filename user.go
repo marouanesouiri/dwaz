@@ -410,7 +410,19 @@ func (u *User) DefaultAvatarIndex() int {
 // All fields are optional:
 //   - If a field is not set (left empty), it will remain unchanged.
 type ModifySelfUserParams struct {
-	Username string      `json:"username,omitempty"`
-	Avatar   Base64Image `json:"avatar,omitempty"`
-	Banner   Base64Image `json:"banner,omitempty"`
+	Username string `json:"username,omitempty"`
+	// Use:
+	//
+	//  avatar, err := yada.NewImageFile("path/to/your/image.png")
+	//  if err != nil {
+	// 		// handler err
+	//  }
+	Avatar Base64Image `json:"avatar,omitempty"`
+	// Use:
+	//
+	//  banner, err := yada.NewImageFile("path/to/your/banner.png")
+	//  if err != nil {
+	// 		// handler err
+	//  }
+	Banner Base64Image `json:"banner,omitempty"`
 }
