@@ -50,4 +50,3 @@ func NewImageFile(path string) (Base64Image, error) {
 	encoded := base64.StdEncoding.EncodeToString(data)
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
-
