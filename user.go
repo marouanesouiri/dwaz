@@ -256,7 +256,7 @@ type OAuth2User struct {
 	Flags UserFlags `json:"flags"`
 
 	// Locale is the user's chosen language/locale.
-	Locale string `json:"locale"`
+	Locale Locale `json:"locale"`
 
 	// MFAEnabled indicates if the user has two-factor authentication enabled.
 	MFAEnabled bool `json:"mfa_enabled"`
