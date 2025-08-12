@@ -295,7 +295,7 @@ func (u *User) CreatedAt() time.Time {
 
 // AvatarURL returns the URL to the user's avatar image.
 //
-// If the user has a custom avatar set, it returns the URL to that avatar.
+// If the user has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
 // By default, it uses GIF format if the avatar is animated, otherwise PNG,
 // with a default size of 1024.
 //
@@ -316,7 +316,7 @@ func (u *User) AvatarURL() string {
 // allowing explicit specification of image format and size.
 //
 // If the user has a custom avatar set, it returns the URL to that avatar
-// using the provided format and size.
+// using the provided format and size, otherwise empty string.
 //
 // If the user has no custom avatar, it returns the URL to their default avatar,
 // using PNG format (size parameter is ignored for default avatars).
