@@ -101,6 +101,18 @@ func GuildSplashURL(guildID Snowflake, splashHash string, format GuildSplashForm
 	return ImageBaseURL + "splashes/" + guildID.String() + "/" + splashHash + string(format) + "?size=" + strconv.Itoa(int(size))
 }
 
+type GuildDiscoverySplashFormat string
+
+const (
+	GuildDiscoverySplashFormatPNG  GuildDiscoverySplashFormat = ".png"
+	GuildDiscoverySplashFormatJPEG GuildDiscoverySplashFormat = ".jpeg"
+	GuildDiscoverySplashFormatWebP GuildDiscoverySplashFormat = ".webp"
+)
+
+func GuildDiscoverySplashURL(guildID Snowflake, discoverySplashHash string, format GuildDiscoverySplashFormat, size ImageSize) string {
+	return ImageBaseURL + "discovery-splashes/" + guildID.String() + "/" + discoverySplashHash + string(format) + "?size=" + strconv.Itoa(int(size))
+}
+
 type GuildBannerFormat string
 
 const (
