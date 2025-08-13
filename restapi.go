@@ -100,7 +100,7 @@ func (r *restApi) FetchGatewayBot() (GatewayBot, error) {
 	}
 
 	var obj GatewayBot
-	if err := sonic.UnmarshalString(string(body), &obj); err != nil {
+	if err := sonic.Unmarshal(body, &obj); err != nil {
 		r.logger.Error("Failed parsing response for /gateway/bot: " + err.Error())
 		return GatewayBot{}, err
 	}
@@ -127,7 +127,7 @@ func (r *restApi) FetchSelfUser() (User, error) {
 	}
 
 	var obj User
-	if err := sonic.UnmarshalString(string(body), &obj); err != nil {
+	if err := sonic.Unmarshal(body, &obj); err != nil {
 		r.logger.Error("Failed parsing response for /users/@me: " + err.Error())
 		return User{}, err
 	}
@@ -176,7 +176,7 @@ func (r *restApi) FetchUser(userID Snowflake) (User, error) {
 	}
 
 	var obj User
-	if err := sonic.UnmarshalString(string(body), &obj); err != nil {
+	if err := sonic.Unmarshal(body, &obj); err != nil {
 		r.logger.Error("Failed parsing response for /users/{id}: " + err.Error())
 		return User{}, err
 	}
