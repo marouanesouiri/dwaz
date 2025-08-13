@@ -100,7 +100,7 @@ func (r *restApi) FetchGatewayBot() (GatewayBot, error) {
 	}
 
 	var obj GatewayBot
-	if err := sonic.Unmarshal(body, &obj); err != nil {
+	if err := sonic.UnmarshalString(string(body), &obj); err != nil {
 		r.logger.Error("Failed parsing response for /gateway/bot: " + err.Error())
 		return GatewayBot{}, err
 	}
@@ -127,7 +127,7 @@ func (r *restApi) FetchSelfUser() (User, error) {
 	}
 
 	var obj User
-	if err := sonic.Unmarshal(body, &obj); err != nil {
+	if err := sonic.UnmarshalString(string(body), &obj); err != nil {
 		r.logger.Error("Failed parsing response for /users/@me: " + err.Error())
 		return User{}, err
 	}
@@ -176,7 +176,7 @@ func (r *restApi) FetchUser(userID Snowflake) (User, error) {
 	}
 
 	var obj User
-	if err := sonic.Unmarshal(body, &obj); err != nil {
+	if err := sonic.UnmarshalString(string(body), &obj); err != nil {
 		r.logger.Error("Failed parsing response for /users/{id}: " + err.Error())
 		return User{}, err
 	}
@@ -202,54 +202,5 @@ func (r *restApi) FetchChannel(channelID Snowflake) (Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var meta struct{ Type ChannelType }
-	if err := sonic.Unmarshal(body, &meta); err != nil {
-		return nil, err
-	}
-
-	switch meta.Type {
-	case ChannelTypeGuildCategory:
-		var c CategoryChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeGuildText:
-		var c TextChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeGuildVoice:
-		var c VoiceChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeGuildAnnouncement:
-		var c AnnouncementChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeGuildStageVoice:
-		var c StageVoiceChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeGuildForum:
-		var c ForumChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeGuildMedia:
-		var c MediaChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypeAnnouncementThread:
-		var c AnnouncementThreadChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypePrivateThread:
-		var c PrivateThreadChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	case ChannelTypePublicThread:
-		var c PublicThreadChannel
-		err = sonic.Unmarshal(body, &c)
-		return &c, err
-	default:
-		return nil, errors.New("unknown channel type")
-	}
+	return channelFromJson(body)
 }
