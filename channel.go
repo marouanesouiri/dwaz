@@ -546,41 +546,41 @@ func channelFromJson(buf []byte) (Channel, error) {
 	var meta struct {
 		Type ChannelType `json:"type"`
 	}
-	if err := sonic.UnmarshalString(string(buf), &meta); err != nil {
+	if err := sonic.Unmarshal(buf, &meta); err != nil {
 		return nil, err
 	}
 
 	switch meta.Type {
 	case ChannelTypeGuildCategory:
 		var c CategoryChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeGuildText:
 		var c TextChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeGuildVoice:
 		var c VoiceChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeGuildAnnouncement:
 		var c AnnouncementChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeGuildStageVoice:
 		var c StageVoiceChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeGuildForum:
 		var c ForumChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeGuildMedia:
 		var c MediaChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeAnnouncementThread:
 		var c AnnouncementThreadChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypePrivateThread:
 		var c PrivateThreadChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypePublicThread:
 		var c PublicThreadChannel
-		return &c, sonic.UnmarshalString(string(buf), &c)
+		return &c, sonic.Unmarshal(buf, &c)
 	default:
 		return nil, errors.New("unknown channel type")
 	}
