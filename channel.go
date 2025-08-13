@@ -13,7 +13,12 @@
 
 package yada
 
-import "time"
+import (
+	"errors"
+	"time"
+
+	"github.com/bytedance/sonic"
+)
 
 // ChannelType represents Discord channel types.
 //
@@ -114,6 +119,11 @@ const (
 	PermissionOverwriteTypeMember PermissionOverwriteType = 1
 )
 
+// Is returns true if the overWrite's Type matches the provided one.
+func (t PermissionOverwriteType) Is(overWriteType PermissionOverwriteType) bool {
+	return t == overWriteType
+}
+
 // ForumPostsSortOrder defines the sort order type used to order posts in forum/media channels.
 //
 // Reference: https://discord.com/developers/docs/resources/channel#channel-object-sort-order-types
@@ -172,10 +182,102 @@ type PermissionOverwrite struct {
 	Deny Permissions `json:"deny"`
 }
 
+// ForumTag represents a tag that can be applied to a thread
+// in a GuildForum or GuildMedia channel.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#forum-tag-object
+type ForumTag struct {
+	// ID is the id of the tag.
+	ID Snowflake `json:"id"`
+
+	// Name is the name of the tag (0-20 characters).
+	Name string `json:"name"`
+
+	// Moderated indicates whether this tag can only be added to or removed from
+	// threads by a member with the ManageThreads permission.
+	Moderated bool `json:"moderated"`
+
+	// EmojiID is the ID of a guild's custom emoji.
+	//
+	// Optional:
+	//  - May be equal 0.
+	//
+	// Note:
+	//  - If EmojiName is empty (not set), then EmojiID must be set (non-zero).
+	EmojiID Snowflake `json:"emoji_id"`
+
+	// EmojiName is the Unicode character of the emoji.
+	//
+	// Optional:
+	//  - May be empty string.
+	//
+	// Note:
+	//  - If EmojiName is empty (not set), then EmojiID must be set (non-zero).
+	EmojiName string `json:"emoji_name"`
+}
+
+// DefaultReactionEmoji represents a default reaction emoji for forum channels.
+type DefaultReactionEmoji struct {
+	// EmojiID is the ID of a guild's custom emoji.
+	//
+	// Optional:
+	//  - May be equal to 0.
+	//
+	// Info:
+	//  - If 0, EmojiName will be set instead.
+	EmojiID Snowflake `json:"emoji_id"`
+
+	// EmojiName is the Unicode character of the emoji.
+	//
+	// Optional:
+	//  - May be empty string.
+	//
+	// Info:
+	//  - If empty, EmojiID will be set instead.
+	EmojiName string `json:"emoji_name"`
+}
+
+// AutoArchiveDuration represents the auto archive duration of a thread channel
+//
+// Reference: https://discord.com/developers/docs/resources/channel#thread-metadata-object
+type AutoArchiveDuration int
+
+const (
+	AutoArchiveDuration1h  AutoArchiveDuration = 60
+	AutoArchiveDuration24h AutoArchiveDuration = 1440
+	AutoArchiveDuration3d  AutoArchiveDuration = 4320
+	AutoArchiveDuration1w  AutoArchiveDuration = 10080
+)
+
+// Is returns true if the thread's auto archive duration matches the provided auto archive duration.
+func (d AutoArchiveDuration) Is(duration AutoArchiveDuration) bool {
+	return d == duration
+}
+
+// ThreadMetaData represents the metadata object that contains a number of thread-specific channel fields.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#thread-metadata-object
+type ThreadMetaData struct {
+	// Archived is whether the thread is archived
+	Archived bool `json:"archived"`
+
+	// AutoArchiveDuration is the duration will thread need to stop showing in the channel list.
+	AutoArchiveDuration AutoArchiveDuration `json:"auto_archive_duration"`
+
+	// ArchiveTimestamp is the timestamp when the thread's archive status was last changed,
+	// used for calculating recent activity
+	ArchiveTimestamp time.Time `json:"archive_timestamp"`
+
+	// Locked is whether the thread is locked; when a thread is locked,
+	// only users with MANAGE_THREADS can unarchive it
+	Locked bool `json:"locked"`
+}
+
 // Channel is the interface representing a Discord channel.
 type Channel interface {
 	GetID() Snowflake
 	GetType() ChannelType
+	CreatedAt() time.Time
 	Mention() string
 }
 
@@ -184,16 +286,15 @@ type GuildChannel interface {
 	Channel
 	GetGuildID() Snowflake
 	GetName() string
-	GetPosition() int
 	GetPermissionOverwrites() []PermissionOverwrite
 	GetFlags() ChannelFlags
 	JumpURL() string
 }
 
-// baseChannel contains only fields present in all channel types.
+// BaseChannel contains only fields present in all channel types.
 //
 // Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
-type baseChannel struct {
+type BaseChannel struct {
 	// ID is the unique Discord snowflake ID of the channel.
 	ID Snowflake `json:"id"`
 
@@ -201,412 +302,286 @@ type baseChannel struct {
 	Type ChannelType `json:"type"`
 }
 
-func (c *baseChannel) GetID() Snowflake     { return c.ID }
-func (c *baseChannel) GetType() ChannelType { return c.Type }
+func (c *BaseChannel) GetID() Snowflake     { return c.ID }
+func (c *BaseChannel) GetType() ChannelType { return c.Type }
+func (c *BaseChannel) CreatedAt() time.Time { return c.ID.Timestamp() }
 
 // Mention returns a Discord mention string for the channel.
 //
 // Example output: "<#123456789012345678>"
-func (c *baseChannel) Mention() string {
+func (c *BaseChannel) Mention() string {
 	return "<#" + c.ID.String() + ">"
 }
 
-// baseGuildChannel embeds baseChannel and adds fields present in guild channels only.
+// BaseGuildChannel embeds BaseChannel and adds fields common to guild channels except threads.
 //
-// Used by all guild-specific channel types like TextChannel, VoiceChannel, ForumChannel, etc.
-type baseGuildChannel struct {
-	baseChannel
+// Used by guild-specific channel types like TextChannel, VoiceChannel, ForumChannel, etc.
+type BaseGuildChannel struct {
+	BaseChannel
 
 	// GuildID is the id of the guild.
-	//
-	// Always present.
 	GuildID Snowflake `json:"guild_id"`
 
 	// Name is the name of the channel.
 	//
-	// Always present. 1-100 characters.
+	// Info:
+	//  - can be 1 to 100 characters.
 	Name string `json:"name,omitempty"`
 
 	// Position is the sorting position of the channel.
-	//
-	// Always present.
 	Position int `json:"position,omitempty"`
 
 	// PermissionOverwrites are explicit permission overwrites for members and roles.
-	//
-	// Always present.
 	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
 
 	// Flags are combined channel flags.
-	//
-	// Always present.
 	Flags ChannelFlags `json:"flags,omitempty"`
 }
 
-func (c *baseGuildChannel) GetGuildID() Snowflake { return c.GuildID }
-func (c *baseGuildChannel) GetName() string       { return c.Name }
-func (c *baseGuildChannel) GetPosition() int      { return c.Position }
-func (c *baseGuildChannel) GetPermissionOverwrites() []PermissionOverwrite {
+func (c *BaseGuildChannel) GetGuildID() Snowflake { return c.GuildID }
+func (c *BaseGuildChannel) GetName() string       { return c.Name }
+func (c *BaseGuildChannel) GetPosition() int      { return c.Position }
+func (c *BaseGuildChannel) GetPermissionOverwrites() []PermissionOverwrite {
 	return c.PermissionOverwrites
 }
-func (c *baseGuildChannel) GetFlags() ChannelFlags { return c.Flags }
-func (c *baseGuildChannel) JumpURL() string {
+func (c *BaseGuildChannel) GetFlags() ChannelFlags { return c.Flags }
+func (c *BaseGuildChannel) JumpURL() string {
 	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
+}
+
+// BaseThreadChannel embeds BaseChannel and adds fields common to thread channels.
+type BaseThreadChannel struct {
+	BaseChannel
+
+	// GuildID is the id of the guild.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Name is the name of the channel.
+	//
+	// Info:
+	//  - can be 1 to 100 characters.
+	Name string `json:"name,omitempty"`
+
+	// PermissionOverwrites are explicit permission overwrites for members and roles.
+	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
+
+	// Flags are combined channel flags.
+	Flags ChannelFlags `json:"flags,omitempty"`
+}
+
+func (c *BaseThreadChannel) GetGuildID() Snowflake { return c.GuildID }
+func (c *BaseThreadChannel) GetName() string       { return c.Name }
+func (c *BaseThreadChannel) GetPermissionOverwrites() []PermissionOverwrite {
+	return c.PermissionOverwrites
+}
+func (c *BaseThreadChannel) GetFlags() ChannelFlags { return c.Flags }
+func (c *BaseThreadChannel) JumpURL() string {
+	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
+}
+
+// CategorizedFields holds the parent category field for categorized guild channels.
+type CategorizedFields struct {
+	// ParentID is the id of the parent category for this channel.
+	//
+	// Info:
+	//  - Each parent category can contain up to 50 channels.
+	//
+	// Optional:
+	//  - May be equal 0 if the channel is not in a category.
+	ParentID Snowflake `json:"parent_id"`
+}
+
+// TextBasedFields holds fields related to text-based features like messaging.
+type TextBasedFields struct {
+	// LastMessageID is the id of the last message sent in this channel.
+	LastMessageID Snowflake `json:"last_message_id"`
+
+	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
+	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
+	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
+}
+
+// NsfwFields holds the NSFW indicator field.
+type NsfwFields struct {
+	// Nsfw indicates whether the channel is NSFW.
+	Nsfw bool `json:"nsfw"`
+}
+
+// TopicFields holds the topic field.
+type TopicFields struct {
+	// Topic is the channel topic.
+	//
+	// Length:
+	//  - 0-1024 characters for text, announcement, and stage voice channels.
+	//  - 0-4096 characters for forum and media channels.
+	//
+	// Optional:
+	//  - May be empty string if the channel has no topic.
+	Topic string `json:"topic"`
+}
+
+// VoiceFields holds voice-related configuration fields.
+type VoiceFields struct {
+	// Bitrate is the bitrate (in bits) of the voice channel.
+	Bitrate int `json:"bitrate"`
+
+	// UserLimit is the user limit of the voice channel.
+	UserLimit int `json:"user_limit"`
+
+	// RtcRegion is the voice region id for the voice channel. Automatic when set to empty string.
+	RtcRegion string `json:"rtc_region"`
+}
+
+// ForumFields holds forum and media channel specific fields.
+type ForumFields struct {
+	// AvailableTags is the set of tags that can be used in this channel.
+	AvailableTags []ForumTag `json:"available_tags"`
+
+	// DefaultReactionEmoji specifies the emoji used as the default way to react to a forum post.
+	DefaultReactionEmoji DefaultReactionEmoji `json:"default_reaction_emoji"`
+
+	// DefaultSortOrder is the default sort order type used to order posts
+	// in GuildForum and GuildMedia channels. Defaults to PostsSortOrderLatestActivity.
+	DefaultSortOrder ForumPostsSortOrder `json:"default_sort_order"`
+
+	// DefaultForumLayout is the default forum layout view used to display posts
+	// in GuildForum channels. Defaults to ForumLayoutNotSet.
+	DefaultForumLayout ForumLayout `json:"default_forum_layout"`
 }
 
 // CategoryChannel represents a guild category channel.
 type CategoryChannel struct {
-	baseGuildChannel
+	BaseGuildChannel
 }
 
 // TextChannel represents a guild text channel.
 type TextChannel struct {
-	baseGuildChannel
-
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Note:
-	//  Each parent category can contain up to 50 channels.
-	//
-	// Always present. If ParentID == 0, the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-
-	// LastMessageID is the id of the last message sent in this channel.
-	//
-	// Always present.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	//
-	// Always present.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-
-	// Topic is the channel topic (can be 0-1024 characters).
-	//
-	// Always present. Can be empty string if the channel has no topic.
-	Topic string `json:"topic"`
-
-	// Nsfw indicates whether the channel is NSFW.
-	//
-	// Always present.
-	Nsfw bool `json:"nsfw"`
+	BaseGuildChannel
+	CategorizedFields
+	TextBasedFields
+	NsfwFields
+	TopicFields
 }
 
 // VoiceChannel represents a guild voice channel.
 type VoiceChannel struct {
-	baseGuildChannel
-
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Note:
-	//  Each parent category can contain up to 50 channels.
-	//
-	// Always present. If ParentID == 0, the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-
-	// LastMessageID is the id of the last message sent in this channel.
-	//
-	// Always present.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	//
-	// Always present.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-
-	// Nsfw indicates whether the channel is NSFW.
-	//
-	// Always present.
-	Nsfw bool `json:"nsfw"`
-
-	// Bitrate is the bitrate (in bits) of the voice channel.
-	//
-	// Always present.
-	Bitrate int `json:"bitrate"`
-
-	// UserLimit is the user limit of the voice channel.
-	//
-	// Always present.
-	UserLimit int `json:"user_limit"`
-
-	// RtcRegion is the voice region id for the voice channel. Automatic when set to empty string.
-	//
-	// Always present.
-	RtcRegion string `json:"rtc_region"`
-}
-
-// ForumTag represents a tag that can be applied to a thread
-// in a GuildForum or GuildMedia channel.
-//
-// Reference: https://discord.com/developers/docs/resources/channel#forum-tag-object
-type ForumTag struct {
-	// ID is the id of the tag.
-	//
-	// Always present.
-	ID Snowflake `json:"id"`
-
-	// Name is the name of the tag (0-20 characters).
-	//
-	// Always present. Can be empty string.
-	Name string `json:"name"`
-
-	// Moderated indicates whether this tag can only be added to or removed from
-	// threads by a member with the ManageThreads permission.
-	//
-	// Always present.
-	Moderated bool `json:"moderated"`
-
-	// EmojiID is the ID of a guild's custom emoji.
-	//
-	// Optional:
-	// - Zero value (0) means it is not set.
-	// - If EmojiName is empty (not set), then EmojiID must be set (non-zero).
-	EmojiID Snowflake `json:"emoji_id"`
-
-	// EmojiName is the Unicode character of the emoji.
-	//
-	// Optional:
-	// - Empty string means it is not set.
-	// - If EmojiID is zero (not set), then EmojiName must be set (non-empty).
-	EmojiName string `json:"emoji_name"`
-}
-
-// ForumChannel represents a guild forum channel.
-type ForumChannel struct {
-	baseGuildChannel
-
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Note:
-	//  Each parent category can contain up to 50 channels.
-	//
-	// Always present. If ParentID == 0, the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-
-	// LastMessageID is the id of the last message sent in this channel.
-	//
-	// Always present.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	//
-	// Always present.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-
-	// Nsfw indicates whether the channel is NSFW.
-	//
-	// Always present.
-	Nsfw bool `json:"nsfw"`
-
-	// Topic is the channel topic (can be 0-4096 characters).
-	//
-	// Always present. Can be empty string if the channel has no topic.
-	Topic string `json:"topic"`
-
-	// AvailableTags is the set of tags that can be used in this channel.
-	//
-	// Always present. Can be empty if this channel has no tags.
-	AvailableTags []ForumTag `json:"available_tags"`
-
-	// DefaultReactionEmoji specifies the emoji used as the default way to react to a forum post.
-	//
-	// Exactly one of EmojiID and EmojiName must be set.
-	//
-	// Always present. If EmojiID != 0, it refers to a guild custom emoji.
-	// If EmojiID == 0, EmojiName will contain a Unicode emoji character.
-	DefaultReactionEmoji struct {
-		// EmojiID is the ID of a guild's custom emoji.
-		//
-		// Optional. If 0, EmojiName will be set instead.
-		EmojiID Snowflake `json:"emoji_id"`
-
-		// EmojiName is the Unicode character of the emoji.
-		//
-		// Optional. If empty, EmojiID will be set instead.
-		EmojiName string `json:"emoji_name"`
-	} `json:"default_reaction_emoji"`
-
-	// DefaultSortOrder is the default sort order type used to order posts
-	// in GuildForum and GuildMedia channels. Defaults to PostsSortOrderLatestActivity.
-	//
-	// Always present.
-	DefaultSortOrder ForumPostsSortOrder `json:"default_sort_order"`
-
-	// DefaultForumLayout is the default forum layout view used to display posts
-	// in GuildForum channels. Defaults to ForumLayoutNotSet.
-	//
-	// Always present.
-	DefaultForumLayout ForumLayout `json:"default_forum_layout"`
-}
-
-// MediaChannel represents a media channel.
-type MediaChannel struct {
-	baseGuildChannel
-
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Note:
-	//  Each parent category can contain up to 50 channels.
-	//
-	// Always present. If ParentID == 0, the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-
-	// LastMessageID is the id of the last message sent in this channel.
-	//
-	// Always present.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	//
-	// Always present.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-
-	// Nsfw indicates whether the channel is NSFW.
-	//
-	// Always present.
-	Nsfw bool `json:"nsfw"`
-
-	// Topic is the channel topic (can be 0-4096 characters).
-	//
-	// Always present. Can be empty string if the channel has no topic.
-	Topic string `json:"topic"`
-
-	// AvailableTags is the set of tags that can be used in this channel.
-	//
-	// Always present. Can be empty if this channel has no tags.
-	AvailableTags []ForumTag `json:"available_tags"`
-
-	// DefaultReactionEmoji specifies the emoji used as the default way to react to a forum post.
-	//
-	// Exactly one of EmojiID and EmojiName must be set.
-	//
-	// Always present. If EmojiID != 0, it refers to a guild custom emoji.
-	// If EmojiID == 0, EmojiName will contain a Unicode emoji character.
-	DefaultReactionEmoji struct {
-		// EmojiID is the ID of a guild's custom emoji.
-		//
-		// Optional. If 0, EmojiName will be set instead.
-		EmojiID Snowflake `json:"emoji_id"`
-
-		// EmojiName is the Unicode character of the emoji.
-		//
-		// Optional. If empty, EmojiID will be set instead.
-		EmojiName string `json:"emoji_name"`
-	} `json:"default_reaction_emoji"`
-
-	// DefaultSortOrder is the default sort order type used to order posts
-	// in GuildForum and GuildMedia channels. Defaults to PostsSortOrderLatestActivity.
-	//
-	// Always present.
-	DefaultSortOrder ForumPostsSortOrder `json:"default_sort_order"`
-
-	// DefaultForumLayout is the default forum layout view used to display posts
-	// in GuildForum channels. Defaults to ForumLayoutNotSet.
-	//
-	// Always present.
-	DefaultForumLayout ForumLayout `json:"default_forum_layout"`
+	BaseGuildChannel
+	CategorizedFields
+	TextBasedFields
+	NsfwFields
+	VoiceFields
 }
 
 // AnnouncementChannel represents an announcement channel.
 type AnnouncementChannel struct {
-	baseGuildChannel
-
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Note:
-	//  Each parent category can contain up to 50 channels.
-	//
-	// Always present. If ParentID == 0, the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-
-	// LastMessageID is the id of the last message sent in this channel.
-	//
-	// Always present.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	//
-	// Always present.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-
-	// Topic is the channel topic (can be 0-1024 characters).
-	//
-	// Always present. Can be empty string if the channel has no topic.
-	Topic string `json:"topic"`
-
-	// Nsfw indicates whether the channel is NSFW.
-	//
-	// Always present.
-	Nsfw bool `json:"nsfw"`
+	BaseGuildChannel
+	CategorizedFields
+	TextBasedFields
+	NsfwFields
+	TopicFields
 }
 
 // StageVoiceChannel represents a stage voice channel.
 type StageVoiceChannel struct {
-	baseGuildChannel
-
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Note:
-	//  Each parent category can contain up to 50 channels.
-	//
-	// Always present. If ParentID == 0, the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-
-	// LastMessageID is the id of the last message sent in this channel.
-	//
-	// Always present.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	//
-	// Always present.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-
-	// Nsfw indicates whether the channel is NSFW.
-	//
-	// Always present.
-	Nsfw bool `json:"nsfw"`
-
-	// Bitrate is the bitrate (in bits) of the voice channel.
-	//
-	// Always present.
-	Bitrate int `json:"bitrate"`
-
-	// UserLimit is the user limit of the voice channel.
-	//
-	// Always present.
-	UserLimit int `json:"user_limit"`
-
-	// RtcRegion is the voice region id for the voice channel. Automatic when set to empty string.
-	//
-	// Always present.
-	RtcRegion string `json:"rtc_region"`
-
-	// Topic is the channel topic (can be 0-1024 characters).
-	//
-	// Always present. Can be empty string if the channel has no topic.
-	Topic string `json:"topic"`
+	BaseGuildChannel
+	CategorizedFields
+	TextBasedFields
+	NsfwFields
+	VoiceFields
+	TopicFields
 }
 
-// TODO: continue the thread channels
+// ForumChannel represents a guild forum channel.
+type ForumChannel struct {
+	BaseGuildChannel
+	CategorizedFields
+	TextBasedFields
+	NsfwFields
+	TopicFields
+	ForumFields
+}
+
+// MediaChannel represents a media channel.
+type MediaChannel struct {
+	ForumChannel
+}
+
+// ThreadChannel represents the base for thread channels.
+type ThreadChannel struct {
+	BaseThreadChannel
+	CategorizedFields
+	TextBasedFields
+	// OwnerID is the id of this thread owner
+	OwnerID Snowflake `json:"owner_id"`
+	// ThreadMetadata is the metadata that contains a number of thread-specific channel fields.
+	ThreadMetadata ThreadMetaData `json:"thread_metadata"`
+}
 
 // AnnouncementThreadChannel represents an announcement thread channel.
 type AnnouncementThreadChannel struct {
-	baseGuildChannel
+	ThreadChannel
 }
 
 // PublicThreadChannel represents a public thread channel.
 type PublicThreadChannel struct {
-	baseGuildChannel
+	ThreadChannel
 }
 
 // PrivateThreadChannel represents a private thread channel.
 type PrivateThreadChannel struct {
-	baseGuildChannel
+	BaseThreadChannel
+	CategorizedFields
+	TextBasedFields
+	// OwnerID is the id of this thread owner
+	OwnerID Snowflake `json:"owner_id"`
+	// ThreadMetadata is the metadata that contains a number of thread-specific channel fields.
+	ThreadMetadata struct {
+		ThreadMetaData
+		// Invitable is whether non-moderators can add other non-moderators to a thread.
+		Invitable bool `json:"invitable"`
+	} `json:"thread_metadata"`
+}
+
+func channelFromJson(buf []byte) (Channel, error) {
+	var meta struct {
+		Type ChannelType `json:"type"`
+	}
+	if err := sonic.UnmarshalString(string(buf), &meta); err != nil {
+		return nil, err
+	}
+
+	switch meta.Type {
+	case ChannelTypeGuildCategory:
+		var c CategoryChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeGuildText:
+		var c TextChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeGuildVoice:
+		var c VoiceChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeGuildAnnouncement:
+		var c AnnouncementChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeGuildStageVoice:
+		var c StageVoiceChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeGuildForum:
+		var c ForumChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeGuildMedia:
+		var c MediaChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypeAnnouncementThread:
+		var c AnnouncementThreadChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypePrivateThread:
+		var c PrivateThreadChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	case ChannelTypePublicThread:
+		var c PublicThreadChannel
+		return &c, sonic.UnmarshalString(string(buf), &c)
+	default:
+		return nil, errors.New("unknown channel type")
+	}
 }
