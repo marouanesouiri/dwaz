@@ -72,15 +72,15 @@ func (e *Emoji) CreatedAt() time.Time {
 
 // URL returns the URL to the emoji's image.
 func (e *Emoji) URL() string {
-	var format EmojiFormat = EmojiFormatPNG
+	format := ImageFormatPNG
 	if e.Animated {
-		format = EmojiFormatGIF
+		format = ImageFormatGIF
 	}
-	return EmojiURL(e.ID, format, ImageSize32)
+	return EmojiURL(e.ID, format, ImageSizeDefault)
 }
 
 // URLWith returns the URL to the emoji's image.
 // allowing explicit specification of image format and size.
-func (e *Emoji) URLWith(format EmojiFormat, size ImageSize) string {
+func (e *Emoji) URLWith(format ImageFormat, size ImageSize) string {
 	return EmojiURL(e.ID, format, size)
 }
