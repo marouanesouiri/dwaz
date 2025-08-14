@@ -271,41 +271,44 @@ type ThreadMetaData struct {
 	// Locked is whether the thread is locked; when a thread is locked,
 	// only users with MANAGE_THREADS can unarchive it
 	Locked bool `json:"locked"`
+
+	// Invitable is whether non-moderators can add other non-moderators to a thread.
+	Invitable bool `json:"invitable"`
 }
 
 // Channel is the interface representing a Discord channel.
 //
-// This interface can represent any type of channel returned by Discord, 
+// This interface can represent any type of channel returned by Discord,
 // including text channels, voice channels, thread channels, forum channels, etc.
 //
-// Use this interface when you want to handle channels generically without knowing 
+// Use this interface when you want to handle channels generically without knowing
 // the specific concrete type in advance.
 //
 // You can convert (assert) it to a specific channel type using a type assertion or
 // a type switch, as described in the official Go documentation:
-//  - https://go.dev/ref/spec#Type_assertions
-//  - https://go.dev/doc/effective_go#type_switch
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
 //
 // Example usage:
 //
-//     var myChannel Channel
+//	var myChannel Channel
 //
-//     switch c := ch.(type) {
-//     case *TextChannel:
-//         fmt.Println("Text channel name:", c.Name)
-//     case *VoiceChannel:
-//         fmt.Println("Voice channel bitrate:", c.Bitrate)
-//     case *ForumChannel:
-//         fmt.Println("Forum channel tags:", c.AvailableTags)
-//     default:
-//         fmt.Println("Other channel type:", c.GetType())
-//     }
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel name:", c.Name)
+//	case *VoiceChannel:
+//	    fmt.Println("Voice channel bitrate:", c.Bitrate)
+//	case *ForumChannel:
+//	    fmt.Println("Forum channel tags:", c.AvailableTags)
+//	default:
+//	    fmt.Println("Other channel type:", c.GetType())
+//	}
 //
 // You can also use an if-condition to check a specific type:
 //
-//     if textCh, ok := ch.(*TextChannel); ok {
-//         fmt.Println("Text channel:", textCh.Name)
-//     }
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel:", textCh.Name)
+//	}
 type Channel interface {
 	GetID() Snowflake
 	GetType() ChannelType
@@ -318,34 +321,34 @@ type Channel interface {
 // This interface extends the Channel interface and adds guild-specific fields,
 // such as the guild ID, channel name, permission overwrites, flags, and jump URL.
 //
-// Use this interface when you want to handle guild channels generically without 
+// Use this interface when you want to handle guild channels generically without
 // knowing the specific concrete type (TextChannel, VoiceChannel, ForumChannel, etc.).
 //
-// You can convert (assert) it to a specific guild channel type using a type assertion 
+// You can convert (assert) it to a specific guild channel type using a type assertion
 // or a type switch, as described in the official Go documentation:
-//  - https://go.dev/ref/spec#Type_assertions
-//  - https://go.dev/doc/effective_go#type_switch
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
 //
 // Example usage:
 //
-//     var myGuildChannel GuildChannel
+//	var myGuildChannel GuildChannel
 //
-//     switch c := ch.(type) {
-//     case *TextChannel:
-//         fmt.Println("Text channel name:", c.Name)
-//     case *VoiceChannel:
-//         fmt.Println("Voice channel bitrate:", c.Bitrate)
-//     case *ForumChannel:
-//         fmt.Println("Forum channel tags:", c.AvailableTags)
-//     default:
-//         fmt.Println("Other guild channel type:", c.GetType())
-//     }
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel name:", c.Name)
+//	case *VoiceChannel:
+//	    fmt.Println("Voice channel bitrate:", c.Bitrate)
+//	case *ForumChannel:
+//	    fmt.Println("Forum channel tags:", c.AvailableTags)
+//	default:
+//	    fmt.Println("Other guild channel type:", c.GetType())
+//	}
 //
 // You can also use an if-condition to check a specific type:
 //
-//     if textCh, ok := ch.(*TextChannel); ok {
-//         fmt.Println("Text channel:", textCh.Name)
-//     }
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel:", textCh.Name)
+//	}
 type GuildChannel interface {
 	Channel
 	GetGuildID() Snowflake
@@ -581,31 +584,6 @@ type ThreadChannel struct {
 	ThreadMetadata ThreadMetaData `json:"thread_metadata"`
 }
 
-// AnnouncementThreadChannel represents an announcement thread channel.
-type AnnouncementThreadChannel struct {
-	ThreadChannel
-}
-
-// PublicThreadChannel represents a public thread channel.
-type PublicThreadChannel struct {
-	ThreadChannel
-}
-
-// PrivateThreadChannel represents a private thread channel.
-type PrivateThreadChannel struct {
-	BaseThreadChannel
-	CategorizedFields
-	TextBasedFields
-	// OwnerID is the id of this thread owner
-	OwnerID Snowflake `json:"owner_id"`
-	// ThreadMetadata is the metadata that contains a number of thread-specific channel fields.
-	ThreadMetadata struct {
-		ThreadMetaData
-		// Invitable is whether non-moderators can add other non-moderators to a thread.
-		Invitable bool `json:"invitable"`
-	} `json:"thread_metadata"`
-}
-
 func channelFromJson(buf []byte) (Channel, error) {
 	var meta struct {
 		Type ChannelType `json:"type"`
@@ -636,14 +614,8 @@ func channelFromJson(buf []byte) (Channel, error) {
 	case ChannelTypeGuildMedia:
 		var c MediaChannel
 		return &c, sonic.Unmarshal(buf, &c)
-	case ChannelTypeAnnouncementThread:
-		var c AnnouncementThreadChannel
-		return &c, sonic.Unmarshal(buf, &c)
-	case ChannelTypePrivateThread:
-		var c PrivateThreadChannel
-		return &c, sonic.Unmarshal(buf, &c)
-	case ChannelTypePublicThread:
-		var c PublicThreadChannel
+	case ChannelTypeAnnouncementThread, ChannelTypePrivateThread, ChannelTypePublicThread:
+		var c ThreadChannel
 		return &c, sonic.Unmarshal(buf, &c)
 	default:
 		return nil, errors.New("unknown channel type")
