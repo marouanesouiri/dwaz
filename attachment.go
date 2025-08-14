@@ -13,17 +13,7 @@
 
 package yada
 
-import (
-	"errors"
-	"fmt"
-	"io"
-	"mime"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
-)
+import "time"
 
 // AttachmentFlags represents bit flags for Discord attachment metadata.
 //
@@ -106,53 +96,25 @@ func (a *Attachment) CreatedAt() time.Time {
 
 // Save downloads the attachment from its URL and saves it to disk.
 //
-// It saves the file in the given directory with its Attachment.Filename.
-// The extension is replaced based on ContentType if available.
+// If fileName is not provided (empty string), it saves the file in the given
+// directory using Attachment.Filename
 //
-// Returns an error if any operation fails.
+// Info:
+//   - The extension is replaced based on the Content-Type of the file.
 //
 // Example:
 //
-//	err := attachment.Save("./downloads")
+//	err := attachment.Save("myfile", "./downloads")
 //	if err != nil {
 //	    // handle error
 //	}
-func (a *Attachment) Save(dir string) error {
-	if a.URL == "" {
-		return errors.New("attachment URL is empty")
+//
+// Returns:
+//   - string: full path to the downloaded file.
+//   - error: non-nil if any operation fails.
+func (a *Attachment) Save(fileName, dir string) (string, error) {
+	if fileName == "" {
+		fileName = a.Filename
 	}
-
-	exts, err := mime.ExtensionsByType(a.ContentType)
-	if err != nil || len(exts) == 0 {
-		exts = []string{filepath.Ext(a.Filename)}
-	}
-	ext := exts[0]
-
-	baseName := strings.TrimSuffix(a.Filename, filepath.Ext(a.Filename))
-	finalName := baseName + ext
-
-	fullPath := filepath.Join(dir, finalName)
-
-	resp, err := http.Get(a.URL)
-	if err != nil {
-		return fmt.Errorf("failed to fetch attachment: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch attachment: status %d", resp.StatusCode)
-	}
-
-	outFile, err := os.Create(fullPath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer outFile.Close()
-
-	_, err = io.Copy(outFile, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return nil
+	return DownloadFile(a.URL, fileName, dir)
 }
