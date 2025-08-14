@@ -195,8 +195,8 @@ func StorePageAssetURL(appID, assetID Snowflake, format ImageFormat, size ImageS
  *       Sticker       *
  ***********************/
 
-func StickerURL(stickerID Snowflake, format ImageFormat, size ImageSize) string {
-	config := ImageConfig{Format: format, Size: size}
+func StickerURL(stickerID Snowflake, format ImageFormat) string {
+	config := ImageConfig{Format: format}
 	allowedFormats := [5]ImageFormat{ImageFormatPNG, ImageFormatGIF, ImageFormatLottie, ImageFormatPNG, ImageFormatPNG}
 	base := ImageBaseURL
 	if config.Format == ImageFormatGIF {
