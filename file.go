@@ -16,15 +16,74 @@ package yada
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
+
+// DownloadFile downloads a file from the given URL and saves it in the specified directory.
+// The filename is derived from baseName and the Content-Type returned by the server.
+// Returns the full path of the saved file.
+func DownloadFile(url, baseName, dir string) (string, error) {
+	if url == "" {
+		return "", errors.New("URL is empty")
+	}
+
+	resp, err := http.Head(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch headers: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch headers: status %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	exts, err := mime.ExtensionsByType(contentType)
+	if err != nil || len(exts) == 0 {
+		exts = []string{filepath.Ext(baseName)}
+	}
+	ext := exts[0]
+
+	name := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	finalName := name + ext
+	fullPath := filepath.Join(dir, finalName)
+
+	respGet, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file: %w", err)
+	}
+	defer respGet.Body.Close()
+
+	if respGet.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch file: status %d", respGet.StatusCode)
+	}
+
+	outFile, err := os.Create(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, respGet.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return fullPath, nil
+}
 
 // Base64Image represents a base64-encoded image data URI string.
 type Base64Image = string
