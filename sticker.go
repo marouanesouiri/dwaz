@@ -87,20 +87,20 @@ type Sticker struct {
 
 // URL returns the URL to the sticker's image.
 func (s *Sticker) URL() string {
-	var format StickerFormat
+	var format ImageFormat
 	switch s.FormatType {
 	case StickerFormatTypeLottie:
-		format = StickerFormatLottie
+		format = ImageFormatLottie
 	case StickerFormatTypeGIF:
-		format = StickerFormatGIF
+		format = ImageFormatGIF
 	default:
-		format = StickerFormatPNG
+		format = ImageFormatPNG
 	}
 	return StickerURL(s.ID, format)
 }
 
 // URLWith returns the URL to the sticker's image with custom format.
-func (s *Sticker) URLWith(format StickerFormat) string {
+func (s *Sticker) URLWith(format ImageFormat) string {
 	return StickerURL(s.ID, format)
 }
 
@@ -136,15 +136,15 @@ type StickerPack struct {
 }
 
 // BannerURL returns the banner URL in PNG format, or empty string if none.
-func (p StickerPack) BannerURL() string {
+func (p *StickerPack) BannerURL() string {
 	if p.BannerAssetID != 0 {
-		return StickerPackBannerURL(p.BannerAssetID, StickerPackBannerFormatPNG, ImageSize2048)
+		return StickerPackBannerURL(p.BannerAssetID, ImageFormatPNG, ImageSize2048)
 	}
 	return ""
 }
 
 // BannerURLWith returns the banner URL with a custom format and size.
-func (p StickerPack) BannerURLWith(format StickerPackBannerFormat, size ImageSize) string {
+func (p *StickerPack) BannerURLWith(format ImageFormat, size ImageSize) string {
 	if p.BannerAssetID != 0 {
 		return StickerPackBannerURL(p.BannerAssetID, format, size)
 	}
