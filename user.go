@@ -92,7 +92,8 @@ type Nameplate struct {
 
 	// Label is the label of this nameplate.
 	//
-	// Optional and currently unused by Discord, may be empty string.
+	// Optional:
+	//  - May be empty string.
 	Label string `json:"label"`
 
 	// Palette is the background color of the nameplate.
@@ -111,7 +112,7 @@ type Collectibles struct {
 	// Nameplate is the user's nameplate collectible data.
 	//
 	// Optional:
-	//  - may be nil if the user has no nameplate collectible.
+	//  - May be nil if the user has no nameplate collectible.
 	Nameplate *Nameplate `json:"nameplate,omitempty"`
 }
 
@@ -296,8 +297,7 @@ func (u *User) CreatedAt() time.Time {
 // AvatarURL returns the URL to the user's avatar image.
 //
 // If the user has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
-// By default, it uses GIF format if the avatar is animated, otherwise PNG,
-// with a default size of 1024.
+// By default, it uses GIF format if the avatar is animated, otherwise PNG.
 //
 // If the user has no custom avatar, it returns the URL to their default avatar
 // based on their discriminator or ID, using PNG format.
@@ -307,7 +307,7 @@ func (u *User) CreatedAt() time.Time {
 //	url := user.AvatarURL()
 func (u *User) AvatarURL() string {
 	if u.Avatar != "" {
-		return UserAvatarURL(u.ID, u.Avatar, UserAvatarFormatGIF, ImageSize1024)
+		return UserAvatarURL(u.ID, u.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
 	return DefaultUserAvatarURL(u.DefaultAvatarIndex())
 }
@@ -323,8 +323,8 @@ func (u *User) AvatarURL() string {
 //
 // Example usage:
 //
-//	url := user.AvatarURLWith(UserAvatarFormatWebP, ImageSize512)
-func (u *User) AvatarURLWith(format UserAvatarFormat, size ImageSize) string {
+//	url := user.AvatarURLWith(ImageFormatWebP, ImageSize1024)
+func (u *User) AvatarURLWith(format ImageFormat, size ImageSize) string {
 	if u.Avatar != "" {
 		return UserAvatarURL(u.ID, u.Avatar, format, size)
 	}
@@ -334,8 +334,7 @@ func (u *User) AvatarURLWith(format UserAvatarFormat, size ImageSize) string {
 // BannerURL returns the URL to the user's banner image.
 //
 // If the user has a custom banner set, it returns the URL to that banner.
-// By default, it uses GIF format if the banner is animated, otherwise PNG,
-// with a default size of 1024.
+// By default, it uses GIF format if the banner is animated, otherwise PNG.
 //
 // If the user has no custom banner, it returns an empty string.
 //
@@ -344,7 +343,7 @@ func (u *User) AvatarURLWith(format UserAvatarFormat, size ImageSize) string {
 //	url := user.BannerURL()
 func (u *User) BannerURL() string {
 	if u.Avatar != "" {
-		return UserBannerURL(u.ID, u.Avatar, UserBannerFormatGIF, ImageSize1024)
+		return UserBannerURL(u.ID, u.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -352,15 +351,12 @@ func (u *User) BannerURL() string {
 // BannerURLWith returns the URL to the member's avatar image,
 // allowing explicit specification of image format and size.
 //
-// If the user has a custom banner set, it returns the URL to that banner
-// using the provided format and size.
-//
-// If the user has no custom baner, it returns an empty string.
+// If the user has no custom banner, it returns an empty string.
 //
 // Example usage:
 //
-//	url := user.BannerURLWith(UserBannerFormatWebP, ImageSize512)
-func (u *User) BannerURLWith(format UserBannerFormat, size ImageSize) string {
+//	url := user.BannerURLWith(ImageFormatWebP, ImageSize1024)
+func (u *User) BannerURLWith(format ImageFormat, size ImageSize) string {
 	if u.Avatar != "" {
 		return UserBannerURL(u.ID, u.Avatar, format, size)
 	}
@@ -414,7 +410,7 @@ func (u *User) DefaultAvatarIndex() int {
 //	url := user.AvatarDecorationURL()
 func (u *User) AvatarDecorationURL() string {
 	if u.AvatarDecorationData != nil {
-		AvatarDecorationURL(u.AvatarDecorationData.Asset, ImageSize1024)
+		AvatarDecorationURL(u.AvatarDecorationData.Asset, ImageSizeDefault)
 	}
 	return ""
 }
@@ -443,7 +439,10 @@ func (u *User) AvatarDecorationURLWith(size ImageSize) string {
 //	url := user.GuildTagBadgeURL()
 func (u *User) GuildTagBadgeURL() string {
 	if u.PrimaryGuild != nil && u.PrimaryGuild.IdentityGuildID != nil && u.PrimaryGuild.Badge != nil {
-		return GuildTagBadgeURL(*u.PrimaryGuild.IdentityGuildID, *u.PrimaryGuild.Badge,GuildTagBadgeFormatPNG, ImageSize128)
+		return GuildTagBadgeURL(
+			*u.PrimaryGuild.IdentityGuildID, *u.PrimaryGuild.Badge,
+			ImageFormatDefault, ImageSizeDefault,
+		)
 	}
 	return ""
 }
