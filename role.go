@@ -152,17 +152,17 @@ func (r *Role) Mention() string {
 	return "<@&" + r.ID.String() + ">"
 }
 
-// IconURL returns the URL to the role's icon image in PNG format (64px).
+// IconURL returns the URL to the role's icon image in PNG format.
 //
-// If the role has a custom icon set, it returns the URL to that icon.
-// If the role has no custom icon, it returns an empty string.
+// If the role has a custom icon set, it returns the URL to that icon,
+// Otherwise it returns an empty string.
 //
 // Example usage:
 //
 //	url := role.IconURL()
 func (u *Role) IconURL() string {
 	if u.Icon != "" {
-		return RoleIconURL(u.ID, u.Icon, RoleIconFormatPNG, ImageSize64)
+		return RoleIconURL(u.ID, u.Icon, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -171,12 +171,12 @@ func (u *Role) IconURL() string {
 // allowing explicit specification of image format and size.
 //
 // If the role has a custom icon set, it returns the URL to that icon
-// using the provided format and size. If not, it returns an empty string.
+// using the provided format and size, Otherwise it returns an empty string.
 //
 // Example usage:
 //
-//	url := role.IconURLWith(RoleIconFormatWebP, ImageSize512)
-func (u *Role) IconURLWith(format RoleIconFormat, size ImageSize) string {
+//	url := role.IconURLWith(ImageFormatWebP, ImageSize512)
+func (u *Role) IconURLWith(format ImageFormat, size ImageSize) string {
 	if u.Icon != "" {
 		return RoleIconURL(u.ID, u.Icon, format, size)
 	}
