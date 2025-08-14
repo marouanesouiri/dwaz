@@ -14,7 +14,9 @@
 package yada
 
 import (
+	"fmt"
 	"os"
+	"runtime/debug"
 	"sync"
 )
 
@@ -77,6 +79,16 @@ func newDispatcher(logger Logger, workerPool WorkerPool) *dispatcher {
 func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
 	d.logger.Debug("Event '" + eventName + "' dispatched")
 	if !d.workerPool.Submit(func() {
+		defer func() {
+			if r := recover(); r != nil {
+				d.logger.WithField("event", eventName).
+					WithField("shard_id", shardID).
+					WithField("panic", r).
+					WithField("stack", string(debug.Stack())).
+					Error("Recovered from panic while handling event")
+			}
+		}()
+
 		d.mu.RLock()
 		hm, ok := d.handlersManagers[eventName]
 		d.mu.RUnlock()
