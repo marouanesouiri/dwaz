@@ -14,7 +14,6 @@
 package yada
 
 import (
-	"fmt"
 	"os"
 	"runtime/debug"
 	"sync"
