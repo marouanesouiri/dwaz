@@ -169,7 +169,6 @@ const (
 	//
 	// Channel types: Stage
 	PermissionRequestToSpeak Permissions = 1 << 32
-
 	// ManageEvents allows editing and deleting scheduled events created by all users.
 	//
 	// Channel types: Voice, Stage
@@ -245,6 +244,61 @@ const (
 	PermissionUseExternalApps Permissions = 1 << 50
 )
 
+// PermissionName is a human-readable name for a Discord permission.
+type PermissionName = string
+
+const (
+	PermissionNameCreateInstantInvite              PermissionName = "CreateInstantInvite"
+	PermissionNameKickMembers                      PermissionName = "KickMembers"
+	PermissionNameBanMembers                       PermissionName = "BanMembers"
+	PermissionNameAdministrator                    PermissionName = "Administrator"
+	PermissionNameManageChannels                   PermissionName = "ManageChannels"
+	PermissionNameManageGuild                      PermissionName = "ManageGuild"
+	PermissionNameAddReactions                     PermissionName = "AddReactions"
+	PermissionNameViewAuditLog                     PermissionName = "ViewAuditLog"
+	PermissionNamePrioritySpeaker                  PermissionName = "PrioritySpeaker"
+	PermissionNameStream                           PermissionName = "Stream"
+	PermissionNameViewChannel                      PermissionName = "ViewChannel"
+	PermissionNameSendMessages                     PermissionName = "SendMessages"
+	PermissionNameSendTTSMessages                  PermissionName = "SendTTSMessages"
+	PermissionNameManageMessages                   PermissionName = "ManageMessages"
+	PermissionNameEmbedLinks                       PermissionName = "EmbedLinks"
+	PermissionNameAttachFiles                      PermissionName = "AttachFiles"
+	PermissionNameReadMessageHistory               PermissionName = "ReadMessageHistory"
+	PermissionNameMentionEveryone                  PermissionName = "MentionEveryone"
+	PermissionNameUseExternalEmojis                PermissionName = "UseExternalEmojis"
+	PermissionNameViewGuildInsights                PermissionName = "ViewGuildInsights"
+	PermissionNameConnect                          PermissionName = "Connect"
+	PermissionNameSpeak                            PermissionName = "Speak"
+	PermissionNameMuteMembers                      PermissionName = "MuteMembers"
+	PermissionNameDeafenMembers                    PermissionName = "DeafenMembers"
+	PermissionNameMoveMembers                      PermissionName = "MoveMembers"
+	PermissionNameUseVAD                           PermissionName = "UseVAD"
+	PermissionNameChangeNickname                   PermissionName = "ChangeNickname"
+	PermissionNameManageNicknames                  PermissionName = "ManageNicknames"
+	PermissionNameManageRoles                      PermissionName = "ManageRoles"
+	PermissionNameManageWebhooks                   PermissionName = "ManageWebhooks"
+	PermissionNameManageGuildExpressions           PermissionName = "ManageGuildExpressions"
+	PermissionNameUseApplicationCommands           PermissionName = "UseApplicationCommands"
+	PermissionNameRequestToSpeak                   PermissionName = "RequestToSpeak"
+	PermissionNameManageEvents                     PermissionName = "ManageEvents"
+	PermissionNameManageThreads                    PermissionName = "ManageThreads"
+	PermissionNameCreatePublicThreads              PermissionName = "CreatePublicThreads"
+	PermissionNameCreatePrivateThreads             PermissionName = "CreatePrivateThreads"
+	PermissionNameUseExternalStickers              PermissionName = "UseExternalStickers"
+	PermissionNameSendMessagesInThreads            PermissionName = "SendMessagesInThreads"
+	PermissionNameUseEmbeddedActivities            PermissionName = "UseEmbeddedActivities"
+	PermissionNameModerateMembers                  PermissionName = "ModerateMembers"
+	PermissionNameViewCreatorMonetizationAnalytics PermissionName = "ViewCreatorMonetizationAnalytics"
+	PermissionNameUseSoundboard                    PermissionName = "UseSoundboard"
+	PermissionNameCreateGuildExpressions           PermissionName = "CreateGuildExpressions"
+	PermissionNameCreateEvents                     PermissionName = "CreateEvents"
+	PermissionNameUseExternalSounds                PermissionName = "UseExternalSounds"
+	PermissionNameSendVoiceMessages                PermissionName = "SendVoiceMessages"
+	PermissionNameSendPolls                        PermissionName = "SendPolls"
+	PermissionNameUseExternalApps                  PermissionName = "UseExternalApps"
+)
+
 // Has returns true if all given permissions are set.
 func (p Permissions) Has(perms ...Permissions) bool {
 	for _, perm := range perms {
@@ -285,6 +339,116 @@ func (p *Permissions) Remove(perms ...Permissions) {
 	for _, perm := range perms {
 		*p &^= perm
 	}
+}
+
+// PermissionsToNames returns a slice of PermissionName for all permissions set in the mask.
+func (p Permissions) Names() []PermissionName {
+	var names []PermissionName
+	for bit := Permissions(1); bit != 0; bit <<= 1 {
+		if p&bit != 0 {
+			switch bit {
+			case PermissionCreateInstantInvite:
+				names = append(names, PermissionNameCreateInstantInvite)
+			case PermissionKickMembers:
+				names = append(names, PermissionNameKickMembers)
+			case PermissionBanMembers:
+				names = append(names, PermissionNameBanMembers)
+			case PermissionAdministrator:
+				names = append(names, PermissionNameAdministrator)
+			case PermissionManageChannels:
+				names = append(names, PermissionNameManageChannels)
+			case PermissionManageGuild:
+				names = append(names, PermissionNameManageGuild)
+			case PermissionAddReactions:
+				names = append(names, PermissionNameAddReactions)
+			case PermissionViewAuditLog:
+				names = append(names, PermissionNameViewAuditLog)
+			case PermissionPrioritySpeaker:
+				names = append(names, PermissionNamePrioritySpeaker)
+			case PermissionStream:
+				names = append(names, PermissionNameStream)
+			case PermissionViewChannel:
+				names = append(names, PermissionNameViewChannel)
+			case PermissionSendMessages:
+				names = append(names, PermissionNameSendMessages)
+			case PermissionSendTTSMessages:
+				names = append(names, PermissionNameSendTTSMessages)
+			case PermissionManageMessages:
+				names = append(names, PermissionNameManageMessages)
+			case PermissionEmbedLinks:
+				names = append(names, PermissionNameEmbedLinks)
+			case PermissionAttachFiles:
+				names = append(names, PermissionNameAttachFiles)
+			case PermissionReadMessageHistory:
+				names = append(names, PermissionNameReadMessageHistory)
+			case PermissionMentionEveryone:
+				names = append(names, PermissionNameMentionEveryone)
+			case PermissionUseExternalEmojis:
+				names = append(names, PermissionNameUseExternalEmojis)
+			case PermissionViewGuildInsights:
+				names = append(names, PermissionNameViewGuildInsights)
+			case PermissionConnect:
+				names = append(names, PermissionNameConnect)
+			case PermissionSpeak:
+				names = append(names, PermissionNameSpeak)
+			case PermissionMuteMembers:
+				names = append(names, PermissionNameMuteMembers)
+			case PermissionDeafenMembers:
+				names = append(names, PermissionNameDeafenMembers)
+			case PermissionMoveMembers:
+				names = append(names, PermissionNameMoveMembers)
+			case PermissionUseVAD:
+				names = append(names, PermissionNameUseVAD)
+			case PermissionChangeNickname:
+				names = append(names, PermissionNameChangeNickname)
+			case PermissionManageNicknames:
+				names = append(names, PermissionNameManageNicknames)
+			case PermissionManageRoles:
+				names = append(names, PermissionNameManageRoles)
+			case PermissionManageWebhooks:
+				names = append(names, PermissionNameManageWebhooks)
+			case PermissionManageGuildExpressions:
+				names = append(names, PermissionNameManageGuildExpressions)
+			case PermissionUseApplicationCommands:
+				names = append(names, PermissionNameUseApplicationCommands)
+			case PermissionRequestToSpeak:
+				names = append(names, PermissionNameRequestToSpeak)
+			case PermissionManageEvents:
+				names = append(names, PermissionNameManageEvents)
+			case PermissionManageThreads:
+				names = append(names, PermissionNameManageThreads)
+			case PermissionCreatePublicThreads:
+				names = append(names, PermissionNameCreatePublicThreads)
+			case PermissionCreatePrivateThreads:
+				names = append(names, PermissionNameCreatePrivateThreads)
+			case PermissionUseExternalStickers:
+				names = append(names, PermissionNameUseExternalStickers)
+			case PermissionSendMessagesInThreads:
+				names = append(names, PermissionNameSendMessagesInThreads)
+			case PermissionUseEmbeddedActivities:
+				names = append(names, PermissionNameUseEmbeddedActivities)
+			case PermissionModerateMembers:
+				names = append(names, PermissionNameModerateMembers)
+			case PermissionViewCreatorMonetizationAnalytics:
+				names = append(names, PermissionNameViewCreatorMonetizationAnalytics)
+			case PermissionUseSoundboard:
+				names = append(names, PermissionNameUseSoundboard)
+			case PermissionCreateGuildExpressions:
+				names = append(names, PermissionNameCreateGuildExpressions)
+			case PermissionCreateEvents:
+				names = append(names, PermissionNameCreateEvents)
+			case PermissionUseExternalSounds:
+				names = append(names, PermissionNameUseExternalSounds)
+			case PermissionSendVoiceMessages:
+				names = append(names, PermissionNameSendVoiceMessages)
+			case PermissionSendPolls:
+				names = append(names, PermissionNameSendPolls)
+			case PermissionUseExternalApps:
+				names = append(names, PermissionNameUseExternalApps)
+			}
+		}
+	}
+	return names
 }
 
 // Method used internally by the library.
