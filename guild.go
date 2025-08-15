@@ -284,6 +284,12 @@ type Guild struct {
 	// Name is the guild's name.
 	Name string `json:"name"`
 
+	// Description is the description of a guild.
+	//
+	// Optional:
+	//  - May be empty string if no description is set.
+	Description string `json:"description"`
+
 	// Icon is the guild's icon hash.
 	//
 	// Optional:
@@ -368,12 +374,6 @@ type Guild struct {
 	//  - May be empty string if no vanity url code is set.
 	VanityURLCode string `json:"vanity_url_code"`
 
-	// Description is the description of a guild.
-	//
-	// Optional:
-	//  - May be empty string if no description is set.
-	Description string `json:"description"`
-
 	// Banner is the guild's banner hash.
 	//
 	// Optional:
@@ -434,15 +434,14 @@ func (g *Guild) CreatedAt() time.Time {
 // IconURL returns the URL to the guild's icon image.
 //
 // If the guild has a custom icon set, it returns the URL to that icon, otherwise empty string.
-// By default, it uses GIF format if the icon is animated, otherwise PNG,
-// with a default size of 1024.
+// By default, it uses GIF format if the icon is animated, otherwise PNG.
 //
 // Example usage:
 //
 //	url := guild.IconURL()
 func (g *Guild) IconURL() string {
 	if g.Icon != "" {
-		return GuildIconURL(g.ID, g.Icon, GuildIconFormatGIF, ImageSize1024)
+		return GuildIconURL(g.ID, g.Icon, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -455,8 +454,8 @@ func (g *Guild) IconURL() string {
 //
 // Example usage:
 //
-//	url := guild.IconURLWith(GuildIconFormatWebP, ImageSize512)
-func (g *Guild) IconURLWith(format GuildIconFormat, size ImageSize) string {
+//	url := guild.IconURLWith(ImageFormatWebP, ImageSize512)
+func (g *Guild) IconURLWith(format ImageFormat, size ImageSize) string {
 	if g.Icon != "" {
 		return GuildIconURL(g.ID, g.Icon, format, size)
 	}
@@ -466,15 +465,14 @@ func (g *Guild) IconURLWith(format GuildIconFormat, size ImageSize) string {
 // BannerURL returns the URL to the guild's banner image.
 //
 // If the guild has a custom banner set, it returns the URL to that banner, otherwise empty string.
-// By default, it uses GIF format if the banner is animated, otherwise PNG,
-// with a default size of 1024.
+// By default, it uses GIF format if the banner is animated, otherwise PNG.
 //
 // Example usage:
 //
 //	url := guild.BannerURL()
 func (g *Guild) BannerURL() string {
 	if g.Icon != "" {
-		return GuildBannerURL(g.ID, g.Icon, GuildBannerFormatGIF, ImageSize1024)
+		return GuildBannerURL(g.ID, g.Icon, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -487,25 +485,25 @@ func (g *Guild) BannerURL() string {
 //
 // Example usage:
 //
-//	url := guild.BannerURLWith(GuildBannerFormatGIF, ImageSize512)
-func (g *Guild) BannerURLWith(foramt GuildBannerFormat, size ImageSize) string {
+//	url := guild.BannerURLWith(ImageFormatWebP, ImageSize512)
+func (g *Guild) BannerURLWith(format ImageFormat, size ImageSize) string {
 	if g.Icon != "" {
-		return GuildBannerURL(g.ID, g.Icon, GuildBannerFormatGIF, ImageSize1024)
+		return GuildBannerURL(g.ID, g.Icon, format, size)
 	}
 	return ""
 }
 
 // SplashURL returns the URL to the guild's splash image.
 //
-// If the guild has a splash image set, it returns the URL to that image, otherwise empty string.
-// By default, it uses PNG format with a default size of 1024.
+// If the guild has a splash image set, it returns the URL to that image,
+// Otherwise empty string, By default it uses PNG.
 //
 // Example usage:
 //
 //	url := guild.SplashURL()
 func (g *Guild) SplashURL() string {
 	if g.Splash != "" {
-		return GuildSplashURL(g.ID, g.Splash, GuildSplashFormatPNG, ImageSize1024)
+		return GuildSplashURL(g.ID, g.Splash, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -518,8 +516,8 @@ func (g *Guild) SplashURL() string {
 //
 // Example usage:
 //
-//	url := guild.SplashURLWith(GuildSplashFormatWebP, ImageSize512)
-func (g *Guild) SplashURLWith(format GuildSplashFormat, size ImageSize) string {
+//	url := guild.SplashURLWith(ImageFormatWebP, ImageSize512)
+func (g *Guild) SplashURLWith(format ImageFormat, size ImageSize) string {
 	if g.Splash != "" {
 		return GuildSplashURL(g.ID, g.Icon, format, size)
 	}
@@ -528,15 +526,15 @@ func (g *Guild) SplashURLWith(format GuildSplashFormat, size ImageSize) string {
 
 // DiscoverySplashURL returns the URL to the guild's discovery splash image.
 //
-// If the guild has a discovery splash image set, it returns the URL to that image, otherwise empty string.
-// By default, it uses PNG format with a default size of 1024.
+// If the guild has a discovery splash image set, it returns the URL to that image,
+// Otherwise empty string, By default it uses PNG.
 //
 // Example usage:
 //
 //	url := guild.DiscoverySplashURL()
 func (g *Guild) DiscoverySplashURL() string {
 	if g.DiscoverySplash != "" {
-		return GuildDiscoverySplashURL(g.ID, g.Splash, GuildDiscoverySplashFormatPNG, ImageSize1024)
+		return GuildDiscoverySplashURL(g.ID, g.Splash, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -549,8 +547,8 @@ func (g *Guild) DiscoverySplashURL() string {
 //
 // Example usage:
 //
-//	url := guild.DiscoverySplashURLWith(GuildDiscoverySplashFormatWebP, ImageSize512)
-func (g *Guild) DiscoverySplashURLWith(format GuildDiscoverySplashFormat, size ImageSize) string {
+//	url := guild.DiscoverySplashURLWith(ImageFormatWebP, ImageSize512)
+func (g *Guild) DiscoverySplashURLWith(format ImageFormat, size ImageSize) string {
 	if g.DiscoverySplash != "" {
 		return GuildDiscoverySplashURL(g.ID, g.Icon, format, size)
 	}
@@ -572,4 +570,36 @@ type RestGuild struct {
 
 	// Emojis contains the custom emojis available in the guild.
 	Emojis []Emoji `json:"emojis"`
+}
+
+// RestGuild represents a guild object returned by the Discord gateway.
+// It embeds RestGuild and adds additional fields provided in the gateway.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#guild-create
+type GatewayGuild struct {
+	RestGuild
+
+	// Large if true this is considered a large guild.
+	Large bool `json:"large"`
+
+	// MemberCount is the total number of members in this guild.
+	MemberCount int `json:"member_count"`
+
+	// VoiceStates is the states of members currently in voice channels; lacks the GuildID key.
+	VoiceStates []VoiceState `json:"voice_states"`
+
+	// Members is a slice of the Users in the guild.
+	Members []Member `json:"members"`
+
+	// Channels is a slice of the Channels in the guild.
+	Channels []GuildChannel `json:"channels"`
+
+	// Threads are all active threads in the guild that current user has permission to view.
+	Threads []ThreadChannel `json:"threads"`
+
+	// StageInstances is a slice of the Stage instances in the guild.
+	StageInstances []StageInstance `json:""`
+
+	// SoundboardSounds is a slice of the Soundboard sounds in the guild.
+	SoundboardSounds []SoundBoardSound `json:"soundboard_sounds"`
 }
