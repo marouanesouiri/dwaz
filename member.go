@@ -171,15 +171,14 @@ func (m *Member) DisplayName() string {
 //
 // If the member has a custom avatar set, it returns the URL to that avatar.
 // Otherwise it returns their global user avatar URL,
-// By default, it uses GIF format if the avatar is animated, otherwise PNG,
-// with a default size of 1024.
+// By default, it uses GIF format if the avatar is animated, otherwise PNG.
 //
 // Example usage:
 //
 //	url := member.AvatarURL()
 func (m *Member) AvatarURL() string {
 	if m.Avatar != "" {
-		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, GuildMemberAvatarFormatGIF, ImageSize1024)
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
 	return m.User.AvatarURL()
 }
@@ -192,27 +191,26 @@ func (m *Member) AvatarURL() string {
 //
 // Example usage:
 //
-//	url := member.AvatarURLWith(GuildMemberAvatarFormatWebP, ImageSize512)
-func (m *Member) AvatarURLWith(format GuildMemberAvatarFormat, size ImageSize) string {
+//	url := member.AvatarURLWith(ImageFormatWebP, ImageSize512)
+func (m *Member) AvatarURLWith(format ImageFormat, size ImageSize) string {
 	if m.Avatar != "" {
 		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, format, size)
 	}
-	return m.User.AvatarURLWith(UserAvatarFormat(format), size)
+	return m.User.AvatarURLWith(format, size)
 }
 
 // BannerURL returns the URL to the member's banner image.
 //
 // If the member has a custom banner set, it returns the URL to that banner.
 // Otherwise it returns their global user banner URL,
-// By default, it uses GIF format if the banner is animated, otherwise PNG,
-// with a default size of 1024.
+// By default, it uses GIF format if the banner is animated, otherwise PNG.
 //
 // Example usage:
 //
 //	url := member.BannerURL()
 func (m *Member) BannerURL() string {
 	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, GuildMemberBannerFormatGIF, ImageSize1024)
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
 	return m.User.BannerURL()
 }
@@ -225,12 +223,12 @@ func (m *Member) BannerURL() string {
 //
 // Example usage:
 //
-//	url := member.BannerURLWith()
-func (m *Member) BannerURLWith(format GuildMemberBannerFormat, size ImageSize) string {
+//	url := member.BannerURLWith(ImageFormatWebP, ImageSize512)
+func (m *Member) BannerURLWith(format ImageFormat, size ImageSize) string {
 	if m.Avatar != "" {
 		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
 	}
-	return m.User.BannerURLWith(UserBannerFormat(format), size)
+	return m.User.BannerURLWith(format, size)
 }
 
 // AvatarDecorationURL returns the URL to the member's avatar decoration image.
@@ -242,7 +240,7 @@ func (m *Member) BannerURLWith(format GuildMemberBannerFormat, size ImageSize) s
 //	url := member.AvatarDecorationURL()
 func (m *Member) AvatarDecorationURL() string {
 	if m.AvatarDecorationData != nil {
-		AvatarDecorationURL(m.AvatarDecorationData.Asset, ImageSize1024)
+		AvatarDecorationURL(m.AvatarDecorationData.Asset, ImageSizeDefault)
 	}
 	return ""
 }
