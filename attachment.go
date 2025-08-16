@@ -21,8 +21,8 @@ import "time"
 type AttachmentFlags int
 
 const (
-	// AttachmentFlag_IsRemix means this attachment has been edited using the remix feature on mobile.
-	AttachmentFlag_IsRemix AttachmentFlags = 1 << 2
+	// AttachmentFlagIsRemix means this attachment has been edited using the remix feature on mobile.
+	AttachmentFlagIsRemix AttachmentFlags = 1 << 2
 )
 
 // Attachment represents a Discord attachment object.
