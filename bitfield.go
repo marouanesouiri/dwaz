@@ -21,37 +21,37 @@ type BitField interface {
 		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
 }
 
-// BitMaskAdd returns a new bitfield with the specified bitmasks set.
+// BitFieldAdd returns a new bitfield with the specified bitmasks set.
 // Each bitmask corresponds to a flag value that will be added (ORed)
 // into the bitfield.
 //
 // Example:
 //
 //	var flags uint8 = 0
-//	flags = BitMaskAdd(flags, 1, 4) // sets bit 0 and 2 → flags = 5
-func BitMaskAdd[T BitField](bitfield T, bitmasks ...T) T {
+//	flags = BitFieldAdd(flags, 1, 4) // sets bit 0 and 2 → flags = 5
+func BitFieldAdd[T BitField](bitfield T, bitmasks ...T) T {
 	for _, bitmask := range bitmasks {
 		bitfield |= bitmask
 	}
 	return bitfield
 }
 
-// BitMaskRemove returns a new bitfield with the specified bitmasks cleared.
+// BitFieldRemove returns a new bitfield with the specified bitmasks cleared.
 // Each bitmask corresponds to a flag value that will be removed (AND NOTed)
 // from the bitfield.
 //
 // Example:
 //
 //	var flags uint8 = 5 // 0101
-//	flags = BitMaskRemove(flags, 1) // clears bit 0 → flags = 4
-func BitMaskRemove[T BitField](bitfield T, bitmasks ...T) T {
+//	flags = BitFieldRemove(flags, 1) // clears bit 0 → flags = 4
+func BitFieldRemove[T BitField](bitfield T, bitmasks ...T) T {
 	for _, bitmask := range bitmasks {
 		bitfield &^= bitmask
 	}
 	return bitfield
 }
 
-// BitMaskHas reports whether the given bitfield contains all of the specified
+// BitFieldHas reports whether the given bitfield contains all of the specified
 // bitmasks. It returns true if every bitmask is fully present in the bitfield.
 //
 // Example:
@@ -64,10 +64,10 @@ func BitMaskRemove[T BitField](bitfield T, bitmasks ...T) T {
 //
 //	var flags = A | C // 0101
 //
-//	BitMaskHas(flags, A)    // true
-//	BitMaskHas(flags, B)    // false
-//	BitMaskHas(flags, A, C) // true
-func BitMaskHas[T BitField](bitfield T, bitmasks ...T) bool {
+//	BitFieldHas(flags, A)    // true
+//	BitFieldHas(flags, B)    // false
+//	BitFieldHas(flags, A, C) // true
+func BitFieldHas[T BitField](bitfield T, bitmasks ...T) bool {
 	for _, bitmask := range bitmasks {
 		if bitfield&bitmask != bitmask {
 			return false
@@ -76,7 +76,7 @@ func BitMaskHas[T BitField](bitfield T, bitmasks ...T) bool {
 	return true
 }
 
-// BitMaskMissing returns a bitfield containing the subset of bitmasks
+// BitFieldMissing returns a bitfield containing the subset of bitmasks
 // that are not present in the given bitfield. If all specified bitmasks
 // are already set, it returns zero.
 //
@@ -90,10 +90,10 @@ func BitMaskHas[T BitField](bitfield T, bitmasks ...T) bool {
 //
 //	var flags = A | C // 0101
 //
-//	BitMaskMissing(flags, A, B, C) // 0010 (B is missing)
-//	BitMaskMissing(flags, A)       // 0000 (A is present)
-//	BitMaskMissing(flags, B, C)    // 0010 (only B is missing)
-func BitMaskMissing[T BitField](bitfield T, bitmasks ...T) T {
+//	BitFieldMissing(flags, A, B, C) // 0010 (B is missing)
+//	BitFieldMissing(flags, A)       // 0000 (A is present)
+//	BitFieldMissing(flags, B, C)    // 0010 (only B is missing)
+func BitFieldMissing[T BitField](bitfield T, bitmasks ...T) T {
 	var missing T
 	for _, bitmask := range bitmasks {
 		if bitfield&bitmask == 0 {
