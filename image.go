@@ -52,19 +52,31 @@ func isAnimatedHash(hash string) bool {
 
 // buildImageURL constructs a URL for Discord assets with fallback logic.
 func buildImageURL(baseURL, path, hash string, config ImageConfig, allowedFormats [5]ImageFormat) string {
-	if config.Format == "" || (config.Format == ImageFormatGIF && !isAnimatedHash(hash)) {
-		config.Format = ImageFormatPNG
-	}
-	url := baseURL + path + string(config.Format)
-	needsAnimated := config.Format == ImageFormatWebP && isAnimatedHash(hash)
-	if config.Size > 0 || needsAnimated {
-		sep := "?"
-		if config.Size > 0 {
-			url += sep + "size=" + strconv.Itoa(int(config.Size))
-			sep = "&"
+	allowed := false
+	for _, f := range allowedFormats {
+		if config.Format == f {
+			allowed = true
+			break
 		}
-		if needsAnimated {
-			url += sep + "animated=true"
+	}
+
+	animatedHash := isAnimatedHash(hash)
+
+	if !allowed || config.Format == "" || (config.Format == ImageFormatGIF && !animatedHash) {
+		config.Format = allowedFormats[0]
+	}
+
+	url := baseURL + path + string(config.Format)
+
+	if config.Size > 0 {
+		url += "?" + "size=" + strconv.Itoa(int(config.Size))
+	}
+
+	if config.Format == ImageFormatWebP && animatedHash {
+		if config.Size > 0 {
+			url += "&animated=true"
+		} else {
+			url += "?animated=true"
 		}
 	}
 	return url
