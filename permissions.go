@@ -301,12 +301,7 @@ const (
 
 // Has returns true if all given permissions are set.
 func (p Permissions) Has(perms ...Permissions) bool {
-	for _, perm := range perms {
-		if p&perm != perm {
-			return false
-		}
-	}
-	return true
+	return BitFieldHas(p, perms...)
 }
 
 // Missing returns a Permissions bitmask containing the permissions
@@ -318,27 +313,17 @@ func (p Permissions) Has(perms ...Permissions) bool {
 //	missing := p.Missing(PermissionSendMessages, PermissionManageChannels)
 //	// missing will contain PermissionManageChannels
 func (p Permissions) Missing(perms ...Permissions) Permissions {
-	var missing Permissions
-	for _, perm := range perms {
-		if p&perm == 0 {
-			missing |= perm
-		}
-	}
-	return missing
+	return BitFieldMissing(p, perms...)
 }
 
 // Add sets all given permissions.
 func (p *Permissions) Add(perms ...Permissions) {
-	for _, perm := range perms {
-		*p |= perm
-	}
+	*p = BitFieldAdd(*p, perms...)
 }
 
 // Remove clears all given permissions.
 func (p *Permissions) Remove(perms ...Permissions) {
-	for _, perm := range perms {
-		*p &^= perm
-	}
+	*p = BitFieldRemove(*p, perms...)
 }
 
 // PermissionsToNames returns a slice of PermissionName for all permissions set in the mask.

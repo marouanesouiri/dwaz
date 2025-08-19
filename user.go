@@ -72,12 +72,7 @@ const (
 
 // Has returns true if all provided flags are set.
 func (f UserFlags) Has(flags ...UserFlags) bool {
-	for _, flag := range flags {
-		if f&flag != flag {
-			return false
-		}
-	}
-	return true
+	return BitMaskHas(f, flags...)
 }
 
 // Nameplate represents the nameplate the user has.

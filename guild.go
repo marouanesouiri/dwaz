@@ -169,12 +169,7 @@ const (
 
 // Has returns true if all provided flags are set.
 func (f SystemChannelFlags) Has(flags ...SystemChannelFlags) bool {
-	for _, flag := range flags {
-		if f&flag != flag {
-			return false
-		}
-	}
-	return true
+	return BitFieldHas(f, flags...)
 }
 
 // PremiumTier represents the boost level of a Discord guild.

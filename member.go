@@ -65,12 +65,7 @@ const (
 
 // Has returns true if all provided flags are set.
 func (f MemberFlags) Has(flags ...MemberFlags) bool {
-	for _, flag := range flags {
-		if f&flag != flag {
-			return false
-		}
-	}
-	return true
+	return BitFieldHas(f, flags...)
 }
 
 // Member is a discord GuildMember
