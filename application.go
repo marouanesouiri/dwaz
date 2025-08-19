@@ -199,12 +199,7 @@ const (
 
 // Has returns true if all provided flags are set.
 func (f ApplicationFlags) Has(flags ...ApplicationFlags) bool {
-	for _, flag := range flags {
-		if f&flag != flag {
-			return false
-		}
-	}
-	return true
+	return BitFieldHas(f, flags...)
 }
 
 // ApplicationEventWebhookStatus represent a Discord application application event webhook status.

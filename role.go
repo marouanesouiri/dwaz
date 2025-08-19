@@ -25,10 +25,7 @@ const (
 
 // Has returns true if all provided flags are set.
 func (f RoleFlags) Has(flag RoleFlags) bool {
-	if f&flag != flag {
-		return false
-	}
-	return true
+	return BitFieldHas(f, flag)
 }
 
 // RoleTags represents the tags object attached to a role.

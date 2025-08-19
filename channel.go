@@ -98,12 +98,7 @@ const (
 
 // Has returns true if all provided flags are set.
 func (f ChannelFlags) Has(flags ...ChannelFlags) bool {
-	for _, flag := range flags {
-		if f&flag != flag {
-			return false
-		}
-	}
-	return true
+	return BitFieldHas(f, flags...)
 }
 
 // PermissionOverwriteType defines the type of permission overwrite target.
