@@ -13,7 +13,13 @@
 
 package yada
 
-import "time"
+import (
+	"bytes"
+	"encoding/json"
+	"time"
+
+	"github.com/bytedance/sonic"
+)
 
 // VerificationLevel represents the verification level required on a Discord guild.
 //
@@ -593,8 +599,53 @@ type GatewayGuild struct {
 	Threads []ThreadChannel `json:"threads"`
 
 	// StageInstances is a slice of the Stage instances in the guild.
-	StageInstances []StageInstance `json:""`
+	StageInstances []StageInstance `json:"stage_instances"`
 
 	// SoundboardSounds is a slice of the Soundboard sounds in the guild.
 	SoundboardSounds []SoundBoardSound `json:"soundboard_sounds"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler for GatewayGuild.
+func (g *GatewayGuild) UnmarshalJSON(buf []byte) error {
+	type tempGuild struct {
+		RestGuild
+		Large            bool              `json:"large"`
+		MemberCount      int               `json:"member_count"`
+		VoiceStates      []VoiceState      `json:"voice_states"`
+		Members          []Member          `json:"members"`
+		Channels         []json.RawMessage `json:"channels"`
+		Threads          []ThreadChannel   `json:"threads"`
+		StageInstances   []StageInstance   `json:"stage_instances"`
+		SoundboardSounds []SoundBoardSound `json:"soundboard_sounds"`
+	}
+
+	var temp tempGuild
+	if err := sonic.Unmarshal(buf, &temp); err != nil {
+		return err
+	}
+
+	g.RestGuild = temp.RestGuild
+	g.Large = temp.Large
+	g.MemberCount = temp.MemberCount
+	g.VoiceStates = temp.VoiceStates
+	g.Members = temp.Members
+	g.Threads = temp.Threads
+	g.StageInstances = temp.StageInstances
+	g.SoundboardSounds = temp.SoundboardSounds
+
+	if temp.Channels != nil {
+		g.Channels = make([]GuildChannel, 0, len(temp.Channels))
+		for i := range len(temp.Channels) {
+			if len(temp.Channels[i]) == 0 || bytes.Equal(temp.Channels[i], []byte("null")) {
+				continue
+			}
+			channel, err := channelFromJson(temp.Channels[i])
+			if err != nil {
+				return err
+			}
+			g.Channels = append(g.Channels, channel.(GuildChannel))
+		}
+	}
+
+	return nil
 }
