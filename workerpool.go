@@ -50,6 +50,8 @@ type defaultWorkerPool struct {
 	idleTimeout  time.Duration
 }
 
+var _ WorkerPool = (*defaultWorkerPool)(nil)
+
 type workerOption func(*defaultWorkerPool)
 
 // WithMinWorkers sets min workers
