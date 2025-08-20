@@ -34,7 +34,7 @@ type WorkerPool interface {
  *  Default WorkerPool *
  ***********************/
 
-type defaultWorkerPool struct {
+type DefaultWorkerPool struct {
 	logger Logger
 
 	minWorkers int
@@ -50,34 +50,34 @@ type defaultWorkerPool struct {
 	idleTimeout  time.Duration
 }
 
-var _ WorkerPool = (*defaultWorkerPool)(nil)
+var _ WorkerPool = (*DefaultWorkerPool)(nil)
 
-type workerOption func(*defaultWorkerPool)
+type workerOption func(*DefaultWorkerPool)
 
 // WithMinWorkers sets min workers
 func WithMinWorkers(_min int) workerOption {
-	return func(p *defaultWorkerPool) {
+	return func(p *DefaultWorkerPool) {
 		p.minWorkers = _min
 	}
 }
 
 // WithMaxWorkers sets max workers
 func WithMaxWorkers(_max int) workerOption {
-	return func(p *defaultWorkerPool) {
+	return func(p *DefaultWorkerPool) {
 		p.maxWorkers = _max
 	}
 }
 
 // WithQueueCap sets queue capacity
 func WithQueueCap(_cap int) workerOption {
-	return func(p *defaultWorkerPool) {
+	return func(p *DefaultWorkerPool) {
 		p.queueCap = _cap
 	}
 }
 
 // WithIdleTimeout sets idle timeout for workers
 func WithIdleTimeout(d time.Duration) workerOption {
-	return func(p *defaultWorkerPool) {
+	return func(p *DefaultWorkerPool) {
 		p.idleTimeout = d
 	}
 }
@@ -86,14 +86,14 @@ func WithIdleTimeout(d time.Duration) workerOption {
 // the pool attempts to dynamically spawn a new worker.
 // A value of 0.75 means new workers are added when the queue is 75% full.
 func WithQueueGrowThreshold(threshold float64) workerOption {
-	return func(p *defaultWorkerPool) {
+	return func(p *DefaultWorkerPool) {
 		p.queueGrowThreshold = threshold
 	}
 }
 
 // NewDefaultWorkerPool creates a new worker pool with options.
 func NewDefaultWorkerPool(logger Logger, opts ...workerOption) WorkerPool {
-	p := &defaultWorkerPool{
+	p := &DefaultWorkerPool{
 		logger:             logger,
 		minWorkers:         10,
 		maxWorkers:         300,
@@ -116,7 +116,7 @@ func NewDefaultWorkerPool(logger Logger, opts ...workerOption) WorkerPool {
 	return p
 }
 
-func (p *defaultWorkerPool) addWorker() {
+func (p *DefaultWorkerPool) addWorker() {
 	atomic.AddInt32(&p.workerCount, 1)
 
 	go func() {
@@ -153,7 +153,7 @@ func (p *defaultWorkerPool) addWorker() {
 
 // Submit submits a task to the pool.
 // Returns false if the queue is full and task dropped.
-func (p *defaultWorkerPool) Submit(task WorkerTask) bool {
+func (p *DefaultWorkerPool) Submit(task WorkerTask) bool {
 	if p.shutdownOnce.Load() {
 		return false
 	}
@@ -175,7 +175,7 @@ func (p *defaultWorkerPool) Submit(task WorkerTask) bool {
 }
 
 // Shutdown stops the pool immediately; no waiting for workers.
-func (p *defaultWorkerPool) Shutdown() {
+func (p *DefaultWorkerPool) Shutdown() {
 	if p.shutdownOnce.CompareAndSwap(false, true) {
 		close(p.stopSignal)
 	}
