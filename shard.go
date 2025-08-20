@@ -38,22 +38,22 @@ type shardsIdentifyRateLimiter interface {
 	Wait()
 }
 
-// defaultShardsRateLimiter implements a simple token bucket
+// DefaultShardsRateLimiter implements a simple token bucket
 // rate limiter using a buffered channel of tokens.
 //
 // The capacity and refill interval control the max burst and rate.
-type defaultShardsRateLimiter struct {
+type DefaultShardsRateLimiter struct {
 	tokens chan struct{}
 }
 
-var _ shardsIdentifyRateLimiter = (*defaultShardsRateLimiter)(nil)
+var _ shardsIdentifyRateLimiter = (*DefaultShardsRateLimiter)(nil)
 
-// newDefaultShardsRateLimiter creates a new token bucket rate limiter.
+// NewDefaultShardsRateLimiter creates a new token bucket rate limiter.
 //
 // r specifies the maximum burst tokens allowed.
 // interval specifies how frequently tokens are refilled.
-func newDefaultShardsRateLimiter(r int, interval time.Duration) *defaultShardsRateLimiter {
-	rl := &defaultShardsRateLimiter{tokens: make(chan struct{}, r)}
+func NewDefaultShardsRateLimiter(r int, interval time.Duration) *DefaultShardsRateLimiter {
+	rl := &DefaultShardsRateLimiter{tokens: make(chan struct{}, r)}
 	// fill initial tokens
 	for range r {
 		rl.tokens <- struct{}{}
@@ -73,7 +73,7 @@ func newDefaultShardsRateLimiter(r int, interval time.Duration) *defaultShardsRa
 }
 
 // Wait blocks until a token is available for sending Identify.
-func (rl *defaultShardsRateLimiter) Wait() {
+func (rl *DefaultShardsRateLimiter) Wait() {
 	<-rl.tokens
 }
 
