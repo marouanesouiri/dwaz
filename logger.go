@@ -55,6 +55,8 @@ type DefaultLogger struct {
 	level  LogLevel
 }
 
+var _ Logger = (*DefaultLogger)(nil)
+
 func NewDefaultLogger(out io.Writer, level LogLevel) *DefaultLogger {
 	if out == nil {
 		out = os.Stdout
