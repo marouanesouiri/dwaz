@@ -29,11 +29,11 @@ import (
  * Shards Identify Rate Limiter
  *******************************/
 
-// shardsIdentifyRateLimiter defines the interface for a rate limiter
+// ShardsIdentifyRateLimiter defines the interface for a rate limiter
 // that controls the frequency of Identify payloads sent per shard.
 //
 // Implementations block the caller in Wait() until an Identify token is available.
-type shardsIdentifyRateLimiter interface {
+type ShardsIdentifyRateLimiter interface {
 	// Wait blocks until the shard is allowed to send an Identify payload.
 	Wait()
 }
@@ -46,7 +46,7 @@ type DefaultShardsRateLimiter struct {
 	tokens chan struct{}
 }
 
-var _ shardsIdentifyRateLimiter = (*DefaultShardsRateLimiter)(nil)
+var _ ShardsIdentifyRateLimiter = (*DefaultShardsRateLimiter)(nil)
 
 // NewDefaultShardsRateLimiter creates a new token bucket rate limiter.
 //
@@ -92,7 +92,7 @@ type Shard struct {
 
 	logger          Logger                    // logger interface for informational and error messages
 	dispatcher      *dispatcher               // event dispatcher for received Gateway events
-	identifyLimiter shardsIdentifyRateLimiter // rate limiter controlling Identify payloads
+	identifyLimiter ShardsIdentifyRateLimiter // rate limiter controlling Identify payloads
 
 	conn net.Conn // websocket connection
 
@@ -113,7 +113,7 @@ type Shard struct {
 // limiter enforces Identify rate limits.
 func newShard(
 	shardID, totalShards int, token, url string, intents GatewayIntent,
-	logger Logger, dispatcher *dispatcher, limiter shardsIdentifyRateLimiter,
+	logger Logger, dispatcher *dispatcher, limiter ShardsIdentifyRateLimiter,
 ) *Shard {
 	return &Shard{
 		shardID:         shardID,
