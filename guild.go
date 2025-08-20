@@ -605,6 +605,8 @@ type GatewayGuild struct {
 	SoundboardSounds []SoundBoardSound `json:"soundboard_sounds"`
 }
 
+var _ json.Unmarshaler = (*GatewayGuild)(nil)
+
 // UnmarshalJSON implements json.Unmarshaler for GatewayGuild.
 func (g *GatewayGuild) UnmarshalJSON(buf []byte) error {
 	type tempGuild struct {
