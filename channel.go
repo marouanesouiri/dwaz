@@ -579,6 +579,26 @@ type ThreadChannel struct {
 	ThreadMetadata ThreadMetaData `json:"thread_metadata"`
 }
 
+var (
+	// All channels must implement Channel.
+	_ Channel = (*CategoryChannel)(nil)
+	_ Channel = (*TextChannel)(nil)
+	_ Channel = (*VoiceChannel)(nil)
+	_ Channel = (*AnnouncementChannel)(nil)
+	_ Channel = (*StageVoiceChannel)(nil)
+	_ Channel = (*ForumChannel)(nil)
+	_ Channel = (*MediaChannel)(nil)
+	_ Channel = (*ThreadChannel)(nil)
+	// All guild channels must implement GuildChannel.
+	_ GuildChannel = (*CategoryChannel)(nil)
+	_ GuildChannel = (*TextChannel)(nil)
+	_ GuildChannel = (*VoiceChannel)(nil)
+	_ GuildChannel = (*AnnouncementChannel)(nil)
+	_ GuildChannel = (*StageVoiceChannel)(nil)
+	_ GuildChannel = (*ForumChannel)(nil)
+	_ GuildChannel = (*MediaChannel)(nil)
+)
+
 func channelFromJson(buf []byte) (Channel, error) {
 	var meta struct {
 		Type ChannelType `json:"type"`
