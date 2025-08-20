@@ -46,6 +46,8 @@ type defaultShardsRateLimiter struct {
 	tokens chan struct{}
 }
 
+var _ shardsIdentifyRateLimiter = (*defaultShardsRateLimiter)(nil)
+
 // newDefaultShardsRateLimiter creates a new token bucket rate limiter.
 //
 // r specifies the maximum burst tokens allowed.
