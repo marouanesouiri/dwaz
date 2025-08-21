@@ -35,13 +35,14 @@ import (
 //
 // Create a Cluster using yada.New() with desired options, then call Start().
 type Cluster struct {
-	Logger      Logger        // logger used throughout the cluster
-	workerPool  WorkerPool    // worker pool used to run tasks asynchronously
-	token       string        // bot token (without "Bot " prefix)
-	intents     GatewayIntent // configured Gateway intents
-	shards      []*Shard      // managed Gateway shards
-	*restApi                  // REST API client
-	*dispatcher               // event dispatcher
+	Logger          Logger                    // logger used throughout the cluster
+	workerPool      WorkerPool                // worker pool used to run tasks asynchronously
+	identifyLimiter ShardsIdentifyRateLimiter // rate limiter controlling Identify payloads per shard
+	token           string                    // bot token (without "Bot " prefix)
+	intents         GatewayIntent             // configured Gateway intents
+	shards          []*Shard                  // managed Gateway shards
+	*restApi                                  // REST API client
+	*dispatcher                               // event dispatcher
 }
 
 // clusterOption defines a function used to configure Cluster during creation.
@@ -109,6 +110,23 @@ func WithWorkerPool(workerPool WorkerPool) clusterOption {
 	}
 }
 
+// WithShardsIdentifyRateLimiter sets a custom ShardsIdentifyRateLimiter
+// implementation for your cluster.
+//
+// Usage:
+//
+//	y := yada.New(yada.WithShardsIdentifyRateLimiter(myRateLimiter))
+//
+// Logs fatal and exits if the provided rateLimiter is nil.
+func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) clusterOption {
+	if rateLimiter == nil {
+		log.Fatal("ShardsIdentifyRateLimiter: shardsIdentifyRateLimiter must not be nil")
+	}
+	return func(c *Cluster) {
+		c.identifyLimiter = rateLimiter
+	}
+}
+
 // WithIntents sets Gateway intents for the cluster shards.
 //
 // Usage:
@@ -157,7 +175,10 @@ func New(options ...clusterOption) *Cluster {
 		option(cluster)
 	}
 
-	cluster.workerPool = NewDefaultWorkerPool(cluster.Logger)
+	if cluster.workerPool == nil {
+		cluster.workerPool = NewDefaultWorkerPool(cluster.Logger)
+	}
+
 	cluster.restApi = newRestApi(
 		newRequester(nil, cluster.token, cluster.Logger),
 		cluster.Logger,
@@ -212,15 +233,14 @@ func (c *Cluster) Start(ctx context.Context) error {
 		return err
 	}
 
-	shardsLimiter := newDefaultShardsRateLimiter(
-		gatewayBotData.SessionStartLimit.MaxConcurrency,
-		5*time.Second,
-	)
+	if c.identifyLimiter == nil {
+		c.identifyLimiter = NewDefaultShardsRateLimiter(gatewayBotData.SessionStartLimit.MaxConcurrency, 5*time.Second)
+	}
 
 	for i := range gatewayBotData.Shards {
 		shard := newShard(
 			i, gatewayBotData.Shards, c.token, gatewayBotData.URL, c.intents,
-			c.Logger, c.dispatcher, shardsLimiter,
+			c.Logger, c.dispatcher, c.identifyLimiter,
 		)
 		if err := shard.connect(ctx); err != nil {
 			return err
@@ -229,6 +249,9 @@ func (c *Cluster) Start(ctx context.Context) error {
 	}
 
 	<-ctx.Done()
+	if err := ctx.Err(); err != nil {
+		c.Logger.WithField("err", err).Error("Cluster shutdown due to context error")
+	}
 	c.Shutdown()
 	return nil
 }
