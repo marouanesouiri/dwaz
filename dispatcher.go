@@ -23,10 +23,10 @@ import (
  *   EventhandlersManager
  *****************************/
 
-// EventhandlersManager defines the interface for managing event handlers of a specific event type.
+// eventhandlersManager defines the interface for managing event handlers of a specific event type.
 //
 // Implementations must support adding handlers and dispatching raw JSON event data to those handlers.
-type EventhandlersManager interface {
+type eventhandlersManager interface {
 	// handleEvent unmarshals the raw JSON data and calls all registered handlers.
 	handleEvent(shardID int, data []byte)
 	// addHandler adds a new handler function for the event type.
@@ -48,7 +48,7 @@ type EventhandlersManager interface {
 type dispatcher struct {
 	logger           Logger
 	workerPool       WorkerPool
-	handlersManagers map[string]EventhandlersManager
+	handlersManagers map[string]eventhandlersManager
 	mu               sync.RWMutex
 }
 
@@ -62,7 +62,7 @@ func newDispatcher(logger Logger, workerPool WorkerPool) *dispatcher {
 	return &dispatcher{
 		logger:           logger,
 		workerPool:       workerPool,
-		handlersManagers: make(map[string]EventhandlersManager, 20),
+		handlersManagers: make(map[string]eventhandlersManager, 20),
 	}
 }
 
