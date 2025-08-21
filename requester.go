@@ -45,10 +45,6 @@ const (
 	headerReason     = "X-Audit-Log-Reason"
 )
 
-var retryableStatusCodes = map[int]struct{}{
-	429: {}, 500: {}, 502: {}, 503: {}, 504: {},
-}
-
 /***********************
  *   GlobalRateLimit   *
  ***********************/
@@ -92,13 +88,13 @@ type ratelimitBucket struct {
 
 // requester handles HTTP requests with Discord rate limit compliance.
 type requester struct {
-	client    *http.Client
-	token     string
-	buckets   sync.Map // map[bucketRoute]*Bucket
-	queues    sync.Map // map[bucketRoute:majorParam]*sync.Mutex
-	global    globalRateLimit
-	userAgent string
-	logger    Logger
+	client               *http.Client
+	token                string
+	buckets              sync.Map // map[bucketRoute:majorParam]*Bucket
+	global               globalRateLimit
+	userAgent            string
+	logger               Logger
+	retryableStatusCodes map[int]struct{}
 }
 
 // newRequester creates a new Requester with the given bot token and logger.
@@ -128,6 +124,9 @@ func newRequester(client *http.Client, token string, logger Logger) *requester {
 		token:     "Bot " + token,
 		userAgent: "DiscordBot (yada)",
 		logger:    logger,
+		retryableStatusCodes: map[int]struct{}{
+			429: {}, 500: {}, 502: {}, 503: {}, 504: {},
+		},
 	}
 }
 
@@ -146,9 +145,6 @@ func (r *requester) Shutdown() {
 
 // updateBucket updates bucket state from headers.
 func (r *requester) updateBucket(b *ratelimitBucket, h http.Header) {
-	b.Lock()
-	defer b.Unlock()
-
 	if rem := h.Get(headerRemaining); rem != "" {
 		if n, err := strconv.Atoi(rem); err == nil {
 			b.remaining = n
@@ -165,43 +161,35 @@ func (r *requester) updateBucket(b *ratelimitBucket, h http.Header) {
 func (r *requester) do(method, url string, body []byte, authenticateWithToken bool, reason string) (*http.Response, error) {
 	bucketKey := r.generateBucketKey(method, url)
 
-	// Get or create queue mutex
-	mutex, _ := r.queues.LoadOrStore(bucketKey, &sync.Mutex{})
-	mu := mutex.(*sync.Mutex)
-
 	// Get or create bucket for rate limit tracking
 	bucket, _ := r.buckets.LoadOrStore(bucketKey, &ratelimitBucket{remaining: 1})
 	b := bucket.(*ratelimitBucket)
-
-	mu.Lock()
-	defer mu.Unlock()
 
 	for tries := range maxRetries {
 		r.logger.Debug(fmt.Sprintf("Attempt #%d %s %s", tries+1, method, url))
 
 		b.Lock()
 
-		// Wait for bucket reset if exhausted
 		if b.remaining == 0 && time.Now().Before(b.resetAt) {
-			wait := b.resetAt.Sub(time.Now()) + 100*time.Millisecond
-			r.logger.Debug(fmt.Sprintf("Bucket rate limited on route %s: waiting %v before retrying", bucketKey, wait))
+			wait := time.Until(b.resetAt) + 50*time.Millisecond
+			r.logger.Debug(
+				fmt.Sprintf("Bucket rate limited on route %s: waiting %v before retrying", bucketKey, wait),
+			)
 			b.Unlock()
 			time.Sleep(wait)
 			b.Lock()
 		}
 
-		// Wait for global rate limit if active
 		if now, globalReset := time.Now(), r.global.get(); globalReset.After(now) {
 			wait := globalReset.Sub(now) + 100*time.Millisecond
-			r.logger.Debug(fmt.Sprintf("Global rate limit active: waiting %v before retrying request %s %s", wait, method, url))
+			r.logger.Debug(
+				fmt.Sprintf("Global rate limit active: waiting %v before retrying request %s %s", wait, method, url),
+			)
 			b.Unlock()
 			time.Sleep(wait)
 			b.Lock()
 		}
 
-		b.Unlock()
-
-		// Build HTTP request
 		req, err := http.NewRequest(method, baseApiUrl+url, bytes.NewReader(body))
 		if err != nil {
 			r.logger.Error(fmt.Sprintf("Failed building request for %s %s: %v", method, url, err))
@@ -225,6 +213,7 @@ func (r *requester) do(method, url string, body []byte, authenticateWithToken bo
 		resp, err := r.client.Do(req)
 		if err != nil {
 			r.logger.Warn(fmt.Sprintf("HTTP request error for %s %s: %v", method, url, err))
+			b.Unlock()
 			time.Sleep(time.Second)
 			continue
 		}
@@ -243,26 +232,26 @@ func (r *requester) do(method, url string, body []byte, authenticateWithToken bo
 			r.logger.Debug(fmt.Sprintf("429 rate limit hit on route %s, retrying after %v", bucketKey, retryAfter))
 
 			r.updateBucket(b, resp.Header)
-
 			if resp.Header.Get(headerGlobal) == "true" || resp.Header.Get(headerScope) == "shared" {
 				r.global.set(time.Now().Add(retryAfter))
 			}
 
+			b.Unlock()
 			resp.Body.Close()
 			time.Sleep(retryAfter)
 			continue
 		}
 
-		if _, retry := retryableStatusCodes[resp.StatusCode]; retry {
+		if _, retry := r.retryableStatusCodes[resp.StatusCode]; retry {
 			r.logger.Warn(fmt.Sprintf("Retryable status %d for %s %s, retrying...", resp.StatusCode, method, url))
 			resp.Body.Close()
+			b.Unlock()
 			time.Sleep(time.Second)
 			continue
 		}
 
-		// Update bucket state from response headers
 		r.updateBucket(b, resp.Header)
-
+		b.Unlock()
 		return resp, nil
 	}
 
