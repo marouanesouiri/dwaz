@@ -13,7 +13,10 @@
 
 package yada
 
-import "strconv"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // Permissions flags for roles and channels permissions.
 //
@@ -436,7 +439,11 @@ func (p Permissions) Names() []PermissionName {
 	return names
 }
 
-// Method used internally by the library.
+var (
+	_ json.Marshaler   = (*Permissions)(nil)
+	_ json.Unmarshaler = (*Permissions)(nil)
+)
+
 func (p *Permissions) UnmarshalJSON(data []byte) error {
 	str, err := strconv.Unquote(string(data))
 	if err != nil {

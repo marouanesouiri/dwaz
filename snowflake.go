@@ -14,6 +14,7 @@
 package yada
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -32,6 +33,11 @@ const discordEpoch = 1420070400000
 
 // Snowflake is a Discord unique identifier.
 type Snowflake uint64
+
+var (
+	_ json.Marshaler   = (*Snowflake)(nil)
+	_ json.Unmarshaler = (*Snowflake)(nil)
+)
 
 func (s *Snowflake) UnmarshalJSON(data []byte) error {
 	str, err := strconv.Unquote(string(data))
