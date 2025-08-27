@@ -2,6 +2,8 @@ package yada
 
 import (
 	"encoding/json"
+	"errors"
+
 	"github.com/bytedance/sonic"
 )
 
@@ -443,16 +445,49 @@ func (o *ApplicationCommandOptionAttachment) MarshalJSON() ([]byte, error) {
 	return sonic.Marshal(o)
 }
 
-var (
-	_ ApplicationCommandOption = (*ApplicationCommandOptionSubCommand)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionSubCommandGroup)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionString)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionInteger)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionBool)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionUser)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionChannel)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionRole)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionMentionable)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionFloat)(nil)
-	_ ApplicationCommandOption = (*ApplicationCommandOptionAttachment)(nil)
-)
+func UnmarshalApplicationCommandOption(buf []byte) (ApplicationCommandOption, error) {
+	var meta struct {
+		Type ApplicationCommandOptionType `json:"type"`
+	}
+	if err := sonic.Unmarshal(buf, &meta); err != nil {
+		return nil, err
+	}
+
+	switch meta.Type {
+	case ApplicationCommandOptionTypeSubCommand:
+		var o ApplicationCommandOptionSubCommand
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeSubCommandGroup:
+		var o ApplicationCommandOptionSubCommand
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeString:
+		var o ApplicationCommandOptionString
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeInteger:
+		var o ApplicationCommandOptionInteger
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeBool:
+		var o ApplicationCommandOptionBool
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeUser:
+		var o ApplicationCommandOptionUser
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeChannel:
+		var o ApplicationCommandOptionChannel
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeRole:
+		var o ApplicationCommandOptionRole
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeMentionable:
+		var o ApplicationCommandOptionMentionable
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeFloat:
+		var o ApplicationCommandOptionFloat
+		return &o, sonic.Unmarshal(buf, &o)
+	case ApplicationCommandOptionTypeAttachment:
+		var o ApplicationCommandOptionAttachment
+		return &o, sonic.Unmarshal(buf, &o)
+	default:
+		return nil, errors.New("unknown application command option type")
+	}
+}
