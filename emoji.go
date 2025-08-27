@@ -84,3 +84,28 @@ func (e *Emoji) URL() string {
 func (e *Emoji) URLWith(format ImageFormat, size ImageSize) string {
 	return EmojiURL(e.ID, format, size)
 }
+
+// PartialEmoji represents a partial emoji object used in a Discord poll, typically within a PollMedia object for poll answers,
+// or when sending a message with a poll request.
+//
+// When creating a poll answer, provide only the ID for a custom emoji or only the Name for a Unicode emoji.
+//
+// Reference: https://discord.com/developers/docs/resources/poll#poll-media-object-poll-media-object-structure
+type PartialEmoji struct {
+	// ID is the unique identifier for a custom emoji.
+	// When sending a poll request with a custom emoji, provide only the ID and leave Name empty.
+	//
+	// Optional:
+	//  - Will be 0 if no ID is set (e.g., for Unicode emojis or when not provided in a response).
+	ID Snowflake `json:"id,omitempty"`
+
+	// Name is the name of the emoji, used for Unicode emojis (e.g., "😊").
+	// When sending a poll request with a Unicode emoji, provide only the Name and leave ID as 0.
+	//
+	// Optional:
+	//  - Will be empty if no name is set (e.g., for custom emojis or when not provided in a response).
+	Name string `json:"name,omitempty"`
+
+	// Animated indicates whether the emoji is animated.
+	Animated bool `json:"animated"`
+}
