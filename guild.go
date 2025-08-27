@@ -641,7 +641,7 @@ func (g *GatewayGuild) UnmarshalJSON(buf []byte) error {
 			if len(temp.Channels[i]) == 0 || bytes.Equal(temp.Channels[i], []byte("null")) {
 				continue
 			}
-			channel, err := channelFromJson(temp.Channels[i])
+			channel, err := UnmarshalChannel(temp.Channels[i])
 			if err != nil {
 				return err
 			}
