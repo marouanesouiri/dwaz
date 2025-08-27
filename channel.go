@@ -599,7 +599,7 @@ var (
 	_ GuildChannel = (*MediaChannel)(nil)
 )
 
-func channelFromJson(buf []byte) (Channel, error) {
+func UnmarshalChannel(buf []byte) (Channel, error) {
 	var meta struct {
 		Type ChannelType `json:"type"`
 	}

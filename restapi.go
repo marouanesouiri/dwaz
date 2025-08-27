@@ -202,5 +202,5 @@ func (r *restApi) FetchChannel(channelID Snowflake) (Channel, error) {
 	if err != nil {
 		return nil, err
 	}
-	return channelFromJson(body)
+	return UnmarshalChannel(body)
 }
