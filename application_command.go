@@ -1,8 +1,10 @@
 package yada
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/bytedance/sonic"
 )
@@ -489,5 +491,349 @@ func UnmarshalApplicationCommandOption(buf []byte) (ApplicationCommandOption, er
 		return &o, sonic.Unmarshal(buf, &o)
 	default:
 		return nil, errors.New("unknown application command option type")
+	}
+}
+
+/*****************************
+ *   Application Commands
+ *****************************/
+
+// ApplicationCommandType represents the type of an application command.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-types
+type ApplicationCommandType int
+
+const (
+	// ApplicationCommandTypeChatInput is a text-based slash command that shows up when a user types "/".
+	ApplicationCommandTypeChatInput ApplicationCommandType = 1 + iota
+
+	// ApplicationCommandTypeUser is a UI-based command that shows up when you right-click or tap on a user.
+	ApplicationCommandTypeUser
+
+	// ApplicationCommandTypeMessage is a UI-based command that shows up when you right-click or tap on a message.
+	ApplicationCommandTypeMessage
+
+	// ApplicationCommandTypePrimaryEntryPoint is a UI-based command that represents the primary way to invoke an app's Activity.
+	ApplicationCommandTypePrimaryEntryPoint
+)
+
+// Is returns true if the command's Type matches the provided one.
+func (t ApplicationCommandType) Is(commandType ApplicationCommandType) bool {
+	return t == commandType
+}
+
+// ApplicationCommandHandlerType represents the handler type for PRIMARY_ENTRY_POINT commands.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object-entry-point-command-handler-types
+type ApplicationCommandHandlerType int
+
+const (
+	// ApplicationCommandHandlerTypeApp indicates the app handles the interaction using an interaction token.
+	ApplicationCommandHandlerTypeApp ApplicationCommandHandlerType = 1 + iota
+
+	// ApplicationCommandHandlerTypeDiscord indicates Discord handles the interaction by launching an Activity and sending a follow-up message.
+	ApplicationCommandHandlerTypeDiscord
+)
+
+// Is returns true if the command handler's Type matches the provided one.
+func (t ApplicationCommandHandlerType) Is(handlerType ApplicationCommandHandlerType) bool {
+	return t == handlerType
+}
+
+// ApplicationCommand is the interface representing a Discord application command.
+//
+// This interface can represent any type of command returned by Discord, including slash commands,
+// user commands, message commands, and primary entry point commands.
+//
+// Use this interface when you want to handle commands generically without knowing the specific
+// concrete type in advance.
+//
+// You can convert (assert) it to a specific command type using a type assertion or a type switch,
+// as described in the official Go documentation:
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
+//
+// Example usage:
+//
+//	var myCommand ApplicationCommand
+//
+//	switch cmd := myCommand.(type) {
+//	case *ChatInputCommand:
+//	    fmt.Println("Slash command:", cmd.Name)
+//	case *ApplicationUserCommand:
+//	    fmt.Println("User command:", cmd.Name)
+//	case *ApplicationMessageCommand:
+//	    fmt.Println("Message command:", cmd.Name)
+//	default:
+//	    fmt.Println("Other command type:", cmd.GetType())
+//	}
+type ApplicationCommand interface {
+	GetType() ApplicationCommandType
+	GetID() Snowflake
+	GetApplicationID() Snowflake
+	GetGuildID() Snowflake
+	GetName() string
+	GetNameLocalizations() map[Locale]string
+	GetDefaultMemberPermissions() Permissions
+	GetVersion() Snowflake
+	CreatedAt() time.Time
+	IsNSFW() bool
+	GetIntegrationTypes() []ApplicationIntegrationType
+	GetContexts() []InteractionContextType
+	json.Marshaler
+}
+
+// ApplicationCommandBase contains fields common to all application command types.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object
+type ApplicationCommandBase struct {
+	// Type is the type of the command.
+	Type ApplicationCommandType `json:"type"`
+
+	// ID is the unique ID of the command.
+	ID Snowflake `json:"id"`
+
+	// ApplicationID is the ID of the parent application.
+	ApplicationID Snowflake `json:"application_id"`
+
+	// GuildID is the guild ID of the command, if not global.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Name is the name of the command.
+	//
+	// Info:
+	//  - Must be 1-32 characters.
+	//  - For CHAT_INPUT commands, must match the regex ^[-_'\p{L}\p{N}\p{sc=Deva}\p{sc=Thai}]{1,32}$ with unicode flag.
+	//  - For USER and MESSAGE commands, may be mixed case and include spaces.
+	//  - Must use lowercase variants of letters when available.
+	Name string `json:"name"`
+
+	// NameLocalizations is a localization dictionary for the name field.
+	//
+	// Info:
+	//  - Keys are available locales.
+	//  - Values follow the same restrictions as Name.
+	NameLocalizations map[Locale]string `json:"name_localizations"`
+
+	// DefaultMemberPermissions is the set of permissions required to use the command.
+	//
+	// Info:
+	//  - Represented as a bit set.
+	//  - Set to "0" to disable the command for everyone except admins by default.
+	DefaultMemberPermissions Permissions `json:"default_member_permissions"`
+
+	// DefaultPermission indicates whether the command is enabled by default when the app is added to a guild.
+	//
+	// Info:
+	//  - Defaults to true.
+	//  - Deprecated; use DefaultMemberPermissions or Contexts instead.
+	DefaultPermission bool `json:"default_permission"`
+
+	// NSFW indicates whether the command is age-restricted.
+	//
+	// Info:
+	//  - Defaults to false.
+	NSFW bool `json:"nsfw"`
+
+	// IntegrationTypes is the list of installation contexts where the command is available.
+	//
+	// Info:
+	//  - Only for globally-scoped commands.
+	//  - Defaults to the app's configured contexts.
+	IntegrationTypes []ApplicationIntegrationType `json:"integration_types"`
+
+	// Contexts is the list of interaction contexts where the command can be used.
+	//
+	// Info:
+	//  - Only for globally-scoped commands.
+	Contexts []InteractionContextType `json:"contexts"`
+
+	// Version is the autoincrementing version identifier updated during substantial record changes.
+	Version Snowflake `json:"version"`
+}
+
+func (a *ApplicationCommandBase) GetType() ApplicationCommandType {
+	return a.Type
+}
+
+func (a *ApplicationCommandBase) GetID() Snowflake {
+	return a.ID
+}
+
+func (a *ApplicationCommandBase) GetApplicationID() Snowflake {
+	return a.ApplicationID
+}
+
+// GetGuildID returns the guild ID of the command, if it is guild-specific.
+//
+// Returns:
+//  - The Snowflake ID of the guild if the command is associated with a guild.
+//  - 0 if the command is global (not tied to a specific guild).
+func (a *ApplicationCommandBase) GetGuildID() Snowflake {
+	return a.GuildID
+}
+
+func (a *ApplicationCommandBase) GetName() string {
+	return a.Name
+}
+
+func (a *ApplicationCommandBase) GetNameLocalizations() map[Locale]string {
+	return a.NameLocalizations
+}
+
+func (a *ApplicationCommandBase) GetDefaultMemberPermissions() Permissions {
+	return a.DefaultMemberPermissions
+}
+
+func (a *ApplicationCommandBase) GetVersion() Snowflake {
+	return a.Version
+}
+
+func (a *ApplicationCommandBase) CreatedAt() time.Time {
+	return a.ID.Timestamp()
+}
+
+func (a *ApplicationCommandBase) IsNSFW() bool {
+	return a.NSFW
+}
+
+func (a *ApplicationCommandBase) GetIntegrationTypes() []ApplicationIntegrationType {
+	return a.IntegrationTypes
+}
+
+func (a *ApplicationCommandBase) GetContexts() []InteractionContextType {
+	return a.Contexts
+}
+
+// DescriptionConstraints contains description fields for application commands.
+type DescriptionConstraints struct {
+	// Description is the description of the command.
+	//
+	// Info:
+	//  - Must be 1-100 characters.
+	Description string `json:"description"`
+
+	// DescriptionLocalizations is a localization dictionary for the description field.
+	//
+	// Info:
+	//  - Keys are available locales.
+	//  - Values follow the same restrictions as Description (1-100 characters).
+	DescriptionLocalizations map[Locale]string `json:"description_localizations"`
+}
+
+// ChatInputCommand represents a slash command.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object
+type ChatInputCommand struct {
+	ApplicationCommandBase
+	DescriptionConstraints
+	// Options is an array of parameters for the command.
+	//
+	// Info:
+	//  - Maximum of 25 options.
+	Options []ApplicationCommandOption `json:"options"`
+}
+
+var _ json.Unmarshaler = (*ChatInputCommand)(nil)
+
+func (c *ChatInputCommand) UnmarshalJSON(buf []byte) error {
+	type tempChatInputCommand struct {
+		ApplicationCommandBase
+		DescriptionConstraints
+		Options []json.RawMessage `json:"options"`
+	}
+
+	var temp tempChatInputCommand
+	if err := sonic.Unmarshal(buf, &temp); err != nil {
+		return err
+	}
+
+	c.ApplicationCommandBase = temp.ApplicationCommandBase
+	c.DescriptionConstraints = temp.DescriptionConstraints
+
+
+	if temp.Options != nil {
+		c.Options = make([]ApplicationCommandOption, 0, len(temp.Options))
+		for i := range len(temp.Options) {
+			if len(temp.Options[i]) == 0 || bytes.Equal(temp.Options[i], []byte("null")) {
+				continue
+			}
+			option, err := UnmarshalApplicationCommandOption(temp.Options[i])
+			if err != nil {
+				return err
+			}
+			c.Options[i] = option.(ApplicationCommandOption)
+		}
+	}
+
+	return nil
+}
+
+func (c *ChatInputCommand) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
+// ApplicationUserCommand represents a UI-based command that appears when right-clicking or tapping on a user.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object
+type ApplicationUserCommand struct {
+	ApplicationCommandBase
+}
+
+func (c *ApplicationUserCommand) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
+// ApplicationMessageCommand represents a UI-based command that appears when right-clicking or tapping on a message.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object
+type ApplicationMessageCommand struct {
+	ApplicationCommandBase
+}
+
+func (c *ApplicationMessageCommand) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
+// ApplicationEntryPointCommand represents a UI-based command that is the primary way to invoke an app's Activity.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-object
+type ApplicationEntryPointCommand struct {
+	ApplicationCommandBase
+	DescriptionConstraints
+	// Handler determines whether the interaction is handled by the app's interactions handler or by Discord.
+	//
+	// Info:
+	//  - Only applicable for commands with the EMBEDDED flag (i.e., applications with an Activity).
+	Handler ApplicationCommandHandlerType `json:"handler"`
+}
+
+func (c *ApplicationEntryPointCommand) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
+func UnmarshalApplicationCommand(buf []byte) (ApplicationCommand, error) {
+	var meta struct {
+		Type ApplicationCommandType `json:"type"`
+	}
+	if err := sonic.Unmarshal(buf, &meta); err != nil {
+		return nil, err
+	}
+
+	switch meta.Type {
+	case ApplicationCommandTypeChatInput:
+		var c ChatInputCommand
+		return &c, sonic.Unmarshal(buf, &c)
+	case ApplicationCommandTypeUser:
+		var c ApplicationUserCommand
+		return &c, sonic.Unmarshal(buf, &c)
+	case ApplicationCommandTypeMessage:
+		var c ApplicationMessageCommand
+		return &c, sonic.Unmarshal(buf, &c)
+	case ApplicationCommandTypePrimaryEntryPoint:
+		var c ApplicationEntryPointCommand
+		return &c, sonic.Unmarshal(buf, &c)
+	default:
+		return nil, errors.New("unknown application command type")
 	}
 }
