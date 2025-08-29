@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * yada (yet another discord api), A Lightweight Go library for Discord API
+ * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package yada
+package dwaz
 
 import (
 	"bytes"
@@ -122,7 +122,7 @@ func newRequester(client *http.Client, token string, logger Logger) *requester {
 	return &requester{
 		client:    client,
 		token:     "Bot " + token,
-		userAgent: "DiscordBot (yada)",
+		userAgent: "DiscordBot (dwaz)",
 		logger:    logger,
 		retryableStatusCodes: map[int]struct{}{
 			429: {}, 500: {}, 502: {}, 503: {}, 504: {},

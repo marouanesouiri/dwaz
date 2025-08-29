@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * yada (yet another discord api), A Lightweight Go library for Discord API
+ * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package yada
+package dwaz
 
 import (
 	"strconv"
@@ -450,14 +450,14 @@ type UpdateSelfUserOptions struct {
 	Username string `json:"username,omitempty"`
 	// Use:
 	//
-	//  avatar, err := yada.NewImageFile("path/to/your/image.png")
+	//  avatar, err := dwaz.NewImageFile("path/to/your/image.png")
 	//  if err != nil {
 	// 		// handler err
 	//  }
 	Avatar Base64Image `json:"avatar,omitempty"`
 	// Use:
 	//
-	//  banner, err := yada.NewImageFile("path/to/your/banner.png")
+	//  banner, err := dwaz.NewImageFile("path/to/your/banner.png")
 	//  if err != nil {
 	// 		// handler err
 	//  }

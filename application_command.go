@@ -1,4 +1,4 @@
-package yada
+package dwaz
 
 import (
 	"bytes"

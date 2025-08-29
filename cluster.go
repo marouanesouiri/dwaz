@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * yada (yet another discord api), A Lightweight Go library for Discord API
+ * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package yada
+package dwaz
 
 import (
 	"context"
@@ -33,7 +33,7 @@ import (
 //   - Event dispatching via dispatcher.
 //   - Shard management for scalable Gateway connections.
 //
-// Create a Cluster using yada.New() with desired options, then call Start().
+// Create a Cluster using dwaz.New() with desired options, then call Start().
 type Cluster struct {
 	Logger          Logger                    // logger used throughout the cluster
 	workerPool      WorkerPool                // worker pool used to run tasks asynchronously
@@ -56,7 +56,7 @@ type clusterOption func(*Cluster)
 //
 // Usage:
 //
-//	y := yada.New(yada.WithToken("your_bot_token"))
+//	y := dwaz.New(dwaz.WithToken("your_bot_token"))
 //
 // Notes:
 //   - Logs fatal and exits if token is empty or obviously invalid (< 50 chars).
@@ -82,7 +82,7 @@ func WithToken(token string) clusterOption {
 //
 // Usage:
 //
-//	y := yada.New(yada.WithLogger(myLogger))
+//	y := dwaz.New(dwaz.WithLogger(myLogger))
 //
 // Logs fatal and exits if logger is nil.
 func WithLogger(logger Logger) clusterOption {
@@ -98,7 +98,7 @@ func WithLogger(logger Logger) clusterOption {
 //
 // Usage:
 //
-//	y := yada.New(yada.WithWorkerPool(myWorkerPool))
+//	y := dwaz.New(dwaz.WithWorkerPool(myWorkerPool))
 //
 // Logs fatal and exits if workerpool is nil.
 func WithWorkerPool(workerPool WorkerPool) clusterOption {
@@ -115,7 +115,7 @@ func WithWorkerPool(workerPool WorkerPool) clusterOption {
 //
 // Usage:
 //
-//	y := yada.New(yada.WithShardsIdentifyRateLimiter(myRateLimiter))
+//	y := dwaz.New(dwaz.WithShardsIdentifyRateLimiter(myRateLimiter))
 //
 // Logs fatal and exits if the provided rateLimiter is nil.
 func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) clusterOption {
@@ -131,11 +131,11 @@ func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) cluste
 //
 // Usage:
 //
-//	y := yada.New(yada.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent))
+//	y := dwaz.New(dwaz.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent))
 //
 // Also supports bitwise OR usage:
 //
-//	y := yada.New(yada.WithIntents(GatewayIntentGuilds | GatewayIntentMessageContent))
+//	y := dwaz.New(dwaz.WithIntents(GatewayIntentGuilds | GatewayIntentMessageContent))
 func WithIntents(intents ...GatewayIntent) clusterOption {
 	var totalIntents GatewayIntent
 	for _, intent := range intents {
@@ -154,10 +154,10 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
 //
 // Example:
 //
-//	y := yada.New(
-//	    yada.WithToken("my_bot_token"),
-//	    yada.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent),
-//	    yada.WithLogger(myLogger),
+//	y := dwaz.New(
+//	    dwaz.WithToken("my_bot_token"),
+//	    dwaz.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent),
+//	    dwaz.WithLogger(myLogger),
 //	)
 //
 // Defaults:

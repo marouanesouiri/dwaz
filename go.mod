@@ -1,6 +1,6 @@
-module github.com/marouanesouiri/yada
+module github.com/marouanesouiri/dwaz
 
-go 1.24.4
+go 1.22
 
 require (
 	github.com/bytedance/sonic v1.13.3
