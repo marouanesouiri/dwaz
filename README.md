@@ -36,7 +36,7 @@ func main() {
     )
 
     // Add message create even handlers
-    client.OnMessageCreate(func(event *dwaz.MessageCreateEvent) {
+    client.OnMessageCreate(func(event dwaz.MessageCreateEvent) {
         if event.Message.Content == "!ping" {
             fmt.Println("Pong!")
         }
