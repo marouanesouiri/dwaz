@@ -1,8 +1,8 @@
 # Getting Started
 
-Welcome to **Yada**, your fast, feature-rich, and easy-to-use Discord API library for Go.
+Welcome to **Dwaz**, your fast, feature-rich, and easy-to-use Discord API library for Go.
 
-This guide will help you set up your first Discord bot with Yada quickly.
+This guide will help you set up your first Discord bot with Dwaz quickly.
 
 ---
 
@@ -17,8 +17,8 @@ Before you begin, ensure you have:
 
 ## Installation
 
-Run the following command to install Yada:
+Run the following command to install Dwaz:
 
 ```bash
-go get github.com/marouanesouiri/yada
+go get github.com/marouanesouiri/dwaz
 ```
