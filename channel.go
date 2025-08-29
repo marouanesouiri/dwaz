@@ -494,6 +494,10 @@ type CategoryChannel struct {
 	GuildChannelFields
 }
 
+func (c *CategoryChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
 // TextChannel represents a guild text channel.
 type TextChannel struct {
 	GuildChannelFields
@@ -501,6 +505,10 @@ type TextChannel struct {
 	GuildMessageChannelFields
 	NsfwChannelFields
 	TopicChannelFields
+}
+
+func (c *TextChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(*c)
 }
 
 // VoiceChannel represents a guild voice channel.
@@ -512,6 +520,10 @@ type VoiceChannel struct {
 	AudioChannelFields
 }
 
+func (c *VoiceChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
 // AnnouncementChannel represents an announcement channel.
 type AnnouncementChannel struct {
 	GuildChannelFields
@@ -519,6 +531,10 @@ type AnnouncementChannel struct {
 	GuildMessageChannelFields
 	NsfwChannelFields
 	TopicChannelFields
+}
+
+func (c *AnnouncementChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
 }
 
 // StageVoiceChannel represents a stage voice channel.
@@ -531,6 +547,10 @@ type StageVoiceChannel struct {
 	TopicChannelFields
 }
 
+func (c *StageVoiceChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
 // ForumChannel represents a guild forum channel.
 type ForumChannel struct {
 	GuildChannelFields
@@ -539,6 +559,10 @@ type ForumChannel struct {
 	NsfwChannelFields
 	TopicChannelFields
 	ForumChannelFields
+}
+
+func (c *ForumChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
 }
 
 // MediaChannel represents a media channel.
@@ -585,6 +609,10 @@ type ThreadChannel struct {
 	ThreadMetadata ThreadMetaData `json:"thread_metadata"`
 }
 
+func (c *ThreadChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
 // DMChannelFields contains fields common to DM and Group DM channels.
 type DMChannelFields struct {
 	ChannelFields
@@ -601,6 +629,10 @@ type DMChannel struct {
 	Recipients []User `json:"recipients"`
 }
 
+func (c *DMChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
+}
+
 // ThreadChannel represents a DM channel between the currect user and other user.
 type GroupDMChannel struct {
 	DMChannelFields
@@ -609,6 +641,10 @@ type GroupDMChannel struct {
 	// Optional:
 	//   - Will be empty string if no icon.
 	Icon string `json:"icon"`
+}
+
+func (c *GroupDMChannel) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(c)
 }
 
 // Channel is the interface representing a Discord channel.
@@ -645,6 +681,7 @@ type GroupDMChannel struct {
 //	    fmt.Println("Text channel:", textCh.Name)
 //	}
 type Channel interface {
+	json.Marshaler
 	GetID() Snowflake
 	GetType() ChannelType
 	CreatedAt() time.Time
@@ -1048,6 +1085,12 @@ func UnmarshalChannel(buf []byte) (Channel, error) {
 		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeAnnouncementThread, ChannelTypePrivateThread, ChannelTypePublicThread:
 		var c ThreadChannel
+		return &c, sonic.Unmarshal(buf, &c)
+	case ChannelTypeDM:
+		var c DMChannel
+		return &c, sonic.Unmarshal(buf, &c)
+	case ChannelTypeGroupDM:
+		var c GroupDMChannel
 		return &c, sonic.Unmarshal(buf, &c)
 	default:
 		return nil, errors.New("unknown channel type")
