@@ -254,3 +254,14 @@ func (m *Member) AvatarDecorationURLWith(size ImageSize) string {
 	}
 	return ""
 }
+
+// ResolvedMember represents a member with additional permissions field, typically included in an interaction object.
+//
+// Info:
+//   - It embeds the Member struct and adds a Permissions field to describe the
+//     member's permissions in the context of the interaction.
+type ResolvedMember struct {
+	Member
+	// Permissions is the total permissions of the member in the channel, including overwrites.
+	Permissions Permissions `json:"permissions,omitempty"`
+}
