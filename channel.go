@@ -495,7 +495,8 @@ type CategoryChannel struct {
 }
 
 func (c *CategoryChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod CategoryChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // TextChannel represents a guild text channel.
@@ -508,7 +509,8 @@ type TextChannel struct {
 }
 
 func (c *TextChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(*c)
+	type NoMethod TextChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // VoiceChannel represents a guild voice channel.
@@ -521,7 +523,8 @@ type VoiceChannel struct {
 }
 
 func (c *VoiceChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod VoiceChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // AnnouncementChannel represents an announcement channel.
@@ -534,7 +537,8 @@ type AnnouncementChannel struct {
 }
 
 func (c *AnnouncementChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod AnnouncementChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // StageVoiceChannel represents a stage voice channel.
@@ -548,7 +552,8 @@ type StageVoiceChannel struct {
 }
 
 func (c *StageVoiceChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod StageVoiceChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // ForumChannel represents a guild forum channel.
@@ -562,7 +567,8 @@ type ForumChannel struct {
 }
 
 func (c *ForumChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod ForumChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // MediaChannel represents a media channel.
@@ -610,7 +616,8 @@ type ThreadChannel struct {
 }
 
 func (c *ThreadChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod ThreadChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // DMChannelFields contains fields common to DM and Group DM channels.
@@ -630,7 +637,8 @@ type DMChannel struct {
 }
 
 func (c *DMChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod DMChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // ThreadChannel represents a DM channel between the currect user and other user.
@@ -644,7 +652,8 @@ type GroupDMChannel struct {
 }
 
 func (c *GroupDMChannel) MarshalJSON() ([]byte, error) {
-	return sonic.Marshal(c)
+	type NoMethod GroupDMChannel
+	return sonic.Marshal((*NoMethod)(c))
 }
 
 // Channel is the interface representing a Discord channel.
