@@ -442,11 +442,11 @@ func (u *User) GuildTagBadgeURL() string {
 	return ""
 }
 
-// ModifySelfUserParams defines the parameters to update the current user account.
+// UpdateSelfUserOptions defines the parameters to update the current user account.
 //
 // All fields are optional:
 //   - If a field is not set (left empty), it will remain unchanged.
-type ModifySelfUserParams struct {
+type UpdateSelfUserOptions struct {
 	Username string `json:"username,omitempty"`
 	// Use:
 	//
