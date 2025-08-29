@@ -17,4 +17,4 @@ jobs:
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           release-type: go
-          package-name: yada
+          package-name: dwaz

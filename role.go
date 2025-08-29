@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * yada (yet another discord api), A Lightweight Go library for Discord API
+ * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package yada
+package dwaz
 
 // RoleFlags represents flags on a Discord guild role.
 //

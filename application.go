@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * yada (yet another discord api), A Lightweight Go library for Discord API
+ * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package yada
+package dwaz
 
 import "time"
 
@@ -163,12 +163,12 @@ const (
 	ApplicationFlagGatewayPresenceLimited
 
 	// Intent required for bots in 100 or more servers to receive member-related
-	// events like guild_member_add. See the list of member-related events under yada.GatewayIntentGuildMembers
+	// events like guild_member_add. See the list of member-related events under dwaz.GatewayIntentGuildMembers
 	ApplicationFlagGatewayGuildMembers
 
 	// Intent required for bots in under 100 servers to receive member-related
 	// events like guild_member_add, found on the Bot page in your app's settings.
-	// See the list of member-related events under yada.GatewayIntentGuildMembers
+	// See the list of member-related events under dwaz.GatewayIntentGuildMembers
 	ApplicationFlagGatewayGuildMemberLimited
 
 	// Indicates unusual growth of an app that prevents verification.
