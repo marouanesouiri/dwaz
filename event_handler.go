@@ -13,7 +13,9 @@
 
 package yada
 
-import "github.com/bytedance/sonic"
+import (
+	"github.com/bytedance/sonic"
+)
 
 /*****************************
  *   READY Handler
@@ -22,7 +24,7 @@ import "github.com/bytedance/sonic"
 // readyHandlers manages all registered handlers for MESSAGE_CREATE events.
 type readyHandlers struct {
 	logger   Logger
-	handlers []func(*ReadyEvent)
+	handlers []func(ReadyEvent)
 }
 
 // handleEvent parses the READY event data and calls each registered handler.
@@ -34,7 +36,7 @@ func (h *readyHandlers) handleEvent(shardID int, data []byte) {
 	}
 
 	for _, handler := range h.handlers {
-		handler(&evt)
+		handler(evt)
 	}
 }
 
@@ -42,7 +44,7 @@ func (h *readyHandlers) handleEvent(shardID int, data []byte) {
 //
 // This method is not thread-safe.
 func (h *readyHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(*ReadyEvent)))
+	h.handlers = append(h.handlers, handler.(func(ReadyEvent)))
 }
 
 /*****************************
@@ -52,19 +54,20 @@ func (h *readyHandlers) addHandler(handler any) {
 // messageCreateHandlers manages all registered handlers for MESSAGE_CREATE events.
 type messageCreateHandlers struct {
 	logger   Logger
-	handlers []func(*MessageCreateEvent)
+	handlers []func(MessageCreateEvent)
 }
 
 // handleEvent parses the MESSAGE_CREATE event data and calls each registered handler.
 func (h *messageCreateHandlers) handleEvent(shardID int, data []byte) {
 	evt := MessageCreateEvent{ShardsID: shardID}
+
 	if err := sonic.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messageCreateHandlers: Failed parsing event data")
 		return
 	}
 
 	for _, handler := range h.handlers {
-		handler(&evt)
+		handler(evt)
 	}
 }
 
@@ -72,7 +75,7 @@ func (h *messageCreateHandlers) handleEvent(shardID int, data []byte) {
 //
 // This method is not thread-safe.
 func (h *messageCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(*MessageCreateEvent)))
+	h.handlers = append(h.handlers, handler.(func(MessageCreateEvent)))
 }
 
 /*****************************
@@ -82,7 +85,7 @@ func (h *messageCreateHandlers) addHandler(handler any) {
 // messageDeleteHandlers manages all registered handlers for MESSAGE_DELETE events.
 type messageDeleteHandlers struct {
 	logger   Logger
-	handlers []func(*MessageDeleteEvent)
+	handlers []func(MessageDeleteEvent)
 }
 
 // handleEvent parses the MESSAGE_DELETE event data and calls each registered handler.
@@ -94,7 +97,7 @@ func (h *messageDeleteHandlers) handleEvent(shardID int, data []byte) {
 	}
 
 	for _, handler := range h.handlers {
-		handler(&evt)
+		handler(evt)
 	}
 }
 
@@ -102,5 +105,5 @@ func (h *messageDeleteHandlers) handleEvent(shardID int, data []byte) {
 //
 // This method is not thread-safe.
 func (h *messageDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(*MessageDeleteEvent)))
+	h.handlers = append(h.handlers, handler.(func(MessageDeleteEvent)))
 }
