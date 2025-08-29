@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Yada',
-  description: 'Yet Another Discord API library for Go.',
+  title: 'Dwaz',
+  description: 'Discord Wrapper API for Zwafriya for Go.',
 
   locales: {
     root: {
@@ -12,13 +12,13 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Home', link: '/' },
-          { text: 'Introduction', link: 'introduction/what-is-yada' }
+          { text: 'Introduction', link: 'introduction/what-is-dwaz' }
         ],
         sidebar: [
           {
             text: 'Introduction',
             items: [
-              { text: 'What is Yada?', link: 'introduction/what-is-yada' },
+              { text: 'What is Dwaz?', link: 'introduction/what-is-dwaz' },
               { text: 'Getting Started', link: 'introduction/getting-started' }
             ]
           }
@@ -32,13 +32,13 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Accueil', link: '/fr/' },
-          { text: 'Introduction', link: '/fr/introduction/what-is-yada' }
+          { text: 'Introduction', link: '/fr/introduction/what-is-dwaz' }
         ],
         sidebar: [
           {
             text: 'Introduction',
             items: [
-              { text: 'Qu\'est-ce que Yada ?', link: '/fr/introduction/what-is-yada' },
+              { text: 'Qu\'est-ce que Dwaz ?', link: '/fr/introduction/what-is-dwaz' },
               { text: 'Guide de démarrage', link: '/fr/introduction/getting-started' }
             ]
           }
