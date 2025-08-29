@@ -14,6 +14,7 @@
 package yada
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -271,6 +272,345 @@ type ThreadMetaData struct {
 	Invitable bool `json:"invitable"`
 }
 
+// ChannelFields contains only fields present in all channel types.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
+type ChannelFields struct {
+	// ID is the unique Discord snowflake ID of the channel.
+	ID Snowflake `json:"id"`
+
+	// Type is the type of the channel.
+	Type ChannelType `json:"type"`
+}
+
+func (c *ChannelFields) GetID() Snowflake {
+	return c.ID
+}
+
+func (c *ChannelFields) GetType() ChannelType {
+	return c.Type
+}
+
+func (c *ChannelFields) CreatedAt() time.Time {
+	return c.ID.Timestamp()
+}
+
+// Mention returns a Discord mention string for the channel.
+//
+// Example output: "<#123456789012345678>"
+func (c *ChannelFields) Mention() string {
+	return "<#" + c.ID.String() + ">"
+}
+
+// GuildChannelFields embeds BaseChannel and adds fields common to guild channels except threads.
+//
+// Used by guild-specific channel types like TextChannel, VoiceChannel, ForumChannel, etc.
+type GuildChannelFields struct {
+	ChannelFields
+
+	// GuildID is the id of the guild.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Name is the name of the channel.
+	//
+	// Info:
+	//  - can be 1 to 100 characters.
+	Name string `json:"name,omitempty"`
+
+	// Position is the sorting position of the channel.
+	Position int `json:"position,omitempty"`
+
+	// PermissionOverwrites are explicit permission overwrites for members and roles.
+	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
+
+	// Flags are combined channel flags.
+	Flags ChannelFlags `json:"flags,omitempty"`
+}
+
+func (c *GuildChannelFields) GetGuildID() Snowflake {
+	return c.GuildID
+}
+
+func (c *GuildChannelFields) GetName() string {
+	return c.Name
+}
+
+func (c *GuildChannelFields) GetPosition() int {
+	return c.Position
+}
+
+func (c *GuildChannelFields) GetPermissionOverwrites() []PermissionOverwrite {
+	return c.PermissionOverwrites
+}
+
+func (c *GuildChannelFields) GetFlags() ChannelFlags {
+	return c.Flags
+}
+
+func (c *GuildChannelFields) JumpURL() string {
+	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
+}
+
+// ThreadChannelFields embeds BaseChannel and adds fields common to thread channels.
+type ThreadChannelFields struct {
+	ChannelFields
+
+	// GuildID is the id of the guild.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Name is the name of the channel.
+	//
+	// Info:
+	//  - can be 1 to 100 characters.
+	Name string `json:"name,omitempty"`
+
+	// PermissionOverwrites are explicit permission overwrites for members and roles.
+	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
+
+	// Flags are combined channel flags.
+	Flags ChannelFlags `json:"flags,omitempty"`
+}
+
+func (c *ThreadChannelFields) GetGuildID() Snowflake {
+	return c.GuildID
+}
+
+func (c *ThreadChannelFields) GetName() string {
+	return c.Name
+}
+
+func (c *ThreadChannelFields) GetPermissionOverwrites() []PermissionOverwrite {
+	return c.PermissionOverwrites
+}
+
+func (c *ThreadChannelFields) GetFlags() ChannelFlags {
+	return c.Flags
+}
+
+func (c *ThreadChannelFields) JumpURL() string {
+	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
+}
+
+// CategorizedChannelFields holds the parent category field for categorized guild channels.
+type CategorizedChannelFields struct {
+	// ParentID is the id of the parent category for this channel.
+	//
+	// Info:
+	//  - Each parent category can contain up to 50 channels.
+	//
+	// Optional:
+	//  - May be equal 0 if the channel is not in a category.
+	ParentID Snowflake `json:"parent_id"`
+}
+
+func (c *CategorizedChannelFields) GetParentID() Snowflake {
+	return c.ParentID
+}
+
+// MessageChannelFields holds fields related to text-based features like messaging.
+type MessageChannelFields struct {
+	// LastMessageID is the id of the last message sent in this channel.
+	LastMessageID Snowflake `json:"last_message_id"`
+}
+
+func (t *MessageChannelFields) GetLastMessageID() Snowflake {
+	return t.LastMessageID
+}
+
+// GuildMessageChannelFields holds fields related to text-based features like messaging.
+type GuildMessageChannelFields struct {
+	MessageChannelFields
+	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
+	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
+	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
+}
+
+func (t *GuildMessageChannelFields) GetRateLimitPerUser() time.Duration {
+	return t.RateLimitPerUser
+}
+
+// NsfwChannelFields holds the NSFW indicator field.
+type NsfwChannelFields struct {
+	// Nsfw indicates whether the channel is NSFW.
+	Nsfw bool `json:"nsfw"`
+}
+
+// TopicChannelFields holds the topic field.
+type TopicChannelFields struct {
+	// Topic is the channel topic.
+	//
+	// Length:
+	//  - 0-1024 characters for text, announcement, and stage voice channels.
+	//  - 0-4096 characters for forum and media channels.
+	//
+	// Optional:
+	//  - May be empty string if the channel has no topic.
+	Topic string `json:"topic"`
+}
+
+// AudioChannelFields holds voice-related configuration fields.
+type AudioChannelFields struct {
+	// Bitrate is the bitrate (in bits) of the voice channel.
+	Bitrate int `json:"bitrate"`
+
+	// UserLimit is the user limit of the voice channel.
+	UserLimit int `json:"user_limit"`
+
+	// RtcRegion is the voice region id for the voice channel. Automatic when set to empty string.
+	RtcRegion string `json:"rtc_region"`
+}
+
+func (c *AudioChannelFields) GetBitrate() int {
+	return c.Bitrate
+}
+
+func (c *AudioChannelFields) GetUserLimit() int {
+	return c.UserLimit
+}
+
+func (c *AudioChannelFields) GetRtcRegion() string {
+	return c.RtcRegion
+}
+
+// ForumChannelFields holds forum and media channel specific fields.
+type ForumChannelFields struct {
+	// AvailableTags is the set of tags that can be used in this channel.
+	AvailableTags []ForumTag `json:"available_tags"`
+
+	// DefaultReactionEmoji specifies the emoji used as the default way to react to a forum post.
+	DefaultReactionEmoji DefaultReactionEmoji `json:"default_reaction_emoji"`
+
+	// DefaultSortOrder is the default sort order type used to order posts
+	// in GuildForum and GuildMedia channels. Defaults to PostsSortOrderLatestActivity.
+	DefaultSortOrder ForumPostsSortOrder `json:"default_sort_order"`
+
+	// DefaultForumLayout is the default forum layout view used to display posts
+	// in GuildForum channels. Defaults to ForumLayoutNotSet.
+	DefaultForumLayout ForumLayout `json:"default_forum_layout"`
+}
+
+// CategoryChannel represents a guild category channel.
+type CategoryChannel struct {
+	GuildChannelFields
+}
+
+// TextChannel represents a guild text channel.
+type TextChannel struct {
+	GuildChannelFields
+	CategorizedChannelFields
+	GuildMessageChannelFields
+	NsfwChannelFields
+	TopicChannelFields
+}
+
+// VoiceChannel represents a guild voice channel.
+type VoiceChannel struct {
+	GuildChannelFields
+	CategorizedChannelFields
+	GuildMessageChannelFields
+	NsfwChannelFields
+	AudioChannelFields
+}
+
+// AnnouncementChannel represents an announcement channel.
+type AnnouncementChannel struct {
+	GuildChannelFields
+	CategorizedChannelFields
+	GuildMessageChannelFields
+	NsfwChannelFields
+	TopicChannelFields
+}
+
+// StageVoiceChannel represents a stage voice channel.
+type StageVoiceChannel struct {
+	GuildChannelFields
+	CategorizedChannelFields
+	GuildMessageChannelFields
+	NsfwChannelFields
+	AudioChannelFields
+	TopicChannelFields
+}
+
+// ForumChannel represents a guild forum channel.
+type ForumChannel struct {
+	GuildChannelFields
+	CategorizedChannelFields
+	GuildMessageChannelFields
+	NsfwChannelFields
+	TopicChannelFields
+	ForumChannelFields
+}
+
+// MediaChannel represents a media channel.
+type MediaChannel struct {
+	ForumChannel
+}
+
+type ThreadMemberFlags int
+
+// ThreadMember represents Discord thread channel member.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-types
+type ThreadMember struct {
+	// ThreadID is the id of the thread.
+	ThreadID Snowflake `json:"id"`
+
+	// UserID is the id of the member.
+	UserID Snowflake `json:"user_id"`
+
+	// JoinTimestamp is the time the user last joined the thread.
+	JoinTimestamp time.Time `json:"join_timestamp"`
+
+	// Flags are any user-thread settings, currently only used for notifications.
+	Flags ThreadMemberFlags `json:"flags"`
+
+	// Member is the guild member object of this thread member.
+	//
+	// Optional:
+	//   - This field is only present when 'with_member' is set to true when calling [ListThreadMembers] or [GetThreadMember].
+	//
+	// [ListThreadMembers]: https://discord.com/developers/docs/resources/channel#list-thread-members
+	// [GetThreadMember]: https://discord.com/developers/docs/resources/channel#get-thread-member
+	Member *Member `json:"member"`
+}
+
+// ThreadChannel represents the base for thread channels.
+type ThreadChannel struct {
+	ThreadChannelFields
+	CategorizedChannelFields
+	GuildMessageChannelFields
+	// OwnerID is the id of this thread owner
+	OwnerID Snowflake `json:"owner_id"`
+	// ThreadMetadata is the metadata that contains a number of thread-specific channel fields.
+	ThreadMetadata ThreadMetaData `json:"thread_metadata"`
+}
+
+// DMChannelFields contains fields common to DM and Group DM channels.
+type DMChannelFields struct {
+	ChannelFields
+	MessageChannelFields
+}
+
+// ThreadChannel represents a DM channel between the currect user and other user.
+type DMChannel struct {
+	DMChannelFields
+	// Recipients is the list of users participating in the group DM channel.
+	//
+	// Info:
+	//   - Contains the users involved in the group DM, excluding the current user or bot.
+	Recipients []User `json:"recipients"`
+}
+
+// ThreadChannel represents a DM channel between the currect user and other user.
+type GroupDMChannel struct {
+	DMChannelFields
+	// Icon is the custom icon for the group DM channel.
+	//
+	// Optional:
+	//   - Will be empty string if no icon.
+	Icon string `json:"icon"`
+}
+
 // Channel is the interface representing a Discord channel.
 //
 // This interface can represent any type of channel returned by Discord,
@@ -311,6 +651,119 @@ type Channel interface {
 	Mention() string
 }
 
+var (
+	_ Channel = (*CategoryChannel)(nil)
+	_ Channel = (*TextChannel)(nil)
+	_ Channel = (*VoiceChannel)(nil)
+	_ Channel = (*AnnouncementChannel)(nil)
+	_ Channel = (*StageVoiceChannel)(nil)
+	_ Channel = (*ForumChannel)(nil)
+	_ Channel = (*MediaChannel)(nil)
+	_ Channel = (*ThreadChannel)(nil)
+	_ Channel = (*DMChannel)(nil)
+	_ Channel = (*GroupDMChannel)(nil)
+)
+
+// MessageChannel represents a Discord text channel.
+//
+// This interface extends the Channel interface and adds text-channel-specific fields,
+// such as the ID of the last message and the rate limit (slowmode) per user.
+//
+// Use this interface when you want to handle text channels specifically.
+//
+// You can convert (assert) it to a concrete type using a type assertion or type switch:
+//
+// Example usage:
+//
+//	var ch MessageChannel
+//
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel name:", c.GetName())
+//	    fmt.Println("Last message ID:", c.GetLastMessageID())
+//	case *VoiceChannel:
+//	    fmt.Println("Voiec channel name:", c.GetName())
+//	    fmt.Println("Last message ID:", c.GetLastMessageID())
+//	case *DMChannel:
+//	    fmt.Println("DM channel name:", c.GetName())
+//	    fmt.Println("Last message ID:", c.GetLastMessageID())
+//	default:
+//	    fmt.Println("Other text channel type:", c.GetType())
+//	}
+//
+// You can also use an if-condition to check a specific type:
+//
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel:", textCh.GetName())
+//	}
+type MessageChannel interface {
+	Channel
+	// GetLastMessageID returns the Snowflake ID to the last message sent in this channel.
+	//
+	// Note:
+	//   - Will always return 0 if no Message has been sent yet.
+	GetLastMessageID() Snowflake
+}
+
+var (
+	_ MessageChannel = (*TextChannel)(nil)
+	_ MessageChannel = (*VoiceChannel)(nil)
+	_ MessageChannel = (*AnnouncementChannel)(nil)
+	_ MessageChannel = (*StageVoiceChannel)(nil)
+	_ MessageChannel = (*ForumChannel)(nil)
+	_ MessageChannel = (*MediaChannel)(nil)
+	_ MessageChannel = (*ThreadChannel)(nil)
+	_ MessageChannel = (*DMChannel)(nil)
+	_ MessageChannel = (*GroupDMChannel)(nil)
+)
+
+// NamedChannel represents a Discord channel that has a name.
+//
+// This interface is used for channel types that expose a name, such as text channels,
+// voice channels, forum channels, thread channels, DM channels, and Group DM channels.
+//
+// Use this interface when you want to handle channels generically by their name without
+// knowing the specific concrete type in advance.
+//
+// You can convert (assert) it to a specific channel type using a type assertion or a type
+// switch, as described in the official Go documentation:
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
+//
+// Example usage:
+//
+//	var ch NamedChannel
+//
+//	// Using a type switch to handle specific channel types
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel name:", c.GetName())
+//	case *VoiceChannel:
+//	    fmt.Println("Voice channel name:", c.GetName())
+//	default:
+//	    fmt.Println("Other named channel type:", c.GetType())
+//	}
+//
+//	// Using a type assertion to check a specific type
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel name:", textCh.GetName())
+//	}
+type NamedChannel interface {
+	Channel
+	GetName() string
+}
+
+var (
+	_ NamedChannel = (*CategoryChannel)(nil)
+	_ NamedChannel = (*TextChannel)(nil)
+	_ NamedChannel = (*VoiceChannel)(nil)
+	_ NamedChannel = (*AnnouncementChannel)(nil)
+	_ NamedChannel = (*StageVoiceChannel)(nil)
+	_ NamedChannel = (*ForumChannel)(nil)
+	_ NamedChannel = (*MediaChannel)(nil)
+	_ NamedChannel = (*ThreadChannel)(nil)
+)
+
 // GuildChannel represents a guild-specific Discord channel.
 //
 // This interface extends the Channel interface and adds guild-specific fields,
@@ -346,250 +799,14 @@ type Channel interface {
 //	}
 type GuildChannel interface {
 	Channel
+	NamedChannel
 	GetGuildID() Snowflake
-	GetName() string
 	GetPermissionOverwrites() []PermissionOverwrite
 	GetFlags() ChannelFlags
 	JumpURL() string
 }
 
-// BaseChannel contains only fields present in all channel types.
-//
-// Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
-type BaseChannel struct {
-	// ID is the unique Discord snowflake ID of the channel.
-	ID Snowflake `json:"id"`
-
-	// Type is the type of the channel.
-	Type ChannelType `json:"type"`
-}
-
-func (c *BaseChannel) GetID() Snowflake     { return c.ID }
-func (c *BaseChannel) GetType() ChannelType { return c.Type }
-func (c *BaseChannel) CreatedAt() time.Time { return c.ID.Timestamp() }
-
-// Mention returns a Discord mention string for the channel.
-//
-// Example output: "<#123456789012345678>"
-func (c *BaseChannel) Mention() string {
-	return "<#" + c.ID.String() + ">"
-}
-
-// BaseGuildChannel embeds BaseChannel and adds fields common to guild channels except threads.
-//
-// Used by guild-specific channel types like TextChannel, VoiceChannel, ForumChannel, etc.
-type BaseGuildChannel struct {
-	BaseChannel
-
-	// GuildID is the id of the guild.
-	GuildID Snowflake `json:"guild_id"`
-
-	// Name is the name of the channel.
-	//
-	// Info:
-	//  - can be 1 to 100 characters.
-	Name string `json:"name,omitempty"`
-
-	// Position is the sorting position of the channel.
-	Position int `json:"position,omitempty"`
-
-	// PermissionOverwrites are explicit permission overwrites for members and roles.
-	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
-
-	// Flags are combined channel flags.
-	Flags ChannelFlags `json:"flags,omitempty"`
-}
-
-func (c *BaseGuildChannel) GetGuildID() Snowflake { return c.GuildID }
-func (c *BaseGuildChannel) GetName() string       { return c.Name }
-func (c *BaseGuildChannel) GetPosition() int      { return c.Position }
-func (c *BaseGuildChannel) GetPermissionOverwrites() []PermissionOverwrite {
-	return c.PermissionOverwrites
-}
-func (c *BaseGuildChannel) GetFlags() ChannelFlags { return c.Flags }
-func (c *BaseGuildChannel) JumpURL() string {
-	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
-}
-
-// BaseThreadChannel embeds BaseChannel and adds fields common to thread channels.
-type BaseThreadChannel struct {
-	BaseChannel
-
-	// GuildID is the id of the guild.
-	GuildID Snowflake `json:"guild_id"`
-
-	// Name is the name of the channel.
-	//
-	// Info:
-	//  - can be 1 to 100 characters.
-	Name string `json:"name,omitempty"`
-
-	// PermissionOverwrites are explicit permission overwrites for members and roles.
-	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
-
-	// Flags are combined channel flags.
-	Flags ChannelFlags `json:"flags,omitempty"`
-}
-
-func (c *BaseThreadChannel) GetGuildID() Snowflake { return c.GuildID }
-func (c *BaseThreadChannel) GetName() string       { return c.Name }
-func (c *BaseThreadChannel) GetPermissionOverwrites() []PermissionOverwrite {
-	return c.PermissionOverwrites
-}
-func (c *BaseThreadChannel) GetFlags() ChannelFlags { return c.Flags }
-func (c *BaseThreadChannel) JumpURL() string {
-	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
-}
-
-// CategorizedFields holds the parent category field for categorized guild channels.
-type CategorizedFields struct {
-	// ParentID is the id of the parent category for this channel.
-	//
-	// Info:
-	//  - Each parent category can contain up to 50 channels.
-	//
-	// Optional:
-	//  - May be equal 0 if the channel is not in a category.
-	ParentID Snowflake `json:"parent_id"`
-}
-
-// TextBasedFields holds fields related to text-based features like messaging.
-type TextBasedFields struct {
-	// LastMessageID is the id of the last message sent in this channel.
-	LastMessageID Snowflake `json:"last_message_id"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
-	// Bots, as well as users with the permission manageMessages or manageChannel, are unaffected.
-	RateLimitPerUser time.Duration `json:"rate_limit_per_user"`
-}
-
-// NsfwFields holds the NSFW indicator field.
-type NsfwFields struct {
-	// Nsfw indicates whether the channel is NSFW.
-	Nsfw bool `json:"nsfw"`
-}
-
-// TopicFields holds the topic field.
-type TopicFields struct {
-	// Topic is the channel topic.
-	//
-	// Length:
-	//  - 0-1024 characters for text, announcement, and stage voice channels.
-	//  - 0-4096 characters for forum and media channels.
-	//
-	// Optional:
-	//  - May be empty string if the channel has no topic.
-	Topic string `json:"topic"`
-}
-
-// VoiceFields holds voice-related configuration fields.
-type VoiceFields struct {
-	// Bitrate is the bitrate (in bits) of the voice channel.
-	Bitrate int `json:"bitrate"`
-
-	// UserLimit is the user limit of the voice channel.
-	UserLimit int `json:"user_limit"`
-
-	// RtcRegion is the voice region id for the voice channel. Automatic when set to empty string.
-	RtcRegion string `json:"rtc_region"`
-}
-
-// ForumFields holds forum and media channel specific fields.
-type ForumFields struct {
-	// AvailableTags is the set of tags that can be used in this channel.
-	AvailableTags []ForumTag `json:"available_tags"`
-
-	// DefaultReactionEmoji specifies the emoji used as the default way to react to a forum post.
-	DefaultReactionEmoji DefaultReactionEmoji `json:"default_reaction_emoji"`
-
-	// DefaultSortOrder is the default sort order type used to order posts
-	// in GuildForum and GuildMedia channels. Defaults to PostsSortOrderLatestActivity.
-	DefaultSortOrder ForumPostsSortOrder `json:"default_sort_order"`
-
-	// DefaultForumLayout is the default forum layout view used to display posts
-	// in GuildForum channels. Defaults to ForumLayoutNotSet.
-	DefaultForumLayout ForumLayout `json:"default_forum_layout"`
-}
-
-// CategoryChannel represents a guild category channel.
-type CategoryChannel struct {
-	BaseGuildChannel
-}
-
-// TextChannel represents a guild text channel.
-type TextChannel struct {
-	BaseGuildChannel
-	CategorizedFields
-	TextBasedFields
-	NsfwFields
-	TopicFields
-}
-
-// VoiceChannel represents a guild voice channel.
-type VoiceChannel struct {
-	BaseGuildChannel
-	CategorizedFields
-	TextBasedFields
-	NsfwFields
-	VoiceFields
-}
-
-// AnnouncementChannel represents an announcement channel.
-type AnnouncementChannel struct {
-	BaseGuildChannel
-	CategorizedFields
-	TextBasedFields
-	NsfwFields
-	TopicFields
-}
-
-// StageVoiceChannel represents a stage voice channel.
-type StageVoiceChannel struct {
-	BaseGuildChannel
-	CategorizedFields
-	TextBasedFields
-	NsfwFields
-	VoiceFields
-	TopicFields
-}
-
-// ForumChannel represents a guild forum channel.
-type ForumChannel struct {
-	BaseGuildChannel
-	CategorizedFields
-	TextBasedFields
-	NsfwFields
-	TopicFields
-	ForumFields
-}
-
-// MediaChannel represents a media channel.
-type MediaChannel struct {
-	ForumChannel
-}
-
-// ThreadChannel represents the base for thread channels.
-type ThreadChannel struct {
-	BaseThreadChannel
-	CategorizedFields
-	TextBasedFields
-	// OwnerID is the id of this thread owner
-	OwnerID Snowflake `json:"owner_id"`
-	// ThreadMetadata is the metadata that contains a number of thread-specific channel fields.
-	ThreadMetadata ThreadMetaData `json:"thread_metadata"`
-}
-
 var (
-	// All channels must implement Channel.
-	_ Channel = (*CategoryChannel)(nil)
-	_ Channel = (*TextChannel)(nil)
-	_ Channel = (*VoiceChannel)(nil)
-	_ Channel = (*AnnouncementChannel)(nil)
-	_ Channel = (*StageVoiceChannel)(nil)
-	_ Channel = (*ForumChannel)(nil)
-	_ Channel = (*MediaChannel)(nil)
-	_ Channel = (*ThreadChannel)(nil)
-	// All guild channels must implement GuildChannel.
 	_ GuildChannel = (*CategoryChannel)(nil)
 	_ GuildChannel = (*TextChannel)(nil)
 	_ GuildChannel = (*VoiceChannel)(nil)
@@ -597,8 +814,208 @@ var (
 	_ GuildChannel = (*StageVoiceChannel)(nil)
 	_ GuildChannel = (*ForumChannel)(nil)
 	_ GuildChannel = (*MediaChannel)(nil)
+	_ GuildChannel = (*ThreadChannel)(nil)
 )
 
+// GuildMessageChannel represents a Discord text channel.
+//
+// This interface extends the Channel interface and adds text-channel-specific fields,
+// such as the ID of the last message and the rate limit (slowmode) per user.
+//
+// Use this interface when you want to handle text channels specifically.
+//
+// You can convert (assert) it to a concrete type using a type assertion or type switch:
+//
+// Example usage:
+//
+//	var ch GuildMessageChannel
+//
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel name:", c.GetName())
+//	    fmt.Println("Last message ID:", c.GetLastMessageID())
+//	    fmt.Println("Rate limit per user:", c.GetRateLimitPerUser())
+//	case *VoiceChannel:
+//	    fmt.Println("Voiec channel name:", c.GetName())
+//	    fmt.Println("Last message ID:", c.GetLastMessageID())
+//	    fmt.Println("Rate limit per user:", c.GetRateLimitPerUser())
+//	default:
+//	    fmt.Println("Other text channel type:", c.GetType())
+//	}
+//
+// You can also use an if-condition to check a specific type:
+//
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel:", textCh.GetName())
+//	}
+type GuildMessageChannel interface {
+	GuildChannel
+	MessageChannel
+	GetRateLimitPerUser() time.Duration
+}
+
+var (
+	_ GuildMessageChannel = (*TextChannel)(nil)
+	_ GuildMessageChannel = (*VoiceChannel)(nil)
+	_ GuildMessageChannel = (*AnnouncementChannel)(nil)
+	_ GuildMessageChannel = (*StageVoiceChannel)(nil)
+	_ GuildMessageChannel = (*ForumChannel)(nil)
+	_ GuildMessageChannel = (*MediaChannel)(nil)
+	_ GuildMessageChannel = (*ThreadChannel)(nil)
+)
+
+// PositionedChannel represents a Discord channel that has a sorting position within its parent category.
+//
+// This interface is used for guild channels that have a defined position, such as category channels, text channels,
+// voice channels, announcement channels, stage voice channels, forum channels, and media channels.
+// The position determines the order in which channels appear within their parent category in the
+// Discord client. If the channel is not under a parent category, the position is relative to other
+// top-level channels in the guild.
+//
+// Use this interface when you want to handle channels generically by their position without knowing
+// the specific concrete type in advance.
+//
+// You can convert (assert) it to a specific channel type using a type assertion or a type switch,
+// as described in the official Go documentation:
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
+//
+// Example usage:
+//
+//	var ch PositionedChannel
+//
+//	// Using a type switch to handle specific channel types
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel position:", c.GetPosition())
+//	case *VoiceChannel:
+//	    fmt.Println("Voice channel position:", c.GetPosition())
+//	case *ForumChannel:
+//	    fmt.Println("Forum channel position:", c.GetPosition())
+//	default:
+//	    fmt.Println("Other positioned channel type:", c.GetType())
+//	}
+//
+//	// Using a type assertion to check a specific type
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel position:", textCh.GetPosition())
+//	}
+type PositionedChannel interface {
+	NamedChannel
+	GetPosition() int
+}
+
+var (
+	_ PositionedChannel = (*CategoryChannel)(nil)
+	_ PositionedChannel = (*TextChannel)(nil)
+	_ PositionedChannel = (*VoiceChannel)(nil)
+	_ PositionedChannel = (*AnnouncementChannel)(nil)
+	_ PositionedChannel = (*StageVoiceChannel)(nil)
+	_ PositionedChannel = (*ForumChannel)(nil)
+	_ PositionedChannel = (*MediaChannel)(nil)
+)
+
+// CategorizedChannel represents a Discord channel that can be placed under a parent category channel within a guild.
+//
+// This interface is used for guild channels that can be organized under a category, such as text channels,
+// voice channels, announcement channels, stage voice channels, forum channels, media channels, and thread channels.
+//
+// Use this interface when you want to handle channels generically by their parent category without knowing
+// the specific concrete type in advance.
+//
+// You can convert (assert) it to a specific channel type using a type assertion or a type switch,
+// as described in the official Go documentation:
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
+//
+// Example usage:
+//
+//	var ch CategorizedChannel
+//
+//	// Using a type switch to handle specific channel types
+//	switch c := ch.(type) {
+//	case *TextChannel:
+//	    fmt.Println("Text channel parent ID:", c.GetParentID())
+//	case *VoiceChannel:
+//	    fmt.Println("Voice channel parent ID:", c.GetParentID())
+//	case *ThreadChannel:
+//	    fmt.Println("Thread channel parent ID:", c.GetParentID())
+//	default:
+//	    fmt.Println("Other categorized channel type:", c.GetType())
+//	}
+//
+//	// Using a type assertion to check a specific type
+//	if textCh, ok := ch.(*TextChannel); ok {
+//	    fmt.Println("Text channel parent ID:", textCh.GetParentID())
+//	}
+type CategorizedChannel interface {
+	NamedChannel
+	GetParentID() Snowflake
+}
+
+var (
+	_ CategorizedChannel = (*TextChannel)(nil)
+	_ CategorizedChannel = (*VoiceChannel)(nil)
+	_ CategorizedChannel = (*AnnouncementChannel)(nil)
+	_ CategorizedChannel = (*StageVoiceChannel)(nil)
+	_ CategorizedChannel = (*ForumChannel)(nil)
+	_ CategorizedChannel = (*MediaChannel)(nil)
+	_ CategorizedChannel = (*ThreadChannel)(nil)
+)
+
+// AudioChannel represents a Discord channel that supports voice or audio functionality.
+//
+// This interface is used for guild channels that have voice-related features, such as voice channels
+// and stage voice channels. It provides access to audio-specific properties like bitrate, user limit,
+// and RTC region.
+//
+// Note:
+//   - DM channels (ChannelTypeDM) and Group DM channels (ChannelTypeGroupDM) support audio features
+//     like calls, streams, and webcams for users. However, for bots, these channels are treated as
+//     text channels, as bots cannot interact with their audio features (e.g., bots cannot initiate calls in them).
+//
+// Use this interface when you want to handle audio channels generically without knowing
+// the specific concrete type in advance.
+//
+// You can convert (assert) it to a specific channel type using a type assertion or a type switch,
+// as described in the official Go documentation:
+//   - https://go.dev/ref/spec#Type_assertions
+//   - https://go.dev/doc/effective_go#type_switch
+//
+// Example usage:
+//
+//	var ch AudioChannel
+//
+//	// Using a type switch to handle specific channel types
+//	switch c := ch.(type) {
+//	case *VoiceChannel:
+//	    fmt.Println("Voice channel bitrate:", c.GetBitrate())
+//	    fmt.Println("Voice channel user limit:", c.GetUserLimit())
+//	    fmt.Println("Voice channel RTC region:", c.GetRtcRegion())
+//	case *StageVoiceChannel:
+//	    fmt.Println("Stage voice channel bitrate:", c.GetBitrate())
+//	    fmt.Println("Stage voice channel user limit:", c.GetUserLimit())
+//	    fmt.Println("Stage voice channel RTC region:", c.GetRtcRegion())
+//	}
+//
+//	// Using a type assertion to check a specific type
+//	if voiceCh, ok := ch.(*VoiceChannel); ok {
+//	    fmt.Println("Voice channel bitrate:", voiceCh.GetBitrate())
+//	}
+type AudioChannel interface {
+	GuildChannel
+	GuildMessageChannel
+	GetBitrate() int
+	GetUserLimit() int
+	GetRtcRegion() string
+}
+
+var (
+	_ AudioChannel = (*VoiceChannel)(nil)
+	_ AudioChannel = (*StageVoiceChannel)(nil)
+)
+
+// Helper func to Unmarshal any channel type to a Channel interface.
 func UnmarshalChannel(buf []byte) (Channel, error) {
 	var meta struct {
 		Type ChannelType `json:"type"`
@@ -635,4 +1052,30 @@ func UnmarshalChannel(buf []byte) (Channel, error) {
 	default:
 		return nil, errors.New("unknown channel type")
 	}
+}
+
+type ResolvedChannel struct {
+	Channel
+	Permissions Permissions `json:"permissions"`
+}
+
+var _ json.Unmarshaler = (*ResolvedChannel)(nil)
+
+// UnmarshalJSON implements json.Unmarshaler for ResolvedChannel.
+func (c *ResolvedChannel) UnmarshalJSON(buf []byte) error {
+	var t struct {
+		Permissions Permissions `json:"permissions"`
+	}
+	if err := sonic.Unmarshal(buf, &t); err != nil {
+		return err
+	}
+	c.Permissions = t.Permissions
+
+	channel, err := UnmarshalChannel(buf)
+	if err != nil {
+		return err
+	}
+	c.Channel = channel
+
+	return nil
 }
