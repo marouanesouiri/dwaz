@@ -111,7 +111,7 @@ func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
 //   - However, it is strongly recommended to register all event handlers sequentially during startup,
 //     before starting event dispatching, to avoid runtime mutations and ensure stable configuration.
 //   - Handlers are called sequentially when dispatching in the order they were added.
-func (d *dispatcher) OnMessageCreate(h func(*MessageCreateEvent)) {
+func (d *dispatcher) OnMessageCreate(h func(MessageCreateEvent)) {
 	const key = "MESSAGE_CREATE" // event name
 	d.logger.Debug(key + " event handler registered")
 
@@ -133,7 +133,7 @@ func (d *dispatcher) OnMessageCreate(h func(*MessageCreateEvent)) {
 //   - However, it is strongly recommended to register all event handlers sequentially during startup,
 //     before starting event dispatching, to avoid runtime mutations and ensure stable configuration.
 //   - Handlers are called sequentially when dispatching in the order they were added.
-func (d *dispatcher) OnMessageDelete(h func(*MessageDeleteEvent)) {
+func (d *dispatcher) OnMessageDelete(h func(MessageDeleteEvent)) {
 	const key = "MESSAGE_DELETE" // event name
 	d.logger.Debug(key + " event handler registered")
 
