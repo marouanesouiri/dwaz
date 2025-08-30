@@ -57,7 +57,7 @@ type dispatcher struct {
 // If logger is nil, it creates a default logger that writes to os.Stdout with debug-level logging.
 func newDispatcher(logger Logger, workerPool WorkerPool) *dispatcher {
 	if logger == nil {
-		logger = NewDefaultLogger(os.Stdout, LogLevel_DebugLevel)
+		logger = NewDefaultLogger(os.Stdout, LogLevelInfoLevel)
 	}
 	return &dispatcher{
 		logger:           logger,

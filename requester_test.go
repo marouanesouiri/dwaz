@@ -49,7 +49,7 @@ func newTestRequester(mockFn func(*http.Request) (*http.Response, error)) *reque
 		Transport: &mockRoundTripper{fn: mockFn},
 		Timeout:   5 * time.Second,
 	}
-	logger := NewDefaultLogger(nil, LogLevel_DebugLevel)
+	logger := NewDefaultLogger(nil, LogLevelDebugLevel)
 	return newRequester(mockClient, "testtoken", logger)
 }
 
