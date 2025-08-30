@@ -16,6 +16,7 @@ package dwaz
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -39,6 +40,11 @@ const (
 	VerificationLevelVeryHigh
 )
 
+// Is returns true if the verification level matches the provided one.
+func (l VerificationLevel) Is(verifLevel VerificationLevel) bool {
+	return l == verifLevel
+}
+
 // MessageNotificationLevel represents the default notification level on a Discord guild.
 //
 // Reference: https://discord.com/developers/docs/resources/guild#guild-object-default-message-notification-level
@@ -50,6 +56,11 @@ const (
 	// Members will receive notifications only for messages that @mention them by default.
 	MessageNotificationsLevelOnlyMentions
 )
+
+// Is returns true if the message notifaction level matches the provided one.
+func (l MessageNotificationsLevel) Is(messageNotificationLevel MessageNotificationsLevel) bool {
+	return l == messageNotificationLevel
+}
 
 // ExplicitContentFilterLevel represents the explicit content filter level on a Discord guild.
 //
@@ -65,6 +76,11 @@ const (
 	ExplicitContentFilterLevelAllMembers
 )
 
+// Is returns true if the explicit content level matches the provided one.
+func (l ExplicitContentFilterLevel) Is(level ExplicitContentFilterLevel) bool {
+	return l == level
+}
+
 // ExplicitContentFilterLevel represents the mfa level on a Discord guild.
 //
 // Reference: https://discord.com/developers/docs/resources/guild#guild-object-mfa-level
@@ -76,6 +92,11 @@ const (
 	// Guild has a 2FA requirement for moderation actions.
 	MFALevelElevated
 )
+
+// Is returns true if the MFA level matches the provided one.
+func (l MFALevel) Is(level MFALevel) bool {
+	return l == level
+}
 
 // GuildFeature represents the features of a Discord guild.
 //
@@ -275,7 +296,7 @@ type GuildIncidentsData struct {
 	RaidDetectedAt *time.Time `json:"raid_detected_at"`
 }
 
-// GuildWelcomeScreen represent a Discord guild.
+// Guild represent a Discord guild.
 //
 // Reference: https://discord.com/developers/docs/resources/guild
 type Guild struct {
@@ -645,9 +666,27 @@ func (g *GatewayGuild) UnmarshalJSON(buf []byte) error {
 			if err != nil {
 				return err
 			}
-			g.Channels = append(g.Channels, channel.(GuildChannel))
+			if guildCh, ok := channel.(GuildChannel); ok {
+				g.Channels = append(g.Channels, guildCh)
+			} else {
+				return errors.New("cannot unmarshal non-GuildChannel into GuildChannel")
+			}
 		}
 	}
 
 	return nil
+}
+
+// PartialGuild represents a partial struct of a Discord guild.
+//
+// Reference: https://discord.com/developers/docs/resources/guild
+type PartialGuild struct {
+	// ID is the guild's unique Discord snowflake ID.
+	ID Snowflake `json:"id"`
+
+	// Locale is the preferred locale of the guild;
+	Locale Locale `json:"locale"`
+
+	// Features is the enabled guild features.
+	Features []GuildFeature `json:"features"`
 }
