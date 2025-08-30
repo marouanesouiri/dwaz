@@ -30,7 +30,7 @@ import (
 
 func main() {
     // Initialize a new Dwaz client
-    client, err := dwaz.New(
+    client := dwaz.New(
 		dwaz.WithToken("YOUR_BOT_TOKEN"),
 		dwaz.WithIntents(dwaz.GatewayIntentGuildMessages, dwaz.GatewayIntentMessageContent),
     )
