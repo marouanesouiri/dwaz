@@ -22,13 +22,13 @@ type Emoji struct {
 	// ID is the unique Discord snowflake ID of the emoji.
 	//
 	// Optional:
-	// - May be nil (zero value) for unicode emojis
+	//   - May be nil (zero value) for unicode emojis
 	ID Snowflake `json:"id,omitempty"`
 
 	// Name is the emoji's name.
 	//
 	// Optional:
-	// - May be empty in deleted emojis.
+	//   - May be empty in deleted emojis.
 	Name string `json:"name,omitempty"`
 
 	// Roles is a list of role IDs allowed to use this emoji.
