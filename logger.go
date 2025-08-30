@@ -41,11 +41,11 @@ type Logger interface {
 type LogLevel int
 
 const (
-	LogLevel_DebugLevel LogLevel = iota
-	LogLevel_InfoLevel
-	LogLevel_WarnLevel
-	LogLevel_ErrorLevel
-	LogLevel_FatalLevel
+	LogLevelDebugLevel LogLevel = iota
+	LogLevelInfoLevel
+	LogLevelWarnLevel
+	LogLevelErrorLevel
+	LogLevelFatalLevel
 )
 
 type DefaultLogger struct {
@@ -108,27 +108,27 @@ func (l *DefaultLogger) log(level LogLevel, levelStr, msg string) {
 	}
 	fmt.Fprintln(l.out, string(enc))
 
-	if level == LogLevel_FatalLevel {
+	if level == LogLevelFatalLevel {
 		os.Exit(1)
 	}
 }
 
 func (l *DefaultLogger) Info(msg string) {
-	l.log(LogLevel_InfoLevel, "info", msg)
+	l.log(LogLevelInfoLevel, "info", msg)
 }
 
 func (l *DefaultLogger) Debug(msg string) {
-	l.log(LogLevel_DebugLevel, "debug", msg)
+	l.log(LogLevelDebugLevel, "debug", msg)
 }
 
 func (l *DefaultLogger) Warn(msg string) {
-	l.log(LogLevel_WarnLevel, "warn", msg)
+	l.log(LogLevelWarnLevel, "warn", msg)
 }
 
 func (l *DefaultLogger) Error(msg string) {
-	l.log(LogLevel_ErrorLevel, "error", msg)
+	l.log(LogLevelErrorLevel, "error", msg)
 }
 
 func (l *DefaultLogger) Fatal(msg string) {
-	l.log(LogLevel_FatalLevel, "fatal", msg)
+	l.log(LogLevelFatalLevel, "fatal", msg)
 }
