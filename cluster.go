@@ -165,7 +165,7 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
 //   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages | GatewayIntentGuildMembers
 func New(options ...clusterOption) *Cluster {
 	cluster := &Cluster{
-		Logger: NewDefaultLogger(os.Stdout, LogLevel_InfoLevel),
+		Logger: NewDefaultLogger(os.Stdout, LogLevelInfoLevel),
 		intents: GatewayIntentGuilds |
 			GatewayIntentGuildMessages |
 			GatewayIntentGuildMembers,
