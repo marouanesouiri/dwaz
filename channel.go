@@ -1111,11 +1111,6 @@ type ResolvedChannel struct {
 	Permissions Permissions `json:"permissions"`
 }
 
-type ResolvedThread struct {
-	ThreadChannel
-	Permissions Permissions `json:"permissions"`
-}
-
 var _ json.Unmarshaler = (*ResolvedChannel)(nil)
 
 // UnmarshalJSON implements json.Unmarshaler for ResolvedChannel.
@@ -1135,4 +1130,39 @@ func (c *ResolvedChannel) UnmarshalJSON(buf []byte) error {
 	c.Channel = channel
 
 	return nil
+}
+
+type ResolvedMessageChannel struct {
+	MessageChannel
+	Permissions Permissions `json:"permissions"`
+}
+
+var _ json.Unmarshaler = (*ResolvedMessageChannel)(nil)
+
+// UnmarshalJSON implements json.Unmarshaler for ResolvedMessageChannel.
+func (c *ResolvedMessageChannel) UnmarshalJSON(buf []byte) error {
+	var t struct {
+		Permissions Permissions `json:"permissions"`
+	}
+	if err := sonic.Unmarshal(buf, &t); err != nil {
+		return err
+	}
+	c.Permissions = t.Permissions
+
+	channel, err := UnmarshalChannel(buf)
+	if err != nil {
+		return err
+	}
+	if messageCh, ok := channel.(MessageChannel); ok {
+		c.MessageChannel = messageCh
+	} else {
+		return errors.New("cannot unmarshal non-MessageChannel into ResolvedMessageChannel")
+	}
+
+	return nil
+}
+
+type ResolvedThread struct {
+	ThreadChannel
+	Permissions Permissions `json:"permissions"`
 }
