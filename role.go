@@ -32,34 +32,39 @@ func (f RoleFlags) Has(flag RoleFlags) bool {
 //
 // Reference: https://discord.com/developers/docs/topics/permissions#role-object-role-tags-structure
 type RoleTags struct {
-	// BotID is the ID of the bot this role belongs to.
+	// BotID is the ID of the bot that this role belongs to.
+	// It is set for roles automatically created when adding a bot
+	// to a guild with specific permissions.
 	//
-	// Always present, 0 if not set.
+	// Optional:
+	//   - Will be 0 if the role is not associated with a bot.
 	BotID Snowflake `json:"bot_id"`
 
-	// IntegrationID is the ID of the integration this role belongs to.
+	// IntegrationID is the ID of the integration that this role belongs to.
 	//
-	// Always present, 0 if not set.
+	// Optional:
+	//   - Will be 0 if the role is not associated with an integration.
 	IntegrationID Snowflake `json:"integration_id"`
 
 	// PremiumSubscriber indicates whether this is the guild's Booster role.
 	//
-	// True if present, false otherwise.
+	// True if present (not nil), false otherwise (nil).
 	PremiumSubscriber *struct{} `json:"premium_subscriber,omitempty"`
 
 	// SubscriptionListingID is the ID of this role's subscription SKU and listing.
 	//
-	// Always present, 0 if not set.
+	// Optional:
+	//   - Will be 0 if the role is not linked to a subscription.
 	SubscriptionListingID Snowflake `json:"subscription_listing_id"`
 
 	// AvailableForPurchase indicates whether this role is available for purchase.
 	//
-	// True if present, false otherwise.
+	// True if present (not nil), false otherwise (nil).
 	AvailableForPurchase *struct{} `json:"available_for_purchase,omitempty"`
 
 	// GuildConnections indicates whether this role is a guild's linked role.
 	//
-	// True if present, false otherwise.
+	// True if present (not nil), false otherwise (nil).
 	GuildConnections *struct{} `json:"guild_connections,omitempty"`
 }
 
@@ -72,13 +77,15 @@ type RoleColors struct {
 
 	// SecondaryColor is the secondary color for the role.
 	//
-	// Always present, 0 if not set.
-	SecondaryColor Color `json:"secondary_color"`
+	// Optional:
+	//   - Will be nil if not set.
+	SecondaryColor *Color `json:"secondary_color"`
 
 	// TertiaryColor is the tertiary color for the role.
 	//
-	// Always present, 0 if not set.
-	TertiaryColor Color `json:"tertiary_color"`
+	// Optional:
+	//   - Will be nil if not set.
+	TertiaryColor *Color `json:"tertiary_color"`
 }
 
 // Role represents a Discord role.
@@ -86,56 +93,48 @@ type RoleColors struct {
 // Reference: https://discord.com/developers/docs/resources/guild#role-object-role-structure
 type Role struct {
 	// ID is the role ID.
-	//
-	// Always present.
 	ID Snowflake `json:"id"`
 
 	// Name is the role name.
-	//
-	// Always present.
 	Name string `json:"name"`
 
 	// Colors contains the role's color definitions.
-	//
-	// Always present.
 	Colors RoleColors `json:"colors"`
 
 	// Hoist indicates if this role is pinned in the user listing.
-	//
-	// Always present.
 	Hoist bool `json:"hoist"`
 
 	// Icon is the role's icon hash.
 	//
-	// Always present, may be empty string if no icon.
+	// Optional:
+	//   - Will be empty string if no icon.
 	Icon string `json:"icon"`
 
 	// UnicodeEmoji is the role's unicode emoji.
 	//
-	// Always present, may be empty string if not set.
+	// Optional:
+	//   - Will be empty string if not set.
 	UnicodeEmoji string `json:"unicode_emoji"`
 
 	// Position is the position of this role (roles with same position are sorted by ID).
+	//
+	// Note:
+	//   - Roles with same position are sorted by ID.
 	Position int `json:"position"`
 
 	// Permissions is the permission bit set for this role.
-	//
-	// Always present.
-	Permissions string `json:"permissions"`
+	Permissions Permissions `json:"permissions"`
 
 	// Managed indicates whether this role is managed by an integration.
-	//
-	// Always present.
 	Managed bool `json:"managed"`
 
 	// Mentionable indicates whether this role is mentionable.
-	//
-	// Always present.
 	Mentionable bool `json:"mentionable"`
 
 	// Tags contains the tags this role has.
 	//
-	// Optional; may be nil if no tags.
+	// Optional:
+	//   - Will be nil if no tags.
 	Tags *RoleTags `json:"tags,omitempty"`
 
 	// Flags are role flags combined as a bitfield.
