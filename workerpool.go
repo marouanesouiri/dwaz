@@ -109,7 +109,7 @@ func NewDefaultWorkerPool(logger Logger, opts ...workerOption) WorkerPool {
 
 	p.queue = make(chan WorkerTask, p.queueCap)
 
-	for i := 0; i < p.minWorkers; i++ {
+	for range p.minWorkers {
 		p.addWorker()
 	}
 
