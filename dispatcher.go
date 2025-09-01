@@ -148,4 +148,26 @@ func (d *dispatcher) OnMessageDelete(h func(MessageDeleteEvent)) {
 	hm.addHandler(h)
 }
 
+// OnInteractionCreate registers a handler function for 'INTERACTION_CREATE' events.
+//
+// Note:
+//   - This method is thread-safe via internal locking.
+//   - However, it is strongly recommended to register all event handlers sequentially during startup,
+//     before starting event dispatching, to avoid runtime mutations and ensure stable configuration.
+//   - Handlers are called sequentially when dispatching in the order they were added.
+func (d *dispatcher) OnInteractionCreate(h func(InteractionCreateEvent)) {
+	const key = "INTERACTION_CREATE" // event name
+	d.logger.Debug(key + " event handler registered")
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	hm, ok := d.handlersManagers[key]
+	if !ok {
+		hm = &interactionCreateHandlers{logger: d.logger}
+		d.handlersManagers[key] = hm
+	}
+	hm.addHandler(h)
+}
+
 // TODO: Add other OnXXX methods to register handlers for additional Discord events.
