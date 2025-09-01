@@ -780,7 +780,7 @@ func (c *ChatInputCommand) UnmarshalJSON(buf []byte) error {
 			if err != nil {
 				return err
 			}
-			c.Options[i] = option.(ApplicationCommandOption)
+			c.Options = append(c.Options, option)
 		}
 	}
 
@@ -859,3 +859,4 @@ func UnmarshalApplicationCommand(buf []byte) (ApplicationCommand, error) {
 		return nil, errors.New("unknown application command type")
 	}
 }
+
