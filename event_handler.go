@@ -13,9 +13,7 @@
 
 package dwaz
 
-import (
-	"github.com/bytedance/sonic"
-)
+import "github.com/bytedance/sonic"
 
 /*****************************
  *   READY Handler
@@ -106,4 +104,34 @@ func (h *messageDeleteHandlers) handleEvent(shardID int, data []byte) {
 // This method is not thread-safe.
 func (h *messageDeleteHandlers) addHandler(handler any) {
 	h.handlers = append(h.handlers, handler.(func(MessageDeleteEvent)))
+}
+
+/*****************************
+ * INTERACTION_CREATE Handler
+ *****************************/
+
+// interactionCreateHandlers manages all registered handlers for INTERACTION_CREATE events.
+type interactionCreateHandlers struct {
+	logger   Logger
+	handlers []func(InteractionCreateEvent)
+}
+
+// handleEvent parses the INTERACTION_CREATE event data and calls each registered handler.
+func (h *interactionCreateHandlers) handleEvent(shardID int, data []byte) {
+	evt := InteractionCreateEvent{ShardsID: shardID}
+	if err := sonic.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("interactionCreateHandlers: Failed parsing event data")
+		return
+	}
+
+	for _, handler := range h.handlers {
+		handler(evt)
+	}
+}
+
+// addHandler registers a new INTERACTION_CREATE handler function.
+//
+// This method is not thread-safe.
+func (h *interactionCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(InteractionCreateEvent)))
 }
