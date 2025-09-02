@@ -22,10 +22,10 @@ import (
 )
 
 /*****************************
- *          Cluster
+ *          Client
  *****************************/
 
-// Cluster manages your Discord connection at a high level, grouping multiple shards together.
+// Client manages your Discord connection at a high level, grouping multiple shards together.
 //
 // It provides:
 //   - Central configuration for your bot token, intents, and logger.
@@ -33,9 +33,10 @@ import (
 //   - Event dispatching via dispatcher.
 //   - Shard management for scalable Gateway connections.
 //
-// Create a Cluster using dwaz.New() with desired options, then call Start().
-type Cluster struct {
-	Logger          Logger                    // logger used throughout the cluster
+// Create a Client using dwaz.New() with desired options, then call Start().
+type Client struct {
+	ctx             context.Context
+	Logger          Logger                    // logger used throughout the client
 	workerPool      WorkerPool                // worker pool used to run tasks asynchronously
 	identifyLimiter ShardsIdentifyRateLimiter // rate limiter controlling Identify payloads per shard
 	token           string                    // bot token (without "Bot " prefix)
@@ -45,14 +46,14 @@ type Cluster struct {
 	*dispatcher                               // event dispatcher
 }
 
-// clusterOption defines a function used to configure Cluster during creation.
-type clusterOption func(*Cluster)
+// clientOption defines a function used to configure Client during creation.
+type clientOption func(*Client)
 
 /*****************************
  *       Options
  *****************************/
 
-// WithToken sets the bot token for your cluster.
+// WithToken sets the bot token for your client.
 //
 // Usage:
 //
@@ -63,7 +64,7 @@ type clusterOption func(*Cluster)
 //   - Removes "Bot " prefix automatically if provided.
 //
 // Warning: Never share your bot token publicly.
-func WithToken(token string) clusterOption {
+func WithToken(token string) clientOption {
 	if token == "" {
 		log.Fatal("WithToken: token must not be empty")
 	}
@@ -73,61 +74,61 @@ func WithToken(token string) clusterOption {
 	if strings.HasPrefix(token, "Bot ") {
 		token = strings.Split(token, " ")[1]
 	}
-	return func(c *Cluster) {
+	return func(c *Client) {
 		c.token = token
 	}
 }
 
-// WithLogger sets a custom Logger implementation for your cluster.
+// WithLogger sets a custom Logger implementation for your client.
 //
 // Usage:
 //
 //	y := dwaz.New(dwaz.WithLogger(myLogger))
 //
 // Logs fatal and exits if logger is nil.
-func WithLogger(logger Logger) clusterOption {
+func WithLogger(logger Logger) clientOption {
 	if logger == nil {
 		log.Fatal("WithLogger: logger must not be nil")
 	}
-	return func(c *Cluster) {
+	return func(c *Client) {
 		c.Logger = logger
 	}
 }
 
-// WithWorkerPool sets a custom workerpool implementation for your cluster.
+// WithWorkerPool sets a custom workerpool implementation for your client.
 //
 // Usage:
 //
 //	y := dwaz.New(dwaz.WithWorkerPool(myWorkerPool))
 //
 // Logs fatal and exits if workerpool is nil.
-func WithWorkerPool(workerPool WorkerPool) clusterOption {
+func WithWorkerPool(workerPool WorkerPool) clientOption {
 	if workerPool == nil {
 		log.Fatal("WithWorkerPool: workerPool must not be nil")
 	}
-	return func(c *Cluster) {
+	return func(c *Client) {
 		c.workerPool = workerPool
 	}
 }
 
 // WithShardsIdentifyRateLimiter sets a custom ShardsIdentifyRateLimiter
-// implementation for your cluster.
+// implementation for your client.
 //
 // Usage:
 //
 //	y := dwaz.New(dwaz.WithShardsIdentifyRateLimiter(myRateLimiter))
 //
 // Logs fatal and exits if the provided rateLimiter is nil.
-func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) clusterOption {
+func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) clientOption {
 	if rateLimiter == nil {
 		log.Fatal("ShardsIdentifyRateLimiter: shardsIdentifyRateLimiter must not be nil")
 	}
-	return func(c *Cluster) {
+	return func(c *Client) {
 		c.identifyLimiter = rateLimiter
 	}
 }
 
-// WithIntents sets Gateway intents for the cluster shards.
+// WithIntents sets Gateway intents for the client shards.
 //
 // Usage:
 //
@@ -136,12 +137,12 @@ func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) cluste
 // Also supports bitwise OR usage:
 //
 //	y := dwaz.New(dwaz.WithIntents(GatewayIntentGuilds | GatewayIntentMessageContent))
-func WithIntents(intents ...GatewayIntent) clusterOption {
+func WithIntents(intents ...GatewayIntent) clientOption {
 	var totalIntents GatewayIntent
 	for _, intent := range intents {
 		totalIntents |= intent
 	}
-	return func(c *Cluster) {
+	return func(c *Client) {
 		c.intents = totalIntents
 	}
 }
@@ -150,7 +151,7 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
  *       Constructor
  *****************************/
 
-// New creates a new Cluster instance with provided options.
+// New creates a new Client instance with provided options.
 //
 // Example:
 //
@@ -163,8 +164,13 @@ func WithIntents(intents ...GatewayIntent) clusterOption {
 // Defaults:
 //   - Logger: stdout logger at Info level.
 //   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages | GatewayIntentGuildMembers
-func New(options ...clusterOption) *Cluster {
-	cluster := &Cluster{
+func New(ctx context.Context, options ...clientOption) *Client {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	client := &Client{
+		ctx:    ctx,
 		Logger: NewDefaultLogger(os.Stdout, LogLevelInfoLevel),
 		intents: GatewayIntentGuilds |
 			GatewayIntentGuildMessages |
@@ -172,62 +178,58 @@ func New(options ...clusterOption) *Cluster {
 	}
 
 	for _, option := range options {
-		option(cluster)
+		option(client)
 	}
 
-	if cluster.workerPool == nil {
-		cluster.workerPool = NewDefaultWorkerPool(cluster.Logger)
+	if client.workerPool == nil {
+		client.workerPool = NewDefaultWorkerPool(client.Logger)
 	}
 
-	cluster.restApi = newRestApi(
-		newRequester(nil, cluster.token, cluster.Logger),
-		cluster.Logger,
+	client.restApi = newRestApi(
+		newRequester(nil, client.token, client.Logger),
+		client.Logger,
 	)
-	cluster.dispatcher = newDispatcher(cluster.Logger, cluster.workerPool)
-	return cluster
+	client.dispatcher = newDispatcher(client.Logger, client.workerPool)
+	return client
 }
 
 /*****************************
  *       Start
  *****************************/
 
-// Start initializes and connects all shards for the cluster.
+// Start initializes and connects all shards for the client.
 //
 // It performs the following steps:
 //  1. Retrieves Gateway information from Discord.
 //  2. Creates and connects shards with appropriate rate limiting.
 //  3. Starts listening to Gateway events.
 //
-// The lifetime of the cluster is controlled by the provided context `ctx`:
+// The lifetime of the client is controlled by the provided context `ctx`:
 //   - If `ctx` is `nil` or `context.Background()`, Start will block forever,
-//     running the cluster until the program exits or Shutdown is called externally.
+//     running the client until the program exits or Shutdown is called externally.
 //   - If `ctx` is cancellable (e.g., created via context.WithCancel or context.WithTimeout),
-//     the cluster will run until the context is cancelled or times out.
-//     When the context is done, the cluster will shutdown gracefully and Start will return.
+//     the client will run until the context is cancelled or times out.
+//     When the context is done, the client will shutdown gracefully and Start will return.
 //
-// This design gives you full control over the cluster's lifecycle.
+// This design gives you full control over the client's lifecycle.
 // For typical usage where you want the bot to run continuously,
 // simply pass `nil` as the context (recommended for beginners).
 //
 // Example usage:
 //
-//	// Run the cluster indefinitely (blocks forever)
-//	err := cluster.Start(nil)
+//	// Run the client indefinitely (blocks forever)
+//	err := client.Start(nil)
 //
-//	// Run the cluster with manual cancellation control
+//	// Run the client with manual cancellation control
 //	ctx, cancel := context.WithCancel(context.Background())
 //	go func() {
 //	    time.Sleep(time.Hour)
-//	    cancel() // stops the cluster after 1 hour
+//	    cancel() // stops the client after 1 hour
 //	}()
-//	err := cluster.Start(ctx)
+//	err := client.Start(ctx)
 //
 // Returns an error if Gateway information retrieval or shard connection fails.
-func (c *Cluster) Start(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
+func (c *Client) Start() error {
 	gatewayBotData, err := c.restApi.FetchGatewayBot()
 	if err != nil {
 		return err
@@ -242,15 +244,15 @@ func (c *Cluster) Start(ctx context.Context) error {
 			i, gatewayBotData.Shards, c.token, gatewayBotData.URL, c.intents,
 			c.Logger, c.dispatcher, c.identifyLimiter,
 		)
-		if err := shard.connect(ctx); err != nil {
+		if err := shard.connect(c.ctx); err != nil {
 			return err
 		}
 		c.shards = append(c.shards, shard)
 	}
 
-	<-ctx.Done()
-	if err := ctx.Err(); err != nil {
-		c.Logger.WithField("err", err).Error("Cluster shutdown due to context error")
+	<-c.ctx.Done()
+	if err := c.ctx.Err(); err != nil {
+		c.Logger.WithField("err", err).Error("Client shutdown due to context error")
 	}
 	c.Shutdown()
 	return nil
@@ -260,14 +262,14 @@ func (c *Cluster) Start(ctx context.Context) error {
  *       Shutdown
  *****************************/
 
-// Shutdown cleanly shuts down the Cluster.
+// Shutdown cleanly shuts down the Client.
 //
 // It:
 //   - Logs shutdown message.
 //   - Shuts down the REST API client (closes idle connections).
 //   - Shuts down all managed shards.
-func (c *Cluster) Shutdown() {
-	c.Logger.Info("Cluster shutting down")
+func (c *Client) Shutdown() {
+	c.Logger.Info("Client shutting down")
 	c.restApi.Shutdown()
 	c.restApi = nil
 	c.Logger = nil
