@@ -31,6 +31,7 @@ import (
 func main() {
     // Initialize a new Dwaz client
     client := dwaz.New(
+        context.TODO(),
 		dwaz.WithToken("YOUR_BOT_TOKEN"),
 		dwaz.WithIntents(dwaz.GatewayIntentGuildMessages, dwaz.GatewayIntentMessageContent),
     )
@@ -43,7 +44,7 @@ func main() {
     })
 
     // Start the bot
-    client.Start(context.TODO())
+    client.Start()
 }
 ```
 
