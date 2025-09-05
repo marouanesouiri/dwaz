@@ -1092,7 +1092,9 @@ func UnmarshalChannel(buf []byte) (Channel, error) {
 	case ChannelTypeGuildMedia:
 		var c MediaChannel
 		return &c, sonic.Unmarshal(buf, &c)
-	case ChannelTypeAnnouncementThread, ChannelTypePrivateThread, ChannelTypePublicThread:
+	case ChannelTypeAnnouncementThread,
+		ChannelTypePrivateThread,
+		ChannelTypePublicThread:
 		var c ThreadChannel
 		return &c, sonic.Unmarshal(buf, &c)
 	case ChannelTypeDM:
