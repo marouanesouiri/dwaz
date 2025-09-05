@@ -148,6 +148,15 @@ type Component interface {
 	json.Marshaler
 }
 
+// LayoutComponent is an interface for all components that can be present as a top level component in a Message.
+//
+// ActionRowComponent, SectionComponent, TextDisplayComponent,
+// MediaGalleryComponent, FileComponent, SeparatorComponent,
+// ContainerComponent, LabelComponent
+type LayoutComponent interface {
+	Component
+}
+
 // InteractiveComponent is an interface for components that can be included in an ActionRowComponent.
 //
 // ButtonComponent, StringSelectMenuComponent, UserSelectMenuComponent, RoleSelectMenuComponent,
