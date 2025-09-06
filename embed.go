@@ -59,7 +59,7 @@ type Embed struct {
 	// Timestamp is the timestamp of the embed content in ISO8601 format.
 	//
 	// Optional, zero value if not set.
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp *time.Time `json:"timestamp"`
 
 	// Color is the color code of the embed (decimal integer).
 	//
@@ -280,8 +280,8 @@ type EmbedBuilder struct {
 }
 
 // NewEmbedBuilder creates a new EmbedBuilder instance.
-func NewEmbedBuilder() EmbedBuilder {
-	return EmbedBuilder{}
+func NewEmbedBuilder() *EmbedBuilder {
+	return &EmbedBuilder{}
 }
 
 // SetTitle sets the embed title (max 256 chars).
@@ -310,7 +310,7 @@ func (b *EmbedBuilder) SetURL(url string) *EmbedBuilder {
 
 // SetTimestamp sets the embed timestamp.
 func (b *EmbedBuilder) SetTimestamp(t time.Time) *EmbedBuilder {
-	b.embed.Timestamp = t
+	b.embed.Timestamp = &t
 	return b
 }
 
@@ -360,7 +360,7 @@ func (b *EmbedBuilder) SetAuthor(name, url, iconURL string) *EmbedBuilder {
 // AddField appends a field to the embed fields slice.
 func (b *EmbedBuilder) AddField(name, value string, inline bool) *EmbedBuilder {
 	if len(b.embed.Fields) >= 25 {
-		return b // ignore extra fields
+		return b
 	}
 	if len(name) > 256 {
 		name = name[:256]
