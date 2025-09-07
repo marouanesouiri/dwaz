@@ -13,7 +13,11 @@
 
 package dwaz
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/bytedance/sonic"
+)
 
 // ReadyCreateEvent Shard is ready
 type ReadyEvent struct {
@@ -24,6 +28,13 @@ type ReadyEvent struct {
 type MessageCreateEvent struct {
 	ShardsID int // shard that dispatched this event
 	Message Message
+}
+
+var _ json.Unmarshaler = (*MessageCreateEvent)(nil)
+
+// UnmarshalJSON implements json.Unmarshaler for MessageCreateEvent.
+func (e *MessageCreateEvent) UnmarshalJSON(buf []byte) error {
+	return sonic.Unmarshal(buf, &e.Message)
 }
 
 // MessageCreateEvent Message was created
