@@ -308,6 +308,7 @@ func (c *ActionRowComponent) UnmarshalJSON(buf []byte) error {
 var _ json.Marshaler = (*ActionRowComponent)(nil)
 
 func (c *ActionRowComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeActionRow
 	type NoMethod ActionRowComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -394,7 +395,7 @@ type ButtonComponent struct {
 	//
 	// Note:
 	//   - Cannot be set for Premium buttons.
-	Emoji PartialEmoji `json:"emoji,omitempty"`
+	Emoji *PartialEmoji `json:"emoji,omitempty"`
 
 	// SkuID is the identifier for a purchasable SKU, used only for Premium buttons.
 	//
@@ -421,6 +422,7 @@ type ButtonComponent struct {
 var _ json.Marshaler = (*ButtonComponent)(nil)
 
 func (c *ButtonComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeButton
 	type NoMethod ButtonComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -450,7 +452,7 @@ type SelectOptionStructure struct {
 	Description string `json:"description,omitempty"`
 
 	// Emoji is the emoji displayed alongside the option.
-	Emoji PartialEmoji `json:"emoji,omitempty"`
+	Emoji *PartialEmoji `json:"emoji,omitempty"`
 
 	// Default specifies whether this option is selected by default.
 	Default bool `json:"default,omitempty"`
@@ -514,6 +516,7 @@ type StringSelectMenuComponent struct {
 var _ json.Marshaler = (*StringSelectMenuComponent)(nil)
 
 func (c *StringSelectMenuComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeStringSelect
 	type NoMethod StringSelectMenuComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -585,6 +588,7 @@ type TextInputComponent struct {
 var _ json.Marshaler = (*TextInputComponent)(nil)
 
 func (c *TextInputComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeTextInput
 	type NoMethod TextInputComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -659,6 +663,7 @@ type UserSelectMenuComponent struct {
 var _ json.Marshaler = (*UserSelectMenuComponent)(nil)
 
 func (c *UserSelectMenuComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeUserSelect
 	type NoMethod UserSelectMenuComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -714,6 +719,7 @@ type RoleSelectMenuComponent struct {
 var _ json.Marshaler = (*RoleSelectMenuComponent)(nil)
 
 func (c *RoleSelectMenuComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeRoleSelect
 	type NoMethod RoleSelectMenuComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -753,6 +759,7 @@ type MentionableSelectMenuComponent struct {
 var _ json.Marshaler = (*MentionableSelectMenuComponent)(nil)
 
 func (c *MentionableSelectMenuComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeMentionableSelect
 	type NoMethod MentionableSelectMenuComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -814,6 +821,7 @@ type ChannelSelectMenuComponent struct {
 var _ json.Marshaler = (*ChannelSelectMenuComponent)(nil)
 
 func (c *ChannelSelectMenuComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeChannelSelect
 	type NoMethod ChannelSelectMenuComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -889,6 +897,7 @@ func (c *SectionComponent) UnmarshalJSON(buf []byte) error {
 var _ json.Marshaler = (*SectionComponent)(nil)
 
 func (c *SectionComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeSection
 	type NoMethod SectionComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -915,6 +924,7 @@ type TextDisplayComponent struct {
 var _ json.Marshaler = (*TextDisplayComponent)(nil)
 
 func (c *TextDisplayComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeTextDisplay
 	type NoMethod TextDisplayComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -983,6 +993,7 @@ type ThumbnailComponent struct {
 var _ json.Marshaler = (*ThumbnailComponent)(nil)
 
 func (c *ThumbnailComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeThumbnail
 	type NoMethod ThumbnailComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -1037,6 +1048,7 @@ type MediaGalleryComponent struct {
 var _ json.Marshaler = (*MediaGalleryComponent)(nil)
 
 func (c *MediaGalleryComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeMediaGallery
 	type NoMethod MediaGalleryComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -1072,6 +1084,7 @@ type FileComponent struct {
 var _ json.Marshaler = (*FileComponent)(nil)
 
 func (c *FileComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeFile
 	type NoMethod FileComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -1115,6 +1128,7 @@ type SeparatorComponent struct {
 var _ json.Marshaler = (*SeparatorComponent)(nil)
 
 func (c *SeparatorComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeSeparator
 	type NoMethod SeparatorComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -1197,6 +1211,7 @@ func (c *ContainerComponent) UnmarshalJSON(buf []byte) error {
 var _ json.Marshaler = (*ContainerComponent)(nil)
 
 func (c *ContainerComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeContainer
 	type NoMethod ContainerComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -1277,6 +1292,7 @@ func (c *LabelComponent) UnmarshalJSON(buf []byte) error {
 var _ json.Marshaler = (*LabelComponent)(nil)
 
 func (c *LabelComponent) MarshalJSON() ([]byte, error) {
+	c.Type = ComponentTypeLabel
 	type NoMethod LabelComponent
 	return sonic.Marshal((*NoMethod)(c))
 }
@@ -1341,4 +1357,105 @@ func UnmarshalComponent(buf []byte) (Component, error) {
 	default:
 		return nil, errors.New("unknown component type")
 	}
+}
+
+/////////////
+
+// ButtonBuilder helps build a ButtonComponent with chainable methods.
+type ActionRowBuilder struct {
+	actionRow ActionRowComponent
+}
+
+// NewActionRowBuilder creates a new ActionRowBuilder instance.
+func NewActionRowBuilder() *ActionRowBuilder {
+	actionRowBuilder := &ActionRowBuilder{}
+	actionRowBuilder.actionRow.Type = ComponentTypeActionRow
+	return actionRowBuilder
+}
+
+// SetComponents sets the action row components.
+func (b *ActionRowBuilder) SetComponent(components ...InteractiveComponent) *ActionRowBuilder {
+	if len(components) > 5 {
+		b.actionRow.Components = components[:5]
+	}
+	b.actionRow.Components = components
+	return b
+}
+
+// AddComponent add's a component to the action row components.
+func (b *ActionRowBuilder) AddComponent(component InteractiveComponent) *ActionRowBuilder {
+	if len(b.actionRow.Components) < 5 {
+		b.actionRow.Components = append(b.actionRow.Components, component)
+	}
+	return b
+}
+
+// Build returns the final ActionRowComponent.
+func (b *ActionRowBuilder) Build() *ActionRowComponent {
+	return &b.actionRow
+}
+
+// ButtonBuilder helps build a ButtonComponent with chainable methods.
+type ButtonBuilder struct {
+	button ButtonComponent
+}
+
+// NewButtonBuilder creates a new ButtonBuilder instance.
+func NewButtonBuilder() *ButtonBuilder {
+	buttonBuilder := &ButtonBuilder{}
+	buttonBuilder.button.Type = ComponentTypeButton
+	return buttonBuilder
+}
+
+// SetLabel sets the button label.
+func (b *ButtonBuilder) SetLabel(label string) *ButtonBuilder {
+	b.button.Label = label
+	return b
+}
+
+// SetStyle sets the button style.
+func (b *ButtonBuilder) SetStyle(style ButtonStyle) *ButtonBuilder {
+	b.button.Style = style
+	return b
+}
+
+// SetCustomID sets the button custom ID.
+func (b *ButtonBuilder) SetCustomID(customID string) *ButtonBuilder {
+	b.button.CustomID = customID
+	return b
+}
+
+// SetURL sets the button URL.
+func (b *ButtonBuilder) SetURL(url string) *ButtonBuilder {
+	b.button.URL = url
+	return b
+}
+
+// SetSkuID sets the button Sku ID.
+func (b *ButtonBuilder) SetSkuID(skuID Snowflake) *ButtonBuilder {
+	b.button.SkuID = skuID
+	return b
+}
+
+// SetDisabled sets the button disabled state.
+func (b *ButtonBuilder) SetDisabled(disabled bool) *ButtonBuilder {
+	b.button.Disabled = disabled
+	return b
+}
+
+// Enable enables the button.
+func (b *ButtonBuilder) Enable() *ButtonBuilder {
+	b.button.Disabled = false
+	return b
+}
+
+// Disable disables the button.
+func (b *ButtonBuilder) Disable() *ButtonBuilder {
+	b.button.Disabled = true
+	return b
+}
+
+// Build returns the final ButtonComponent.
+func (b *ButtonBuilder) Build() *ButtonComponent {
+	return &b.button
 }
