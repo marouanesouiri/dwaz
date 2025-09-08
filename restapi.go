@@ -204,3 +204,35 @@ func (r *restApi) FetchChannel(channelID Snowflake) (Channel, error) {
 	}
 	return UnmarshalChannel(body)
 }
+
+// SendMessage send's a to the spesified channel.
+//
+// Usage example:
+//
+//	message, err := .SendMessage(123456789012345678, MessageCreateOptions{
+//           Content: "Hello, World!",
+//  })
+//	if err != nil {
+//	    // handle error
+//	}
+//	fmt.Println("Message ID:", message.ID)
+//
+// Returns:
+//   - Message: the message object.
+//   - error: if the request or decoding failed.
+func (r *restApi) SendMessage(channelID Snowflake, opts MessageCreateOptions) (Message, error) {
+	reqBody, err := sonic.Marshal(opts)
+	body, err := r.doRequest("POST", "/channels/"+channelID.String()+"/messages", reqBody, true, "")
+
+	var message Message
+
+	if err != nil {
+		return message, err
+	}
+
+	err = sonic.Unmarshal(body, message)
+	if err != nil {
+		return message, err
+	}
+	return message, nil
+}
