@@ -142,3 +142,38 @@ type Poll struct {
 	//  - Will be nil if the poll has no results.
 	Results *PollResults `json:"results"`
 }
+
+// PollCreateOptions represents the request payload for creating a poll in a message.
+//
+// Reference:
+//   - https://discord.com/developers/docs/resources/poll#poll-create-request-object
+//
+// Note:
+//   This object is similar to the main Poll object, but differs in that it
+//   specifies a `duration` field (how long the poll remains open), which later
+//   becomes an `expiry` field in the resulting poll object.
+type PollCreateOptions struct {
+	// Question defines the main question of the poll.
+	Question PollMedia `json:"question"`
+
+	// Answers is the list of possible answers a user can select from.
+	Answers []PollAnswer `json:"answers"`
+
+	// Duration specifies the number of hours the poll should remain open.
+	//
+	// Defaults to 24 hours if omitted.
+	// Constraints:
+	//   - Minimum: 1 hour
+	//   - Maximum: 768 hours (32 days)
+	Duration int `json:"duration,omitempty"`
+
+	// AllowMultiselect indicates whether users may select more than one answer.
+	//
+	// Defaults to false if omitted.
+	AllowMultiselect bool `json:"allow_multiselect,omitempty"`
+
+	// LayoutType specifies how the poll is visually arranged.
+	//
+	// Defaults to PollLayoutTypeDefault if omitted.
+	LayoutType PollLayoutType `json:"layout_type,omitempty"`
+}
