@@ -107,6 +107,36 @@ func (h *messageDeleteHandlers) addHandler(handler any) {
 }
 
 /*****************************
+ *   MESSAGE_UPDATE Handler
+ *****************************/
+
+// messageUpdateHandlers manages all registered handlers for MESSAGE_UPDATE events.
+type messageUpdateHandlers struct {
+	logger   Logger
+	handlers []func(MessageUpdateEvent)
+}
+
+// handleEvent parses the MESSAGE_UPDATE event data and calls each registered handler.
+func (h *messageUpdateHandlers) handleEvent(shardID int, data []byte) {
+	evt := MessageUpdateEvent{ShardsID: shardID}
+	if err := sonic.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("messageUpdateHandlers: Failed parsing event data")
+		return
+	}
+
+	for _, handler := range h.handlers {
+		handler(evt)
+	}
+}
+
+// addHandler registers a new MESSAGE_UPDATE handler function.
+//
+// This method is not thread-safe.
+func (h *messageUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(MessageUpdateEvent)))
+}
+
+/*****************************
  * INTERACTION_CREATE Handler
  *****************************/
 
@@ -134,4 +164,34 @@ func (h *interactionCreateHandlers) handleEvent(shardID int, data []byte) {
 // This method is not thread-safe.
 func (h *interactionCreateHandlers) addHandler(handler any) {
 	h.handlers = append(h.handlers, handler.(func(InteractionCreateEvent)))
+}
+
+/*****************************
+ * VOICE_STATE_UPDATE Handler
+ *****************************/
+
+// voiceStateUpdateHandlers manages all registered handlers for VOICE_STATE_UPDATE events.
+type voiceStateUpdateHandlers struct {
+	logger   Logger
+	handlers []func(VoiceStateUpdateEvent)
+}
+
+// handleEvent parses the VOICE_STATE_UPDATE event data and calls each registered handler.
+func (h *voiceStateUpdateHandlers) handleEvent(shardID int, data []byte) {
+	evt := VoiceStateUpdateEvent{ShardsID: shardID}
+	if err := sonic.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("voiceStateCreateHandlers: Failed parsing event data")
+		return
+	}
+
+	for _, handler := range h.handlers {
+		handler(evt)
+	}
+}
+
+// addHandler registers a new VOICE_STATE_UPDATE handler function.
+//
+// This method is not thread-safe.
+func (h *voiceStateUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(VoiceStateUpdateEvent)))
 }
