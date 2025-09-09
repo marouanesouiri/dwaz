@@ -27,7 +27,7 @@ type ReadyEvent struct {
 // MessageCreateEvent Message was created
 type MessageCreateEvent struct {
 	ShardsID int // shard that dispatched this event
-	Message Message
+	Message  Message
 }
 
 var _ json.Unmarshaler = (*MessageCreateEvent)(nil)
@@ -44,15 +44,29 @@ type MessageUpdateEvent struct {
 	NewMessage Message
 }
 
+var _ json.Unmarshaler = (*MessageUpdateEvent)(nil)
+
+// UnmarshalJSON implements json.Unmarshaler for MessageCreateEvent.
+func (e *MessageUpdateEvent) UnmarshalJSON(buf []byte) error {
+	return sonic.Unmarshal(buf, &e.NewMessage)
+}
+
 // MessageDeleteEvent Message was deleted
 type MessageDeleteEvent struct {
 	ShardsID int // shard that dispatched this event
-	Message Message
+	Message  Message
+}
+
+var _ json.Unmarshaler = (*MessageDeleteEvent)(nil)
+
+// UnmarshalJSON implements json.Unmarshaler for MessageDeleteEvent.
+func (e *MessageDeleteEvent) UnmarshalJSON(buf []byte) error {
+	return sonic.Unmarshal(buf, &e.Message)
 }
 
 // InteractionCreateEvent Interaction created
 type InteractionCreateEvent struct {
-	ShardsID int // shard that dispatched this event
+	ShardsID    int // shard that dispatched this event
 	Interaction Interaction
 }
 
@@ -65,6 +79,20 @@ func (c *InteractionCreateEvent) UnmarshalJSON(buf []byte) error {
 		c.Interaction = interaction
 	}
 	return err
+}
+
+// VoiceStateUpdateEvent VoiceState was updated
+type VoiceStateUpdateEvent struct {
+	ShardsID int // shard that dispatched this event
+	OldState VoiceState
+	NewState VoiceState
+}
+
+var _ json.Unmarshaler = (*VoiceStateUpdateEvent)(nil)
+
+// UnmarshalJSON implements json.Unmarshaler for InteractionCreateEvent.
+func (c *VoiceStateUpdateEvent) UnmarshalJSON(buf []byte) error {
+	return sonic.Unmarshal(buf, c.NewState)
 }
 
 // TODO: add other events
