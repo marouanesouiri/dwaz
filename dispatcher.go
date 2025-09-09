@@ -148,6 +148,28 @@ func (d *dispatcher) OnMessageDelete(h func(MessageDeleteEvent)) {
 	hm.addHandler(h)
 }
 
+// OnMessageUpdate registers a handler function for 'MESSAGE_UPDATE' events.
+//
+// Note:
+//   - This method is thread-safe via internal locking.
+//   - However, it is strongly recommended to register all event handlers sequentially during startup,
+//     before starting event dispatching, to avoid runtime mutations and ensure stable configuration.
+//   - Handlers are called sequentially when dispatching in the order they were added.
+func (d *dispatcher) OnMessageUpdate(h func(MessageDeleteEvent)) {
+	const key = "MESSAGE_UPDATE" // event name
+	d.logger.Debug(key + " event handler registered")
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	hm, ok := d.handlersManagers[key]
+	if !ok {
+		hm = &messageUpdateHandlers{logger: d.logger}
+		d.handlersManagers[key] = hm
+	}
+	hm.addHandler(h)
+}
+
 // OnInteractionCreate registers a handler function for 'INTERACTION_CREATE' events.
 //
 // Note:
@@ -165,6 +187,29 @@ func (d *dispatcher) OnInteractionCreate(h func(InteractionCreateEvent)) {
 	hm, ok := d.handlersManagers[key]
 	if !ok {
 		hm = &interactionCreateHandlers{logger: d.logger}
+		d.handlersManagers[key] = hm
+	}
+	hm.addHandler(h)
+}
+
+
+// OnVoiceStateUpdate registers a handler function for 'VOICE_STATE_UPDATE' events.
+//
+// Note:
+//   - This method is thread-safe via internal locking.
+//   - However, it is strongly recommended to register all event handlers sequentially during startup,
+//     before starting event dispatching, to avoid runtime mutations and ensure stable configuration.
+//   - Handlers are called sequentially when dispatching in the order they were added.
+func (d *dispatcher) OnVoiceStateUpdate(h func(VoiceStateUpdateEvent)) {
+	const key = "VOICE_STATE_UPDATE" // event name
+	d.logger.Debug(key + " event handler registered")
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	hm, ok := d.handlersManagers[key]
+	if !ok {
+		hm = &voiceStateUpdateHandlers{logger: d.logger}
 		d.handlersManagers[key] = hm
 	}
 	hm.addHandler(h)
