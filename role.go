@@ -96,7 +96,7 @@ type Role struct {
 	ID Snowflake `json:"id"`
 
 	// GuildID is the id of the guild this role is in.
-	GuildID Snowflake `json:"id"`
+	GuildID Snowflake `json:"guild_id"`
 
 	// Name is the role name.
 	Name string `json:"name"`
