@@ -1,5 +1,5 @@
 # Dwaz - Discord Wrapper API for Zwafriya
-> Dwaz 5alina men lmar9a kat3reb tsaybe bot b dwaz?
+> Dwaz 5alina men lmar9a kat3ref tsaybe bot b dwaz?
 
 ## Overview
 
