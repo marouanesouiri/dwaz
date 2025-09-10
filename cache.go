@@ -52,10 +52,21 @@ type CacheManager interface {
 	GetChannel(channelID Snowflake) (Channel, bool)
 	GetMessage(messageID Snowflake) (Message, bool)
 	GetVoiceState(guildID, userID Snowflake) (VoiceState, bool)
-	GetGuildChannels(guildID Snowflake) (map[Snowflake]Channel, bool)
+	GetGuildChannels(guildID Snowflake) (map[Snowflake]GuildChannel, bool)
 	GetGuildMembers(guildID Snowflake) (map[Snowflake]Member, bool)
 	GetGuildVoiceStates(guildID Snowflake) (map[Snowflake]VoiceState, bool)
 	GetGuildRoles(guildID Snowflake) (map[Snowflake]Role, bool)
+
+	HasUser(userID Snowflake) bool
+	HasGuild(guildID Snowflake) bool
+	HasMember(guildID, userID Snowflake) bool
+	HasChannel(channelID Snowflake) bool
+	HasMessage(messageID Snowflake) bool
+	HasVoiceState(guildID, userID Snowflake) bool
+	HasGuildChannels(guildID Snowflake) bool
+	HasGuildMembers(guildID Snowflake) bool
+	HasGuildVoiceStates(guildID Snowflake) bool
+	HasGuildRoles(guildID Snowflake) bool
 
 	CountUsers() int
 	CountGuilds() int
@@ -198,7 +209,7 @@ func (c *DefaultCache) GetVoiceState(guildID, userID Snowflake) (voiceState Voic
 	return
 }
 
-func (c *DefaultCache) GetGuildChannels(guildID Snowflake) (map[Snowflake]Channel, bool) {
+func (c *DefaultCache) GetGuildChannels(guildID Snowflake) (map[Snowflake]GuildChannel, bool) {
 	c.guildToChannelIDsMu.RLock()
 	set, ok := c.guildToChannelIDs[guildID]
 	c.guildToChannelIDsMu.RUnlock()
@@ -207,10 +218,10 @@ func (c *DefaultCache) GetGuildChannels(guildID Snowflake) (map[Snowflake]Channe
 	}
 	c.channelsCacheMu.RLock()
 	defer c.channelsCacheMu.RUnlock()
-	res := make(map[Snowflake]Channel, len(set))
+	res := make(map[Snowflake]GuildChannel, len(set))
 	for channelID := range set {
 		if channel, exists := c.channelsCache[channelID]; exists {
-			res[channelID] = channel
+			res[channelID] = channel.(GuildChannel)
 		}
 	}
 	return res, true
@@ -270,6 +281,106 @@ func (c *DefaultCache) GetGuildRoles(guildID Snowflake) (map[Snowflake]Role, boo
 		}
 	}
 	return res, true
+}
+
+func (c *DefaultCache) HasUser(userID Snowflake) bool {
+	if !c.flags.Has(CacheFlagUsers) {
+		return false
+	}
+	c.usersCacheMu.RLock()
+	_, exists := c.usersCache[userID]
+	c.usersCacheMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasGuild(guildID Snowflake) bool {
+	if !c.flags.Has(CacheFlagGuilds) {
+		return false
+	}
+	c.guildsCacheMu.RLock()
+	_, exists := c.guildsCache[guildID]
+	c.guildsCacheMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasMember(guildID, userID Snowflake) bool {
+	if !c.flags.Has(CacheFlagMembers) {
+		return false
+	}
+	c.membersCacheMu.RLock()
+	_, exists := c.membersCache[SnowflakePairKey{A: guildID, B: userID}]
+	c.membersCacheMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasChannel(channelID Snowflake) bool {
+	if !c.flags.Has(CacheFlagChannels) {
+		return false
+	}
+	c.channelsCacheMu.RLock()
+	_, exists := c.channelsCache[channelID]
+	c.channelsCacheMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasMessage(messageID Snowflake) bool {
+	if !c.flags.Has(CacheFlagMessages) {
+		return false
+	}
+	c.messagesCacheMu.RLock()
+	_, exists := c.messagesCache[messageID]
+	c.messagesCacheMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasVoiceState(guildID, userID Snowflake) bool {
+	if !c.flags.Has(CacheFlagVoiceStates) {
+		return false
+	}
+	c.voiceStatesCacheMu.RLock()
+	_, exists := c.voiceStatesCache[SnowflakePairKey{A: guildID, B: userID}]
+	c.voiceStatesCacheMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasGuildChannels(guildID Snowflake) bool {
+	if !c.flags.Has(CacheFlagChannels) {
+		return false
+	}
+	c.guildToChannelIDsMu.RLock()
+	_, exists := c.guildToChannelIDs[guildID]
+	c.guildToChannelIDsMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasGuildMembers(guildID Snowflake) bool {
+	if !c.flags.Has(CacheFlagMembers) {
+		return false
+	}
+	c.guildToMemberIDsMu.RLock()
+	_, exists := c.guildToMemberIDs[guildID]
+	c.guildToMemberIDsMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasGuildVoiceStates(guildID Snowflake) bool {
+	if !c.flags.Has(CacheFlagVoiceStates) {
+		return false
+	}
+	c.guildToVoiceStateUserIDsMu.RLock()
+	_, exists := c.guildToVoiceStateUserIDs[guildID]
+	c.guildToVoiceStateUserIDsMu.RUnlock()
+	return exists
+}
+
+func (c *DefaultCache) HasGuildRoles(guildID Snowflake) bool {
+	if !c.flags.Has(CacheFlagRoles) {
+		return false
+	}
+	c.guildToRoleIDsMu.RLock()
+	_, exists := c.guildToRoleIDs[guildID]
+	c.guildToRoleIDsMu.RUnlock()
+	return exists
 }
 
 func (c *DefaultCache) CountUsers() int {
