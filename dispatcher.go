@@ -28,9 +28,9 @@ import (
 // Implementations must support adding handlers and dispatching raw JSON event data to those handlers.
 type eventhandlersManager interface {
 	// handleEvent unmarshals the raw JSON data and calls all registered handlers.
-	handleEvent(shardID int, data []byte)
+	handleEvent(cache CacheManager, shardID int, buf []byte)
 	// addHandler adds a new handler function for the event type.
-	addHandler(h any)
+	addHandler(handler any)
 }
 
 /*****************************
@@ -47,6 +47,7 @@ type eventhandlersManager interface {
 //   - Dispatching handlers is done asynchronously in separate goroutines for each event.
 type dispatcher struct {
 	logger           Logger
+	cacheManager     CacheManager
 	workerPool       WorkerPool
 	handlersManagers map[string]eventhandlersManager
 	mu               sync.RWMutex
@@ -55,15 +56,25 @@ type dispatcher struct {
 // newDispatcher creates a new dispatcher instance.
 //
 // If logger is nil, it creates a default logger that writes to os.Stdout with debug-level logging.
-func newDispatcher(logger Logger, workerPool WorkerPool) *dispatcher {
+func newDispatcher(logger Logger, workerPool WorkerPool, cacheManager CacheManager) *dispatcher {
 	if logger == nil {
 		logger = NewDefaultLogger(os.Stdout, LogLevelInfoLevel)
 	}
-	return &dispatcher{
+	if workerPool == nil {
+		workerPool = NewDefaultWorkerPool(logger)
+	}
+	d := &dispatcher{
 		logger:           logger,
 		workerPool:       workerPool,
+		cacheManager:     cacheManager,
 		handlersManagers: make(map[string]eventhandlersManager, 20),
 	}
+
+	// Register some necessary events for caching
+	d.handlersManagers["READY"] = &readyHandlers{logger: logger}
+	d.handlersManagers["GUILD_CREATE"] = &guildCreateHandlers{logger: logger}
+
+	return d
 }
 
 /*****************************
@@ -93,7 +104,7 @@ func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
 		d.mu.RUnlock()
 
 		if ok {
-			hm.handleEvent(shardID, data)
+			hm.handleEvent(d.cacheManager, shardID, data)
 		}
 	}) {
 		d.logger.Warn("Dispatcher: dropped event '" + eventName + "' due to full queue")
@@ -191,7 +202,6 @@ func (d *dispatcher) OnInteractionCreate(h func(InteractionCreateEvent)) {
 	}
 	hm.addHandler(h)
 }
-
 
 // OnVoiceStateUpdate registers a handler function for 'VOICE_STATE_UPDATE' events.
 //
