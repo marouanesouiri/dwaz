@@ -445,17 +445,22 @@ var (
 )
 
 func (p *Permissions) UnmarshalJSON(data []byte) error {
+	dataAsString := string(data)
+	if dataAsString == "null" || dataAsString == "" {
+		return nil
+	}
+
 	str, err := strconv.Unquote(string(data))
 	if err != nil {
 		return err
 	}
 
-	id, err := strconv.ParseUint(str, 10, 64)
+	perms, err := strconv.ParseUint(str, 10, 64)
 	if err != nil {
 		return err
 	}
 
-	*p = Permissions(id)
+	*p = Permissions(perms)
 	return nil
 }
 
