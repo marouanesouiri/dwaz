@@ -43,6 +43,7 @@ type Client struct {
 	intents         GatewayIntent             // configured Gateway intents
 	shards          []*Shard                  // managed Gateway shards
 	*restApi                                  // REST API client
+	CacheManager                              // CacheManager for caching discord entities
 	*dispatcher                               // event dispatcher
 }
 
@@ -108,6 +109,22 @@ func WithWorkerPool(workerPool WorkerPool) clientOption {
 	}
 	return func(c *Client) {
 		c.workerPool = workerPool
+	}
+}
+
+// WithCacheManager sets a custom CacheManager implementation for your client.
+//
+// Usage:
+//
+//	y := dwaz.New(dwaz.WithCacheManager(myCacheManager))
+//
+// Logs fatal and exits if cacheManager is nil.
+func WithCacheManager(cacheManager CacheManager) clientOption {
+	if cacheManager == nil {
+		log.Fatal("WithCacheManager: cacheManager must not be nil")
+	}
+	return func(c *Client) {
+		c.CacheManager = cacheManager
 	}
 }
 
@@ -189,7 +206,10 @@ func New(ctx context.Context, options ...clientOption) *Client {
 		newRequester(nil, client.token, client.Logger),
 		client.Logger,
 	)
-	client.dispatcher = newDispatcher(client.Logger, client.workerPool)
+	client.CacheManager = NewDefaultCache(
+		CacheFlagGuilds | CacheFlagMembers | CacheFlagChannels | CacheFlagRoles | CacheFlagUsers,
+	)
+	client.dispatcher = newDispatcher(client.Logger, client.workerPool, client.cacheManager)
 	return client
 }
 
@@ -241,7 +261,7 @@ func (c *Client) Start() error {
 
 	for i := range gatewayBotData.Shards {
 		shard := newShard(
-			i, gatewayBotData.Shards, c.token, gatewayBotData.URL, c.intents,
+			i, gatewayBotData.Shards, c.token, c.intents,
 			c.Logger, c.dispatcher, c.identifyLimiter,
 		)
 		if err := shard.connect(c.ctx); err != nil {
