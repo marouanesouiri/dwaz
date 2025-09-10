@@ -39,8 +39,12 @@ var (
 	_ json.Unmarshaler = (*Snowflake)(nil)
 )
 
-func (s *Snowflake) UnmarshalJSON(data []byte) error {
-	str, err := strconv.Unquote(string(data))
+func (s *Snowflake) UnmarshalJSON(buf []byte) error {
+	if string(buf) == "null" {
+		return nil
+	}
+
+	str, err := strconv.Unquote(string(buf))
 	if err != nil {
 		return err
 	}
