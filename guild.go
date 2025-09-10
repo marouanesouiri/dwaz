@@ -665,6 +665,9 @@ func (g *GatewayGuild) UnmarshalJSON(buf []byte) error {
 	for i := range len(g.Members) {
 		g.Members[i].GuildID = g.ID
 	}
+	for i := range len(g.VoiceStates) {
+		g.VoiceStates[i].GuildID = g.ID
+	}
 
 	if temp.Channels != nil {
 		g.Channels = make([]GuildChannel, 0, len(temp.Channels))
