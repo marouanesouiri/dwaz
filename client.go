@@ -209,7 +209,7 @@ func New(ctx context.Context, options ...clientOption) *Client {
 	client.CacheManager = NewDefaultCache(
 		CacheFlagGuilds | CacheFlagMembers | CacheFlagChannels | CacheFlagRoles | CacheFlagUsers,
 	)
-	client.dispatcher = newDispatcher(client.Logger, client.workerPool, client.cacheManager)
+	client.dispatcher = newDispatcher(client.Logger, client.workerPool, client.CacheManager)
 	return client
 }
 
