@@ -15,5 +15,5 @@ package dwaz
 
 const (
 	LIB_NAME    = "dwaz"
-	LIB_VERSION = "0.14.3"
+	LIB_VERSION = "0.14.4"
 )
