@@ -81,6 +81,11 @@ func (rl *DefaultShardsRateLimiter) Wait() {
  * Shard: a single Gateway connection
  *************************************/
 
+const (
+	gatewayVersion = "10"
+	gatewayURL     = "wss://gateway.discord.gg/?v=10&encoding=json"
+)
+
 // Shard manages a single WebSocket connection to Discord Gateway,
 // including session state, event handling, heartbeats, and reconnects.
 type Shard struct {
@@ -88,7 +93,6 @@ type Shard struct {
 	totalShards int           // total number of shards in the bot
 	token       string        // Discord bot token
 	intents     GatewayIntent // Gateway intents bitmask
-	url         string        // Gateway URL to connect to
 
 	logger          Logger                    // logger interface for informational and error messages
 	dispatcher      *dispatcher               // event dispatcher for received Gateway events
@@ -112,14 +116,13 @@ type Shard struct {
 // logger and dispatcher handle logging and event dispatching,
 // limiter enforces Identify rate limits.
 func newShard(
-	shardID, totalShards int, token, url string, intents GatewayIntent,
+	shardID, totalShards int, token string, intents GatewayIntent,
 	logger Logger, dispatcher *dispatcher, limiter ShardsIdentifyRateLimiter,
 ) *Shard {
 	return &Shard{
 		shardID:         shardID,
 		totalShards:     totalShards,
 		token:           token,
-		url:             url,
 		intents:         intents,
 		logger:          logger,
 		dispatcher:      dispatcher,
@@ -140,7 +143,7 @@ func (s *Shard) connect(ctx context.Context) error {
 
 	url := s.resumeURL
 	if url == "" {
-		url = s.url
+		url = gatewayURL
 	}
 
 	dialer := ws.Dialer{}
