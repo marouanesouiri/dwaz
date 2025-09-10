@@ -303,6 +303,9 @@ type Guild struct {
 	// ID is the guild's unique Discord snowflake ID.
 	ID Snowflake `json:"id"`
 
+	// Unavailable is whether this guild is available or not.
+	Unavailable bool `json:"unavailable"`
+
 	// Name is the guild's name.
 	Name string `json:"name"`
 
@@ -655,6 +658,13 @@ func (g *GatewayGuild) UnmarshalJSON(buf []byte) error {
 	g.Threads = temp.Threads
 	g.StageInstances = temp.StageInstances
 	g.SoundboardSounds = temp.SoundboardSounds
+
+	for i := range len(g.Roles) {
+		g.Roles[i].GuildID = g.ID
+	}
+	for i := range len(g.Members) {
+		g.Members[i].GuildID = g.ID
+	}
 
 	if temp.Channels != nil {
 		g.Channels = make([]GuildChannel, 0, len(temp.Channels))
