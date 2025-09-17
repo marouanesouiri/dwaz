@@ -172,10 +172,10 @@ type PermissionOverwrite struct {
 	Type PermissionOverwriteType `json:"type"`
 
 	// Allow is the permission bit set explicitly allowed.
-	Allow Permissions `json:"allow"`
+	Allow Permissions `json:"allow,omitempty"`
 
 	// Deny is the permission bit set explicitly denied.
-	Deny Permissions `json:"deny"`
+	Deny Permissions `json:"deny,omitempty"`
 }
 
 // ForumTag represents a tag that can be applied to a thread
@@ -200,7 +200,7 @@ type ForumTag struct {
 	//
 	// Note:
 	//  - If EmojiName is empty (not set), then EmojiID must be set (non-zero).
-	EmojiID Snowflake `json:"emoji_id"`
+	EmojiID Snowflake `json:"emoji_id,omitempty"`
 
 	// EmojiName is the Unicode character of the emoji.
 	//
@@ -209,7 +209,7 @@ type ForumTag struct {
 	//
 	// Note:
 	//  - If EmojiName is empty (not set), then EmojiID must be set (non-zero).
-	EmojiName string `json:"emoji_name"`
+	EmojiName string `json:"emoji_name,omitempty"`
 }
 
 // DefaultReactionEmoji represents a default reaction emoji for forum channels.
@@ -1167,4 +1167,161 @@ func (c *ResolvedMessageChannel) UnmarshalJSON(buf []byte) error {
 type ResolvedThread struct {
 	ThreadChannel
 	Permissions Permissions `json:"permissions"`
+}
+
+type VideoQualityModes int
+
+const (
+	VideoQualityModesAuto VideoQualityModes = iota + 1
+	VideoQualityModesFull
+)
+
+// ChannelCreateOptions defines the configuration for creating a new Discord guild channel.
+//
+// Note:
+//   - This struct configures properties for a new channel, such as text, voice, or forum.
+//   - Only set fields applicable to the channel type to avoid errors.
+//
+// Reference: https://discord.com/developers/docs/resources/guild#create-guild-channel-json-params
+type ChannelCreateOptions struct {
+	// Name is the channel's name (1-100 characters).
+	//
+	// Note:
+	//  - This field is required for every channel.
+	//
+	// Applies to All Channels.
+	Name string `json:"name"`
+
+	// Type specifies the type of channel to create.
+	//
+	// Note:
+	//  - Defaults to ChannelTypeGuildText if unset.
+	//  - Valid values include ChannelTypeGuildText, ChannelTypeGuildVoice, ChannelTypeGuildForum, etc.
+	//
+	// Applies to All Channels.
+	Type ChannelType `json:"type,omitempty"`
+
+	// Topic is a description of the channel (0-1024 characters).
+	//
+	// Note:
+	//  - This field is optional.
+	//
+	// Applies to Channels of Type: Text, Announcement, Forum, Media.
+	Topic string `json:"topic,omitempty"`
+
+	// Bitrate sets the audio quality for voice or stage channels (in bits, minimum 8000).
+	//
+	// Note:
+	//  - This field is ignored for non-voice channels.
+	//
+	// Applies to Channels of Type: Voice, Stage.
+	Bitrate int `json:"bitrate,omitempty"`
+
+	// UserLimit caps the number of users in a voice or stage channel (0 for unlimited, 1-99 for a limit).
+	//
+	// Note:
+	//  - Set to 0 to allow unlimited users.
+	//
+	// Applies to Channels of Type: Voice, Stage.
+	UserLimit *int `json:"user_limit,omitempty"`
+
+	// RateLimitPerUser sets the seconds a user must wait before sending another message (0-21600).
+	//
+	// Note:
+	//  - Bots and users with manage_messages or manage_channel permissions are unaffected.
+	//
+	// Applies to Channels of Type: Text, Voice, Stage, Forum, Media.
+	RateLimitPerUser *int `json:"rate_limit_per_user,omitempty"`
+
+	// Position determines the channel’s position in the server’s channel list (lower numbers appear higher).
+	//
+	// Note:
+	//  - Channels with the same position are sorted by their internal ID.
+	//
+	// Applies to All Channels.
+	Position int `json:"position,omitempty"`
+
+	// PermissionOverwrites defines custom permissions for specific roles or users.
+	//
+	// Note:
+	//  - This field requires valid overwrite objects.
+	//
+	// Applies to All Channels.
+	PermissionOverwrites []PermissionOverwrite `json:"permission_overwrites,omitempty"`
+
+	// ParentID is the ID of the category to nest the channel under.
+	//
+	// Note:
+	//  - This field is ignored for category channels.
+	//
+	// Applies to Channels of Type: Text, Voice, Announcement, Stage, Forum, Media.
+	ParentID Snowflake `json:"parent_id,omitempty"`
+
+	// Nsfw marks the channel as Not Safe For Work, restricting it to 18+ users.
+	//
+	// Note:
+	//  - Set to true to enable the age restriction.
+	//
+	// Applies to Channels of Type: Text, Voice, Announcement, Stage, Forum.
+	Nsfw *bool `json:"nsfw,omitempty"`
+
+	// VideoQualityMode sets the camera video quality for voice or stage channels.
+	//
+	// Note:
+	//  - Valid options are defined in VideoQualityModes.
+	//
+	// Applies to Channels of Type: Voice, Stage.
+	VideoQualityMode VideoQualityModes `json:"video_quality_mode,omitempty"`
+
+	// DefaultAutoArchiveDuration sets the default time (in minutes) before threads are archived.
+	//
+	// Note:
+	//  - Valid values are 60, 1440, 4320, or 10080.
+	//
+	// Applies to Channels of Type: Text, Announcement, Forum, Media.
+	DefaultAutoArchiveDuration AutoArchiveDuration `json:"default_auto_archive_duration,omitempty"`
+
+	// DefaultReactionEmoji is the default emoji for the add reaction button on threads.
+	//
+	// Note:
+	//  - Set to a valid emoji object or nil if not needed.
+	//
+	// Applies to Channels of Type: Forum, Media.
+	DefaultReactionEmoji *DefaultReactionEmoji `json:"default_reaction_emoji,omitempty"`
+
+	// AvailableTags lists tags that can be applied to threads for organization.
+	//
+	// Note:
+	//  - This field defines tags users can select for threads.
+	//
+	// Applies to Channels of Type: Forum, Media.
+	AvailableTags []ForumTag `json:"available_tags,omitempty"`
+
+	// DefaultSortOrder sets how threads are sorted by default.
+	//
+	// Note:
+	//  - Valid options are defined in ForumPostsSortOrder.
+	//
+	// Applies to Channels of Type: Forum, Media.
+	DefaultSortOrder ForumPostsSortOrder `json:"default_sort_order,omitempty"`
+
+	// DefaultForumLayout sets the default view for forum posts.
+	//
+	// Note:
+	//  - Valid options are defined in ForumLayout.
+	//
+	// Applies to Channels of Type: Forum.
+	DefaultForumLayout ForumLayout `json:"default_forum_layout,omitempty"`
+
+	// DefaultThreadRateLimitPerUser sets the default slow mode for messages in new threads.
+	//
+	// Note:
+	//  - This value is copied to new threads at creation and does not update live.
+	//
+	// Applies to Channels of Type: Text, Announcement, Forum, Media.
+	DefaultThreadRateLimitPerUser int `json:"default_thread_rate_limit_per_user,omitempty"`
+
+
+	// Reason specifies the audit log reason for creating the channel.
+	Reason string `json:"-"`
 }
