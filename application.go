@@ -13,7 +13,11 @@
 
 package dwaz
 
-import "time"
+import (
+	"time"
+
+	"github.com/marouanesouiri/stdx/optional"
+)
 
 // MembershipState represent a team member MembershipState.
 //
@@ -459,20 +463,14 @@ type Application struct {
 	Flags ApplicationFlags `json:"flags"`
 
 	// ApproximateGuildCount is the approximate count of guilds the app has been added to.
-	//
-	// Optional.
-	ApproximateGuildCount *int `json:"approximate_guild_count"`
+	ApproximateGuildCount optional.Option[int] `json:"approximate_guild_count"`
 
 	// ApproximateUserInstallCount is the Approximate count of users that have installed
 	// the app (authorized with application.commands as a scope).
-	//
-	// Optional.
-	ApproximateUserInstallCount *int `json:"approximate_user_install_count"`
+	ApproximateUserInstallCount optional.Option[int] `json:"approximate_user_install_count"`
 
 	// ApproximateUserAuthorizationCount is the approximate count of users that have OAuth2 authorizations for the app.
-	//
-	// Optional.
-	ApproximateUserAuthorizationCount *int `json:"approximate_user_authorization_count"`
+	ApproximateUserAuthorizationCount optional.Option[int] `json:"approximate_user_authorization_count"`
 
 	// RedirectURIs is an array of redirect URIs for the app.
 	RedirectURIs []string `json:"redirect_uris"`
@@ -578,6 +576,42 @@ func (a *Application) CoverImageURL() string {
 func (a *Application) CoverImageURLWith(format ImageFormat, size ImageSize) string {
 	if a.Icon != "" {
 		return ApplicationCoverURL(a.ID, a.Icon, format, size)
+	}
+	return ""
+}
+
+
+// PartialApplication represent a Discord partial application object.
+//
+// Reference: https://discord.com/developers/docs/resources/application#application-object
+type PartialApplication struct {
+	// ID is the applications's unique Discord snowflake ID.
+	ID Snowflake `json:"id"`
+
+	// Name is the applications's name.
+	Name string `json:"name"`
+
+	// Icon is the application's icon hash.
+	//
+	// Optional:
+	//  - May be empty string if no icon.
+	Icon string `json:"icon"`
+
+	// Description is the description of a application.
+	Description string `json:"description"`
+}
+
+// IconURL returns the URL to the app's icon image.
+//
+// If the application has a custom icon set, it returns the URL to that icon, otherwise empty string.
+// By default, it uses PNG format.
+//
+// Example usage:
+//
+//	url := application.IconURL()
+func (a *PartialApplication) IconURL() string {
+	if a.Icon != "" {
+		return ApplicationIconURL(a.ID, a.Icon, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
