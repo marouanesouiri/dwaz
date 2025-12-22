@@ -13,7 +13,11 @@
 
 package dwaz
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/marouanesouiri/stdx/optional"
+)
 
 type CacheFlags int
 
@@ -46,16 +50,17 @@ type CacheManager interface {
 	Flags() CacheFlags
 	SetFlags(flags ...CacheFlags)
 
-	GetUser(userID Snowflake) (User, bool)
-	GetGuild(guildID Snowflake) (Guild, bool)
-	GetMember(guildID, userID Snowflake) (Member, bool)
-	GetChannel(channelID Snowflake) (Channel, bool)
-	GetMessage(messageID Snowflake) (Message, bool)
-	GetVoiceState(guildID, userID Snowflake) (VoiceState, bool)
-	GetGuildChannels(guildID Snowflake) (map[Snowflake]GuildChannel, bool)
-	GetGuildMembers(guildID Snowflake) (map[Snowflake]Member, bool)
-	GetGuildVoiceStates(guildID Snowflake) (map[Snowflake]VoiceState, bool)
-	GetGuildRoles(guildID Snowflake) (map[Snowflake]Role, bool)
+	GetUser(userID Snowflake) optional.Option[User]
+	GetGuild(guildID Snowflake) optional.Option[Guild]
+	GetMember(guildID, userID Snowflake) optional.Option[Member]
+	GetChannel(channelID Snowflake) optional.Option[Channel]
+	GetMessage(messageID Snowflake) optional.Option[Message]
+	GetVoiceState(guildID, userID Snowflake) optional.Option[VoiceState]
+	GetGuildChannels(guildID Snowflake) optional.Option[map[Snowflake]GuildChannel]
+	GetGuildMembers(guildID Snowflake) optional.Option[map[Snowflake]Member]
+	GetGuildVoiceStates(guildID Snowflake) optional.Option[map[Snowflake]VoiceState]
+	GetGuildRoles(guildID Snowflake) optional.Option[map[Snowflake]Role]
+	GetRoles(rolesIDs ...Snowflake) map[Snowflake]Role
 
 	HasUser(userID Snowflake) bool
 	HasGuild(guildID Snowflake) bool
@@ -67,6 +72,7 @@ type CacheManager interface {
 	HasGuildMembers(guildID Snowflake) bool
 	HasGuildVoiceStates(guildID Snowflake) bool
 	HasGuildRoles(guildID Snowflake) bool
+	HasRoles(rolesIDs ...Snowflake) bool
 
 	CountUsers() int
 	CountGuilds() int
@@ -86,6 +92,7 @@ type CacheManager interface {
 	PutMessage(message Message)
 	PutVoiceState(voiceState VoiceState)
 	PutRole(role Role)
+	PutRoles(roles ...Role)
 
 	DelUser(userID Snowflake) bool
 	DelGuild(guildID Snowflake) bool
@@ -96,9 +103,10 @@ type CacheManager interface {
 	DelGuildChannels(guildID Snowflake) bool
 	DelGuildMembers(guildID Snowflake) bool
 	DelRole(guildID, roleID Snowflake) bool
+	DelRoles(roleIDs ...Snowflake) bool
 }
 
-type DefaultCache struct {
+type InMemoryCacheManager struct {
 	flags CacheFlags
 
 	usersCache   map[Snowflake]User
@@ -139,9 +147,10 @@ type DefaultCache struct {
 	guildToRoleIDsMu sync.RWMutex
 }
 
-func NewDefaultCache(flags CacheFlags) CacheManager {
-	return &DefaultCache{
-		flags:                    flags,
+func NewInMemoryCacheManager(flags CacheFlags) *InMemoryCacheManager {
+	return &InMemoryCacheManager{
+		flags: flags,
+
 		usersCache:               make(map[Snowflake]User),
 		guildsCache:              make(map[Snowflake]Guild),
 		membersCache:             make(map[SnowflakePairKey]Member),
@@ -156,65 +165,65 @@ func NewDefaultCache(flags CacheFlags) CacheManager {
 	}
 }
 
-func (c *DefaultCache) Flags() CacheFlags {
+func (c *InMemoryCacheManager) Flags() CacheFlags {
 	return c.flags
 }
 
-func (c *DefaultCache) SetFlags(flags ...CacheFlags) {
+func (c *InMemoryCacheManager) SetFlags(flags ...CacheFlags) {
 	c.flags = CacheFlagsNone
 	for _, f := range flags {
 		c.flags |= f
 	}
 }
 
-func (c *DefaultCache) GetUser(userID Snowflake) (user User, ok bool) {
+func (c *InMemoryCacheManager) GetUser(userID Snowflake) optional.Option[User] {
 	c.usersCacheMu.RLock()
-	user, ok = c.usersCache[userID]
+	val, ok := c.usersCache[userID]
 	c.usersCacheMu.RUnlock()
-	return
+	return optional.FromPair(val, ok)
 }
 
-func (c *DefaultCache) GetGuild(guildID Snowflake) (guild Guild, ok bool) {
+func (c *InMemoryCacheManager) GetGuild(guildID Snowflake) optional.Option[Guild] {
 	c.guildsCacheMu.RLock()
-	guild, ok = c.guildsCache[guildID]
+	val, ok := c.guildsCache[guildID]
 	c.guildsCacheMu.RUnlock()
-	return
+	return optional.FromPair(val, ok)
 }
 
-func (c *DefaultCache) GetMember(guildID, userID Snowflake) (member Member, ok bool) {
+func (c *InMemoryCacheManager) GetMember(guildID, userID Snowflake) optional.Option[Member] {
 	c.membersCacheMu.RLock()
-	member, ok = c.membersCache[SnowflakePairKey{A: userID, B: guildID}]
+	val, ok := c.membersCache[SnowflakePairKey{A: guildID, B: userID}]
 	c.membersCacheMu.RUnlock()
-	return
+	return optional.FromPair(val, ok)
 }
 
-func (c *DefaultCache) GetChannel(channelID Snowflake) (channel Channel, ok bool) {
+func (c *InMemoryCacheManager) GetChannel(channelID Snowflake) optional.Option[Channel] {
 	c.channelsCacheMu.RLock()
-	channel, ok = c.channelsCache[channelID]
+	val, ok := c.channelsCache[channelID]
 	c.channelsCacheMu.RUnlock()
-	return
+	return optional.FromPair(val, ok)
 }
 
-func (c *DefaultCache) GetMessage(messageID Snowflake) (message Message, ok bool) {
+func (c *InMemoryCacheManager) GetMessage(messageID Snowflake) optional.Option[Message] {
 	c.messagesCacheMu.RLock()
-	message, ok = c.messagesCache[messageID]
+	val, ok := c.messagesCache[messageID]
 	c.messagesCacheMu.RUnlock()
-	return
+	return optional.FromPair(val, ok)
 }
 
-func (c *DefaultCache) GetVoiceState(guildID, userID Snowflake) (voiceState VoiceState, ok bool) {
+func (c *InMemoryCacheManager) GetVoiceState(guildID, userID Snowflake) optional.Option[VoiceState] {
 	c.voiceStatesCacheMu.RLock()
-	voiceState, ok = c.voiceStatesCache[SnowflakePairKey{A: guildID, B: userID}]
+	val, ok := c.voiceStatesCache[SnowflakePairKey{A: guildID, B: userID}]
 	c.voiceStatesCacheMu.RUnlock()
-	return
+	return optional.FromPair(val, ok)
 }
 
-func (c *DefaultCache) GetGuildChannels(guildID Snowflake) (map[Snowflake]GuildChannel, bool) {
+func (c *InMemoryCacheManager) GetGuildChannels(guildID Snowflake) optional.Option[map[Snowflake]GuildChannel] {
 	c.guildToChannelIDsMu.RLock()
 	set, ok := c.guildToChannelIDs[guildID]
 	c.guildToChannelIDsMu.RUnlock()
 	if !ok {
-		return nil, false
+		return optional.None[map[Snowflake]GuildChannel]()
 	}
 	c.channelsCacheMu.RLock()
 	defer c.channelsCacheMu.RUnlock()
@@ -224,15 +233,15 @@ func (c *DefaultCache) GetGuildChannels(guildID Snowflake) (map[Snowflake]GuildC
 			res[channelID] = channel.(GuildChannel)
 		}
 	}
-	return res, true
+	return optional.Some(res)
 }
 
-func (c *DefaultCache) GetGuildMembers(guildID Snowflake) (map[Snowflake]Member, bool) {
+func (c *InMemoryCacheManager) GetGuildMembers(guildID Snowflake) optional.Option[map[Snowflake]Member] {
 	c.guildToMemberIDsMu.RLock()
 	set, ok := c.guildToMemberIDs[guildID]
 	c.guildToMemberIDsMu.RUnlock()
 	if !ok {
-		return nil, false
+		return optional.None[map[Snowflake]Member]()
 	}
 	c.membersCacheMu.RLock()
 	defer c.membersCacheMu.RUnlock()
@@ -243,15 +252,15 @@ func (c *DefaultCache) GetGuildMembers(guildID Snowflake) (map[Snowflake]Member,
 			res[userID] = member
 		}
 	}
-	return res, true
+	return optional.Some(res)
 }
 
-func (c *DefaultCache) GetGuildVoiceStates(guildID Snowflake) (map[Snowflake]VoiceState, bool) {
+func (c *InMemoryCacheManager) GetGuildVoiceStates(guildID Snowflake) optional.Option[map[Snowflake]VoiceState] {
 	c.guildToVoiceStateUserIDsMu.RLock()
 	set, ok := c.guildToVoiceStateUserIDs[guildID]
 	c.guildToVoiceStateUserIDsMu.RUnlock()
 	if !ok {
-		return nil, false
+		return optional.None[map[Snowflake]VoiceState]()
 	}
 	c.voiceStatesCacheMu.RLock()
 	defer c.voiceStatesCacheMu.RUnlock()
@@ -262,15 +271,15 @@ func (c *DefaultCache) GetGuildVoiceStates(guildID Snowflake) (map[Snowflake]Voi
 			res[userID] = voiceState
 		}
 	}
-	return res, true
+	return optional.Some(res)
 }
 
-func (c *DefaultCache) GetGuildRoles(guildID Snowflake) (map[Snowflake]Role, bool) {
+func (c *InMemoryCacheManager) GetGuildRoles(guildID Snowflake) optional.Option[map[Snowflake]Role] {
 	c.guildToRoleIDsMu.RLock()
 	set, ok := c.guildToRoleIDs[guildID]
 	c.guildToRoleIDsMu.RUnlock()
 	if !ok {
-		return nil, false
+		return optional.None[map[Snowflake]Role]()
 	}
 	c.rolesCacheMu.RLock()
 	defer c.rolesCacheMu.RUnlock()
@@ -280,10 +289,10 @@ func (c *DefaultCache) GetGuildRoles(guildID Snowflake) (map[Snowflake]Role, boo
 			res[roleID] = role
 		}
 	}
-	return res, true
+	return optional.Some(res)
 }
 
-func (c *DefaultCache) HasUser(userID Snowflake) bool {
+func (c *InMemoryCacheManager) HasUser(userID Snowflake) bool {
 	if !c.flags.Has(CacheFlagUsers) {
 		return false
 	}
@@ -293,7 +302,7 @@ func (c *DefaultCache) HasUser(userID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasGuild(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) HasGuild(guildID Snowflake) bool {
 	if !c.flags.Has(CacheFlagGuilds) {
 		return false
 	}
@@ -303,7 +312,7 @@ func (c *DefaultCache) HasGuild(guildID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasMember(guildID, userID Snowflake) bool {
+func (c *InMemoryCacheManager) HasMember(guildID, userID Snowflake) bool {
 	if !c.flags.Has(CacheFlagMembers) {
 		return false
 	}
@@ -313,7 +322,7 @@ func (c *DefaultCache) HasMember(guildID, userID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasChannel(channelID Snowflake) bool {
+func (c *InMemoryCacheManager) HasChannel(channelID Snowflake) bool {
 	if !c.flags.Has(CacheFlagChannels) {
 		return false
 	}
@@ -323,7 +332,7 @@ func (c *DefaultCache) HasChannel(channelID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasMessage(messageID Snowflake) bool {
+func (c *InMemoryCacheManager) HasMessage(messageID Snowflake) bool {
 	if !c.flags.Has(CacheFlagMessages) {
 		return false
 	}
@@ -333,7 +342,7 @@ func (c *DefaultCache) HasMessage(messageID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasVoiceState(guildID, userID Snowflake) bool {
+func (c *InMemoryCacheManager) HasVoiceState(guildID, userID Snowflake) bool {
 	if !c.flags.Has(CacheFlagVoiceStates) {
 		return false
 	}
@@ -343,7 +352,7 @@ func (c *DefaultCache) HasVoiceState(guildID, userID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasGuildChannels(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) HasGuildChannels(guildID Snowflake) bool {
 	if !c.flags.Has(CacheFlagChannels) {
 		return false
 	}
@@ -353,7 +362,7 @@ func (c *DefaultCache) HasGuildChannels(guildID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasGuildMembers(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) HasGuildMembers(guildID Snowflake) bool {
 	if !c.flags.Has(CacheFlagMembers) {
 		return false
 	}
@@ -363,7 +372,7 @@ func (c *DefaultCache) HasGuildMembers(guildID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasGuildVoiceStates(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) HasGuildVoiceStates(guildID Snowflake) bool {
 	if !c.flags.Has(CacheFlagVoiceStates) {
 		return false
 	}
@@ -373,7 +382,7 @@ func (c *DefaultCache) HasGuildVoiceStates(guildID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) HasGuildRoles(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) HasGuildRoles(guildID Snowflake) bool {
 	if !c.flags.Has(CacheFlagRoles) {
 		return false
 	}
@@ -383,56 +392,56 @@ func (c *DefaultCache) HasGuildRoles(guildID Snowflake) bool {
 	return exists
 }
 
-func (c *DefaultCache) CountUsers() int {
+func (c *InMemoryCacheManager) CountUsers() int {
 	c.usersCacheMu.RLock()
 	count := len(c.usersCache)
 	c.usersCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountGuilds() int {
+func (c *InMemoryCacheManager) CountGuilds() int {
 	c.guildsCacheMu.RLock()
 	count := len(c.guildsCache)
 	c.guildsCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountMembers() int {
+func (c *InMemoryCacheManager) CountMembers() int {
 	c.membersCacheMu.RLock()
 	count := len(c.membersCache)
 	c.membersCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountChannels() int {
+func (c *InMemoryCacheManager) CountChannels() int {
 	c.channelsCacheMu.RLock()
 	count := len(c.channelsCache)
 	c.channelsCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountMessages() int {
+func (c *InMemoryCacheManager) CountMessages() int {
 	c.messagesCacheMu.RLock()
 	count := len(c.messagesCache)
 	c.messagesCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountVoiceStates() int {
+func (c *InMemoryCacheManager) CountVoiceStates() int {
 	c.voiceStatesCacheMu.RLock()
 	count := len(c.voiceStatesCache)
 	c.voiceStatesCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountRoles() int {
+func (c *InMemoryCacheManager) CountRoles() int {
 	c.rolesCacheMu.RLock()
 	count := len(c.rolesCache)
 	c.rolesCacheMu.RUnlock()
 	return count
 }
 
-func (c *DefaultCache) CountGuildChannels(guildID Snowflake) int {
+func (c *InMemoryCacheManager) CountGuildChannels(guildID Snowflake) int {
 	c.guildToChannelIDsMu.RLock()
 	set, exists := c.guildToChannelIDs[guildID]
 	c.guildToChannelIDsMu.RUnlock()
@@ -442,7 +451,7 @@ func (c *DefaultCache) CountGuildChannels(guildID Snowflake) int {
 	return len(set)
 }
 
-func (c *DefaultCache) CountGuildMembers(guildID Snowflake) int {
+func (c *InMemoryCacheManager) CountGuildMembers(guildID Snowflake) int {
 	c.guildToMemberIDsMu.RLock()
 	set, exists := c.guildToMemberIDs[guildID]
 	c.guildToMemberIDsMu.RUnlock()
@@ -452,7 +461,7 @@ func (c *DefaultCache) CountGuildMembers(guildID Snowflake) int {
 	return len(set)
 }
 
-func (c *DefaultCache) CountGuildRoles(guildID Snowflake) int {
+func (c *InMemoryCacheManager) CountGuildRoles(guildID Snowflake) int {
 	c.guildToRoleIDsMu.RLock()
 	set, exists := c.guildToRoleIDs[guildID]
 	c.guildToRoleIDsMu.RUnlock()
@@ -462,7 +471,7 @@ func (c *DefaultCache) CountGuildRoles(guildID Snowflake) int {
 	return len(set)
 }
 
-func (c *DefaultCache) PutUser(user User) {
+func (c *InMemoryCacheManager) PutUser(user User) {
 	if !c.flags.Has(CacheFlagUsers) {
 		return
 	}
@@ -471,7 +480,7 @@ func (c *DefaultCache) PutUser(user User) {
 	c.usersCacheMu.Unlock()
 }
 
-func (c *DefaultCache) PutGuild(guild Guild) {
+func (c *InMemoryCacheManager) PutGuild(guild Guild) {
 	if !c.flags.Has(CacheFlagGuilds) {
 		return
 	}
@@ -480,11 +489,11 @@ func (c *DefaultCache) PutGuild(guild Guild) {
 	c.guildsCacheMu.Unlock()
 }
 
-func (c *DefaultCache) PutMember(member Member) {
+func (c *InMemoryCacheManager) PutMember(member Member) {
 	if !c.flags.Has(CacheFlagMembers) {
 		return
 	}
-	userID := member.User.ID
+	userID := member.ID
 	guildID := member.GuildID
 	key := SnowflakePairKey{A: guildID, B: userID}
 	c.membersCacheMu.Lock()
@@ -498,7 +507,7 @@ func (c *DefaultCache) PutMember(member Member) {
 	c.guildToMemberIDsMu.Unlock()
 }
 
-func (c *DefaultCache) PutChannel(channel Channel) {
+func (c *InMemoryCacheManager) PutChannel(channel Channel) {
 	if !c.flags.Has(CacheFlagChannels) {
 		return
 	}
@@ -517,7 +526,7 @@ func (c *DefaultCache) PutChannel(channel Channel) {
 	}
 }
 
-func (c *DefaultCache) PutMessage(message Message) {
+func (c *InMemoryCacheManager) PutMessage(message Message) {
 	if !c.flags.Has(CacheFlagMessages) {
 		return
 	}
@@ -526,7 +535,7 @@ func (c *DefaultCache) PutMessage(message Message) {
 	c.messagesCacheMu.Unlock()
 }
 
-func (c *DefaultCache) PutVoiceState(voiceState VoiceState) {
+func (c *InMemoryCacheManager) PutVoiceState(voiceState VoiceState) {
 	if !c.flags.Has(CacheFlagVoiceStates) {
 		return
 	}
@@ -544,7 +553,7 @@ func (c *DefaultCache) PutVoiceState(voiceState VoiceState) {
 	c.guildToVoiceStateUserIDsMu.Unlock()
 }
 
-func (c *DefaultCache) PutRole(role Role) {
+func (c *InMemoryCacheManager) PutRole(role Role) {
 	if !c.flags.Has(CacheFlagRoles) {
 		return
 	}
@@ -561,7 +570,7 @@ func (c *DefaultCache) PutRole(role Role) {
 	c.guildToRoleIDsMu.Unlock()
 }
 
-func (c *DefaultCache) DelUser(userID Snowflake) bool {
+func (c *InMemoryCacheManager) DelUser(userID Snowflake) bool {
 	c.usersCacheMu.Lock()
 	_, ok := c.usersCache[userID]
 	if ok {
@@ -571,7 +580,7 @@ func (c *DefaultCache) DelUser(userID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelGuild(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) DelGuild(guildID Snowflake) bool {
 	c.guildsCacheMu.Lock()
 	_, ok := c.guildsCache[guildID]
 	if ok {
@@ -581,7 +590,7 @@ func (c *DefaultCache) DelGuild(guildID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelMember(guildID, userID Snowflake) bool {
+func (c *InMemoryCacheManager) DelMember(guildID, userID Snowflake) bool {
 	key := SnowflakePairKey{A: guildID, B: userID}
 	c.membersCacheMu.Lock()
 	_, ok := c.membersCache[key]
@@ -602,7 +611,7 @@ func (c *DefaultCache) DelMember(guildID, userID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelChannel(channelID Snowflake) bool {
+func (c *InMemoryCacheManager) DelChannel(channelID Snowflake) bool {
 	c.channelsCacheMu.Lock()
 	channel, ok := c.channelsCache[channelID]
 	if ok {
@@ -624,7 +633,7 @@ func (c *DefaultCache) DelChannel(channelID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelMessage(messageID Snowflake) bool {
+func (c *InMemoryCacheManager) DelMessage(messageID Snowflake) bool {
 	c.messagesCacheMu.Lock()
 	_, ok := c.messagesCache[messageID]
 	if ok {
@@ -634,7 +643,7 @@ func (c *DefaultCache) DelMessage(messageID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelVoiceState(guildID, userID Snowflake) bool {
+func (c *InMemoryCacheManager) DelVoiceState(guildID, userID Snowflake) bool {
 	key := SnowflakePairKey{A: guildID, B: userID}
 	c.voiceStatesCacheMu.Lock()
 	_, ok := c.voiceStatesCache[key]
@@ -655,7 +664,7 @@ func (c *DefaultCache) DelVoiceState(guildID, userID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelRole(guildID, roleID Snowflake) bool {
+func (c *InMemoryCacheManager) DelRole(guildID, roleID Snowflake) bool {
 	c.rolesCacheMu.Lock()
 	_, ok := c.rolesCache[roleID]
 	if ok {
@@ -675,7 +684,7 @@ func (c *DefaultCache) DelRole(guildID, roleID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelGuildChannels(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) DelGuildChannels(guildID Snowflake) bool {
 	c.guildToChannelIDsMu.Lock()
 	set, ok := c.guildToChannelIDs[guildID]
 	if ok {
@@ -692,7 +701,7 @@ func (c *DefaultCache) DelGuildChannels(guildID Snowflake) bool {
 	return ok
 }
 
-func (c *DefaultCache) DelGuildMembers(guildID Snowflake) bool {
+func (c *InMemoryCacheManager) DelGuildMembers(guildID Snowflake) bool {
 	c.guildToMemberIDsMu.Lock()
 	set, ok := c.guildToMemberIDs[guildID]
 	if ok {
@@ -708,4 +717,52 @@ func (c *DefaultCache) DelGuildMembers(guildID Snowflake) bool {
 		c.membersCacheMu.Unlock()
 	}
 	return ok
+}
+
+func (c *InMemoryCacheManager) GetRoles(rolesIDs ...Snowflake) map[Snowflake]Role {
+	c.rolesCacheMu.RLock()
+	defer c.rolesCacheMu.RUnlock()
+	res := make(map[Snowflake]Role, len(rolesIDs))
+	for _, id := range rolesIDs {
+		if role, ok := c.rolesCache[id]; ok {
+			res[id] = role
+		}
+	}
+	return res
+}
+
+func (c *InMemoryCacheManager) HasRoles(rolesIDs ...Snowflake) bool {
+	if !c.flags.Has(CacheFlagRoles) {
+		return false
+	}
+	c.rolesCacheMu.RLock()
+	defer c.rolesCacheMu.RUnlock()
+	for _, id := range rolesIDs {
+		if _, ok := c.rolesCache[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *InMemoryCacheManager) PutRoles(roles ...Role) {
+	for _, role := range roles {
+		c.PutRole(role)
+	}
+}
+
+func (c *InMemoryCacheManager) DelRoles(roleIDs ...Snowflake) bool {
+	anyDeleted := false
+	for _, id := range roleIDs {
+		c.rolesCacheMu.RLock()
+		role, ok := c.rolesCache[id]
+		c.rolesCacheMu.RUnlock()
+
+		if ok {
+			if c.DelRole(role.GuildID, id) {
+				anyDeleted = true
+			}
+		}
+	}
+	return anyDeleted
 }
