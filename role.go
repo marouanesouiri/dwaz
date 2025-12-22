@@ -13,6 +13,8 @@
 
 package dwaz
 
+import "github.com/marouanesouiri/stdx/optional"
+
 // RoleFlags represents flags on a Discord guild role.
 //
 // Reference: https://discord.com/developers/docs/topics/permissions#role-object-role-flags
@@ -76,16 +78,10 @@ type RoleColors struct {
 	PrimaryColor Color `json:"primary_color"`
 
 	// SecondaryColor is the secondary color for the role.
-	//
-	// Optional:
-	//   - Will be nil if not set.
-	SecondaryColor *Color `json:"secondary_color"`
+	SecondaryColor optional.Option[Color] `json:"secondary_color"`
 
 	// TertiaryColor is the tertiary color for the role.
-	//
-	// Optional:
-	//   - Will be nil if not set.
-	TertiaryColor *Color `json:"tertiary_color"`
+	TertiaryColor optional.Option[Color] `json:"tertiary_color"`
 }
 
 // Role represents a Discord role.
@@ -149,6 +145,11 @@ type Role struct {
 // Example output: "<@&123456789012345678>"
 func (r *Role) Mention() string {
 	return "<@&" + r.ID.String() + ">"
+}
+
+// String implements the fmt.Stringer interface.
+func (r *Role) String() string {
+	return r.Mention()
 }
 
 // IconURL returns the URL to the role's icon image in PNG format.
