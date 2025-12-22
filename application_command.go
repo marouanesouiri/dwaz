@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
-
-	"github.com/bytedance/sonic"
 )
 
 // ApplicationCommandOptionType represents the type of an application command option.
@@ -224,7 +222,7 @@ type ApplicationCommandOptionString struct {
 
 func (o *ApplicationCommandOptionString) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionString
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionChoiceInteger represents a choice for integer options.
@@ -282,7 +280,7 @@ type ApplicationCommandOptionInteger struct {
 
 func (o *ApplicationCommandOptionInteger) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionInteger
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionChoiceFloat represents a choice for float options.
@@ -340,7 +338,7 @@ type ApplicationCommandOptionFloat struct {
 
 func (o *ApplicationCommandOptionFloat) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionFloat
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ChannelConstraints contains constraints for channel options.
@@ -363,7 +361,7 @@ type ApplicationCommandOptionChannel struct {
 
 func (o *ApplicationCommandOptionChannel) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionChannel
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionSubCommand represents a sub-command option.
@@ -381,7 +379,7 @@ type ApplicationCommandOptionSubCommand struct {
 
 func (o *ApplicationCommandOptionSubCommand) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionSubCommand
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionSubCommandGroup represents a sub-command group option.
@@ -398,7 +396,7 @@ type ApplicationCommandOptionSubCommandGroup struct {
 
 func (o *ApplicationCommandOptionSubCommandGroup) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionSubCommandGroup
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionBool represents a boolean option.
@@ -411,7 +409,7 @@ type ApplicationCommandOptionBool struct {
 
 func (o *ApplicationCommandOptionBool) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionBool
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionUser represents a user option.
@@ -424,7 +422,7 @@ type ApplicationCommandOptionUser struct {
 
 func (o *ApplicationCommandOptionUser) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionUser
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionRole represents a role option.
@@ -437,7 +435,7 @@ type ApplicationCommandOptionRole struct {
 
 func (o *ApplicationCommandOptionRole) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionRole
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionMentionable represents a mentionable option.
@@ -450,7 +448,7 @@ type ApplicationCommandOptionMentionable struct {
 
 func (o *ApplicationCommandOptionMentionable) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionMentionable
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 // ApplicationCommandOptionAttachment represents an attachment option.
@@ -463,51 +461,51 @@ type ApplicationCommandOptionAttachment struct {
 
 func (o *ApplicationCommandOptionAttachment) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationCommandOptionAttachment
-	return sonic.Marshal((*NoMethod)(o))
+	return json.Marshal((*NoMethod)(o))
 }
 
 func UnmarshalApplicationCommandOption(buf []byte) (ApplicationCommandOption, error) {
 	var meta struct {
 		Type ApplicationCommandOptionType `json:"type"`
 	}
-	if err := sonic.Unmarshal(buf, &meta); err != nil {
+	if err := json.Unmarshal(buf, &meta); err != nil {
 		return nil, err
 	}
 
 	switch meta.Type {
 	case ApplicationCommandOptionTypeSubCommand:
 		var o ApplicationCommandOptionSubCommand
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeSubCommandGroup:
 		var o ApplicationCommandOptionSubCommand
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeString:
 		var o ApplicationCommandOptionString
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeInteger:
 		var o ApplicationCommandOptionInteger
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeBool:
 		var o ApplicationCommandOptionBool
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeUser:
 		var o ApplicationCommandOptionUser
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeChannel:
 		var o ApplicationCommandOptionChannel
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeRole:
 		var o ApplicationCommandOptionRole
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeMentionable:
 		var o ApplicationCommandOptionMentionable
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeFloat:
 		var o ApplicationCommandOptionFloat
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	case ApplicationCommandOptionTypeAttachment:
 		var o ApplicationCommandOptionAttachment
-		return &o, sonic.Unmarshal(buf, &o)
+		return &o, json.Unmarshal(buf, &o)
 	default:
 		return nil, errors.New("unknown application command option type")
 	}
@@ -763,7 +761,7 @@ func (c *ChatInputCommand) UnmarshalJSON(buf []byte) error {
 	}
 
 	var temp tempChatInputCommand
-	if err := sonic.Unmarshal(buf, &temp); err != nil {
+	if err := json.Unmarshal(buf, &temp); err != nil {
 		return err
 	}
 
@@ -789,7 +787,7 @@ func (c *ChatInputCommand) UnmarshalJSON(buf []byte) error {
 
 func (c *ChatInputCommand) MarshalJSON() ([]byte, error) {
 	type NoMethod ChatInputCommand
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // ApplicationUserCommand represents a UI-based command that appears when right-clicking or tapping on a user.
@@ -801,7 +799,7 @@ type ApplicationUserCommand struct {
 
 func (c *ApplicationUserCommand) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationUserCommand
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // ApplicationMessageCommand represents a UI-based command that appears when right-clicking or tapping on a message.
@@ -813,7 +811,7 @@ type ApplicationMessageCommand struct {
 
 func (c *ApplicationMessageCommand) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationMessageCommand
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // ApplicationEntryPointCommand represents a UI-based command that is the primary way to invoke an app's Activity.
@@ -831,32 +829,31 @@ type ApplicationEntryPointCommand struct {
 
 func (c *ApplicationEntryPointCommand) MarshalJSON() ([]byte, error) {
 	type NoMethod ApplicationEntryPointCommand
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 func UnmarshalApplicationCommand(buf []byte) (ApplicationCommand, error) {
 	var meta struct {
 		Type ApplicationCommandType `json:"type"`
 	}
-	if err := sonic.Unmarshal(buf, &meta); err != nil {
+	if err := json.Unmarshal(buf, &meta); err != nil {
 		return nil, err
 	}
 
 	switch meta.Type {
 	case ApplicationCommandTypeChatInput:
 		var c ChatInputCommand
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ApplicationCommandTypeUser:
 		var c ApplicationUserCommand
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ApplicationCommandTypeMessage:
 		var c ApplicationMessageCommand
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ApplicationCommandTypePrimaryEntryPoint:
 		var c ApplicationEntryPointCommand
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	default:
 		return nil, errors.New("unknown application command type")
 	}
 }
-
