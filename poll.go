@@ -128,7 +128,7 @@ type Poll struct {
 	//
 	// Optional:
 	//  - Will be nil if the poll has no expiry.
-	Expiry *time.Time `json:"expiry"`
+	Expiry *time.Time `json:"expiry,omitzero"`
 
 	// AllowMultiselect indicates whether a user can select multiple answers.
 	AllowMultiselect bool `json:"allow_multiselect"`
@@ -149,9 +149,10 @@ type Poll struct {
 //   - https://discord.com/developers/docs/resources/poll#poll-create-request-object
 //
 // Note:
-//   This object is similar to the main Poll object, but differs in that it
-//   specifies a `duration` field (how long the poll remains open), which later
-//   becomes an `expiry` field in the resulting poll object.
+//
+//	This object is similar to the main Poll object, but differs in that it
+//	specifies a `duration` field (how long the poll remains open), which later
+//	becomes an `expiry` field in the resulting poll object.
 type PollCreateOptions struct {
 	// Question defines the main question of the poll.
 	Question PollMedia `json:"question"`
