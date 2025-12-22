@@ -245,6 +245,16 @@ const (
 	//
 	// Channel types: Text, Voice, Stage
 	PermissionUseExternalApps Permissions = 1 << 50
+
+	// PermissionPinMessages allows pinning and unpinning messages.
+	//
+	// Channel types: Text
+	PermissionPinMessages Permissions = 1 << 51
+
+	// PermissionPinMessages allows pinning and unpinning messages.
+	//
+	// Channel types: Text, Voice, Stage
+	PermissionBypassSlowmode Permissions = 1 << 52
 )
 
 // PermissionName is a human-readable name for a Discord permission.
@@ -300,6 +310,8 @@ const (
 	PermissionNameSendVoiceMessages                PermissionName = "SendVoiceMessages"
 	PermissionNameSendPolls                        PermissionName = "SendPolls"
 	PermissionNameUseExternalApps                  PermissionName = "UseExternalApps"
+	PermissionNamePinMessages                      PermissionName = "PinMessages"
+	PermissionNameBypassSlowmode                   PermissionName = "BypassSlowmode"
 )
 
 // Has returns true if all given permissions are set.
@@ -433,6 +445,10 @@ func (p Permissions) Names() []PermissionName {
 				names = append(names, PermissionNameSendPolls)
 			case PermissionUseExternalApps:
 				names = append(names, PermissionNameUseExternalApps)
+			case PermissionPinMessages:
+				names = append(names, PermissionNamePinMessages)
+			case PermissionBypassSlowmode:
+				names = append(names, PermissionNameBypassSlowmode)
 			}
 		}
 	}
