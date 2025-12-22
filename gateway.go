@@ -15,6 +15,8 @@ package dwaz
 
 import (
 	"encoding/json"
+
+	"github.com/marouanesouiri/stdx/result"
 )
 
 // GatewayIntent represents Discord Gateway Intents.
@@ -322,4 +324,28 @@ type GatewayBot struct {
 		ResetAfter     int `json:"reset_after"`
 		MaxConcurrency int `json:"max_concurrency"`
 	} `json:"session_start_limit"`
+}
+
+// FetchGatewayBot retrieves bot gateway information including recommended shard count and session limits.
+func (r *requester) FetchGatewayBot() result.Result[GatewayBot] {
+	res := r.DoRequest(Request{
+		Method: "GET",
+		URL:    "/gateway/bot",
+	})
+	if res.IsErr() {
+		return result.Err[GatewayBot](res.Err())
+	}
+	body := res.Value()
+	defer body.Close()
+
+	var obj GatewayBot
+	if err := json.NewDecoder(body).Decode(&obj); err != nil {
+		r.logger.WithFields(map[string]any{
+			"method": "GET",
+			"url":    "/gateway/bot",
+			"error":  err,
+		}).Error("failed parsing response")
+		return result.Err[GatewayBot](err)
+	}
+	return result.Ok(obj)
 }
