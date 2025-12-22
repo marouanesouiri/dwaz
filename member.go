@@ -13,7 +13,9 @@
 
 package dwaz
 
-import "time"
+import (
+	"time"
+)
 
 // MemberFlags represents flags of a guild member.
 //
@@ -68,67 +70,59 @@ func (f MemberFlags) Has(flags ...MemberFlags) bool {
 	return BitFieldHas(f, flags...)
 }
 
-// Member is a discord GuildMember
+// Member represents a user's membership in a specific guild.
+//
+// This contains guild-specific information like nickname, roles, and join date.
 type Member struct {
-	// ID is the user's unique Discord snowflake ID.
+	// ID is the user's unique Discord ID.
 	ID Snowflake `json:"id"`
 
-	// GuildID is the member's guild id.
+	// GuildID is the ID of the guild this member belongs to.
 	GuildID Snowflake `json:"guild_id"`
 
-	// User is the member's user object.
-	User User `json:"user"`
-
-	// Nickname is the user's nickname.
+	// Nickname is the member's guild-specific nickname.
+	// Empty if no nickname is set.
 	Nickname string `json:"nick"`
 
-	// Avatar is the member's avatar hash.
-	// Note:
-	//  - this is difrent from the user avatar, this one is spesific to this guild
-	//
-	// Optional:
-	//  - May be empty string if no avatar.
+	// Avatar is the member's guild-specific avatar hash.
+	// This is different from the user's global avatar.
+	// Empty if the member hasn't set a guild avatar.
 	Avatar string `json:"avatar"`
 
-	// Banner is the member's banner hash.
-	// Note:
-	//  - this is difrent from the user banner, this one is spesific to this guild
-	//
-	// Optional:
-	//  - May be empty string if no banner.
+	// Banner is the member's guild-specific banner hash.
+	// This is different from the user's global banner.
+	// Empty if the member hasn't set a guild banner.
 	Banner string `json:"banner"`
 
-	// RoleIDs is the ids of roles this member have
+	// RoleIDs contains the IDs of all roles assigned to this member.
 	RoleIDs []Snowflake `json:"roles,omitempty"`
 
-	// JoinedAt when the user joined the guild
-	//
-	// Optional:
-	//  - Nil in VoiceStateUpdate event if the member was invited as a guest.
-	JoinedAt *time.Time `json:"joined_at"`
+	// JoinedAt is the timestamp when the user joined the guild.
+	// May be nil if the member was invited as a guest.
+	JoinedAt *time.Time `json:"joined_at,omitzero"`
 
-	// PremiumSince when the user started boosting the guild
-	//
-	// Optional:
-	//  - Nil if member is not a server booster
-	PremiumSince *time.Time `json:"premium_since,omitempty"`
+	// PremiumSince is the timestamp when the user started boosting the guild.
+	// Nil if the member is not currently boosting.
+	PremiumSince *time.Time `json:"premium_since,omitzero"`
 
-	// Deaf is whether the user is deafened in voice channels
+	// Deaf indicates whether the user is deafened in voice channels.
 	Deaf bool `json:"deaf,omitempty"`
 
-	// Mute is whether the user is muted in voice channels
+	// Mute indicates whether the user is muted in voice channels.
 	Mute bool `json:"mute,omitempty"`
 
-	// Flags guild member flags represented as a bit set, defaults to 0
+	// Flags contains the member's guild-specific flags.
 	Flags MemberFlags `json:"flags"`
 
-	// Pending is whether the user has not yet passed the guild's Membership Screening requirements
+	// Pending indicates whether the user has completed the guild's Membership Screening.
+	// True if they still need to complete screening.
 	Pending bool `json:"pending"`
 
-	// CommunicationDisabledUntil is when the user's timeout will expire and the user will be able to communicate in the guild again, null or a time in the past if the user is not timed out
-	CommunicationDisabledUntil *time.Time `json:"communication_disabled_until"`
+	// CommunicationDisabledUntil is when the member's timeout expires.
+	// Nil or a past time if the member is not currently timed out.
+	CommunicationDisabledUntil *time.Time `json:"communication_disabled_until,omitzero"`
 
-	// AvatarDecorationData is the data for the member's guild avatar decoration
+	// AvatarDecorationData contains information about the member's avatar decoration.
 	AvatarDecorationData *AvatarDecorationData `json:"avatar_decoration_data"`
 }
 
@@ -139,33 +133,19 @@ func (m *Member) Mention() string {
 	return "<@" + m.ID.String() + ">"
 }
 
+// String implements the fmt.Stringer interface.
+func (m *Member) String() string {
+	return m.Mention()
+}
+
 // CreatedAt returns the time when this member account is created.
 func (m *Member) CreatedAt() time.Time {
 	return m.ID.Timestamp()
 }
 
-// DisplayName returns the member's nickname if set,
-// otherwise it returns their global display name if set,
-// otherwise it falls back to their username.
-//
-// - Nickname: a guild-specific name set by the user or server mods.
-// - Globalname: the name shown across Discord (can differ from username).
-// - Username: the original account username.
-//
-// Example usage:
-//
-//	name := member.DisplayName()
-func (m *Member) DisplayName() string {
-	if m.Nickname != "" {
-		return m.Nickname
-	}
-	return m.User.DisplayName()
-}
-
 // AvatarURL returns the URL to the members's avatar image.
 //
-// If the member has a custom avatar set, it returns the URL to that avatar.
-// Otherwise it returns their global user avatar URL,
+// If the member has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
 // By default, it uses GIF format if the avatar is animated, otherwise PNG.
 //
 // Example usage:
@@ -175,14 +155,13 @@ func (m *Member) AvatarURL() string {
 	if m.Avatar != "" {
 		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
-	return m.User.AvatarURL()
+	return ""
 }
 
 // AvatarURLWith returns the URL to the member's avatar image,
 // allowing explicit specification of image format and size.
 //
-// If the user has a custom avatar set, it returns the URL to that avatar.
-// Otherwise it returns their global user avatar URL using the provided format and size.
+// If the user has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
 //
 // Example usage:
 //
@@ -191,13 +170,12 @@ func (m *Member) AvatarURLWith(format ImageFormat, size ImageSize) string {
 	if m.Avatar != "" {
 		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, format, size)
 	}
-	return m.User.AvatarURLWith(format, size)
+	return ""
 }
 
 // BannerURL returns the URL to the member's banner image.
 //
-// If the member has a custom banner set, it returns the URL to that banner.
-// Otherwise it returns their global user banner URL,
+// If the member has a custom banner set, it returns the URL to that banner, otherwise empty string.
 // By default, it uses GIF format if the banner is animated, otherwise PNG.
 //
 // Example usage:
@@ -207,14 +185,13 @@ func (m *Member) BannerURL() string {
 	if m.Avatar != "" {
 		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
-	return m.User.BannerURL()
+	return ""
 }
 
 // BannerURLWith returns the URL to the member's banner image,
 // allowing explicit specification of image format and size.
 //
-// If the user has a custom banner set, it returns the URL to that avatar.
-// Otherwise it returns their global user banner URL using the provided format and size.
+// If the user has a custom banner set, it returns the URL to that avatar, otherwise empty string.
 //
 // Example usage:
 //
@@ -223,7 +200,7 @@ func (m *Member) BannerURLWith(format ImageFormat, size ImageSize) string {
 	if m.Avatar != "" {
 		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
 	}
-	return m.User.BannerURLWith(format, size)
+	return ""
 }
 
 // AvatarDecorationURL returns the URL to the member's avatar decoration image.
@@ -255,13 +232,209 @@ func (m *Member) AvatarDecorationURLWith(size ImageSize) string {
 	return ""
 }
 
-// ResolvedMember represents a member with additional permissions field, typically included in an interaction object.
+// FullMember represents a complete guild member with their associated user information.
 //
-// Info:
-//   - It embeds the Member struct and adds a Permissions field to describe the
-//     member's permissions in the context of the interaction.
-type ResolvedMember struct {
+// This extends Member with the full User object, combining both
+// guild-specific data (roles, nickname) and global user data (username, avatar).
+type FullMember struct {
 	Member
-	// Permissions is the total permissions of the member in the channel, including overwrites.
+
+	// User contains the member's global Discord user information.
+	User User `json:"user"`
+}
+
+// DisplayName returns the member's nickname if set,
+// otherwise it returns their global display name if set,
+// otherwise it falls back to their username.
+//
+// - Nickname: a guild-specific name set by the user or server mods.
+// - Globalname: the name shown across Discord (can differ from username).
+// - Username: the original account username.
+//
+// Example usage:
+//
+//	name := member.DisplayName()
+func (m *FullMember) DisplayName() string {
+	if m.Nickname != "" {
+		return m.Nickname
+	}
+	return m.User.DisplayName()
+}
+
+// AvatarURL returns the URL to the members's avatar image.
+//
+// If the member has a custom avatar set, it returns the URL to that avatar.
+// Otherwise it returns their global user avatar URL,
+// By default, it uses GIF format if the avatar is animated, otherwise PNG.
+//
+// Example usage:
+//
+//	url := member.AvatarURL()
+func (m *FullMember) AvatarURL() string {
+	if m.Avatar != "" {
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+	}
+	return m.User.AvatarURL()
+}
+
+// AvatarURLWith returns the URL to the member's avatar image,
+// allowing explicit specification of image format and size.
+//
+// If the user has a custom avatar set, it returns the URL to that avatar.
+// Otherwise it returns their global user avatar URL using the provided format and size.
+//
+// Example usage:
+//
+//	url := member.AvatarURLWith(ImageFormatWebP, ImageSize512)
+func (m *FullMember) AvatarURLWith(format ImageFormat, size ImageSize) string {
+	if m.Avatar != "" {
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, format, size)
+	}
+	return m.User.AvatarURLWith(format, size)
+}
+
+// BannerURL returns the URL to the member's banner image.
+//
+// If the member has a custom banner set, it returns the URL to that banner.
+// Otherwise it returns their global user banner URL,
+// By default, it uses GIF format if the banner is animated, otherwise PNG.
+//
+// Example usage:
+//
+//	url := member.BannerURL()
+func (m *FullMember) BannerURL() string {
+	if m.Avatar != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+	}
+	return m.User.BannerURL()
+}
+
+// BannerURLWith returns the URL to the member's banner image,
+// allowing explicit specification of image format and size.
+//
+// If the user has a custom banner set, it returns the URL to that avatar.
+// Otherwise it returns their global user banner URL using the provided format and size.
+//
+// Example usage:
+//
+//	url := member.BannerURLWith(ImageFormatWebP, ImageSize512)
+func (m *FullMember) BannerURLWith(format ImageFormat, size ImageSize) string {
+	if m.Avatar != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
+	}
+	return m.User.BannerURLWith(format, size)
+}
+
+// ResolvedMember represents a member with their computed permissions.
+//
+// This is typically used in interaction contexts where you need to know
+// what permissions the member has in the channel where the interaction occurred.
+type ResolvedMember struct {
+	FullMember
+
+	// Permissions contains all permissions the member has in a specific channel,
+	// including role permissions and permission overwrites.
 	Permissions Permissions `json:"permissions,omitempty"`
+}
+
+type PartialMember struct {
+	// ID is the user's unique Discord ID.
+	ID Snowflake `json:"id"`
+
+	// GuildID is the ID of the guild this member belongs to.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Nickname is the member's guild-specific nickname.
+	// Empty if no nickname is set.
+	Nickname string `json:"nick"`
+
+	// Avatar is the member's guild-specific avatar hash.
+	// This is different from the user's global avatar.
+	// Empty if the member hasn't set a guild avatar.
+	Avatar string `json:"avatar"`
+
+	// Banner is the member's guild-specific banner hash.
+	// This is different from the user's global banner.
+	// Empty if the member hasn't set a guild banner.
+	Banner string `json:"banner"`
+
+	// RoleIDs contains the IDs of all roles assigned to this member.
+	RoleIDs []Snowflake `json:"roles,omitempty"`
+}
+
+// Mention returns a Discord mention string for the user.
+//
+// Example output: "<@123456789012345678>"
+func (m *PartialMember) Mention() string {
+	return "<@" + m.ID.String() + ">"
+}
+
+// String implements the fmt.Stringer interface.
+func (m *PartialMember) String() string {
+	return m.Mention()
+}
+
+// CreatedAt returns the time when this member account is created.
+func (m *PartialMember) CreatedAt() time.Time {
+	return m.ID.Timestamp()
+}
+
+// AvatarURL returns the URL to the members's avatar image.
+//
+// If the member has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
+// By default, it uses GIF format if the avatar is animated, otherwise PNG.
+//
+// Example usage:
+//
+//	url := member.AvatarURL()
+func (m *PartialMember) AvatarURL() string {
+	if m.Avatar != "" {
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+	}
+	return ""
+}
+
+// AvatarURLWith returns the URL to the member's avatar image,
+// allowing explicit specification of image format and size.
+//
+// If the user has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
+//
+// Example usage:
+//
+//	url := member.AvatarURLWith(ImageFormatWebP, ImageSize512)
+func (m *PartialMember) AvatarURLWith(format ImageFormat, size ImageSize) string {
+	if m.Avatar != "" {
+		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, format, size)
+	}
+	return ""
+}
+
+// BannerURL returns the URL to the member's banner image.
+//
+// If the member has a custom banner set, it returns the URL to that banner, otherwise empty string.
+// By default, it uses GIF format if the banner is animated, otherwise PNG.
+//
+// Example usage:
+//
+//	url := member.BannerURL()
+func (m *PartialMember) BannerURL() string {
+	if m.Avatar != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+	}
+	return ""
+}
+
+// BannerURLWith returns the URL to the member's banner image,
+// allowing explicit specification of image format and size.
+//
+// If the user has a custom banner set, it returns the URL to that avatar, otherwise empty string.
+//
+// Example usage:
+//
+//	url := member.BannerURLWith(ImageFormatWebP, ImageSize512)
+func (m *PartialMember) BannerURLWith(format ImageFormat, size ImageSize) string {
+	if m.Avatar != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
+	}
+	return ""
 }
