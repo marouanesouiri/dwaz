@@ -1,30 +1,14 @@
-/************************************************************************************
- *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
- *
- * SPDX-License-Identifier: BSD-3-Clause
- *
- * Copyright 2025 Marouane Souiri
- *
- * Licensed under the BSD 3-Clause License.
- * See the LICENSE file for details.
- *
- ************************************************************************************/
-
 package dwaz
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"math"
+	"io"
 	"net/http"
-	"regexp"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/marouanesouiri/stdx/result"
+	"github.com/marouanesouiri/stdx/xlog"
 )
 
 /***********************
@@ -33,292 +17,167 @@ import (
 
 const (
 	apiVersion       = "v10"
-	baseApiUrl       = "https://discord.com/api/" + apiVersion
-	maxRetries       = 5
-	maxRequestAge    = 10 * time.Second
-	headerRetryAfter = "Retry-After"
-	headerGlobal     = "X-RateLimit-Global"
-	headerRemaining  = "X-RateLimit-Remaining"
-	headerResetAfter = "X-RateLimit-Reset-After"
-	headerBucket     = "X-RateLimit-Bucket"
-	headerScope      = "X-RateLimit-Scope"
+	defaultBaseURL   = "https://discord.com/api/" + apiVersion
+	defaultUserAgent = "DiscordBot (dwaz, v0.0.1)"
 	headerReason     = "X-Audit-Log-Reason"
 )
 
 /***********************
- *   GlobalRateLimit   *
+ *   Configuration     *
  ***********************/
 
-// globalRateLimit stores the earliest time global requests can resume.
-type globalRateLimit int64
+// RequesterConfig holds configuration for the HTTP requester.
+type RequesterConfig struct {
+	// BaseURL is the base URL for API requests. Defaults to Discord API.
+	// Change this to use a reverse proxy like nirn-proxy.
+	BaseURL string
 
-// set updates the global reset time if the new time is later.
-func (g *globalRateLimit) set(t time.Time) {
-	newVal := t.UnixNano()
-	for {
-		oldVal := atomic.LoadInt64((*int64)(g))
-		if newVal <= oldVal {
-			return
-		}
-		if atomic.CompareAndSwapInt64((*int64)(g), oldVal, newVal) {
-			return
-		}
+	// APIVersion is the Discord API version. Defaults to "v10".
+	APIVersion string
+
+	// UserAgent is the User-Agent header value.
+	UserAgent string
+
+	// MaxRetries is the maximum number of retries for failed requests.
+	MaxRetries int
+
+	// Token is the Bot token.
+	Token string
+
+	// HTTPClient is a custom HTTP client.
+	HTTPClient *http.Client
+}
+
+func DefaultRequesterConfig() RequesterConfig {
+	return RequesterConfig{
+		BaseURL:    defaultBaseURL,
+		APIVersion: apiVersion,
+		UserAgent:  defaultUserAgent,
+		HTTPClient: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				Proxy:                 http.ProxyFromEnvironment,
+				MaxIdleConns:          500,
+				MaxIdleConnsPerHost:   100,
+				MaxConnsPerHost:       200,
+				IdleConnTimeout:       120 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				ForceAttemptHTTP2:     true,
+			},
+		},
 	}
-}
-
-// get returns the current global reset time.
-func (g *globalRateLimit) get() time.Time {
-	return time.Unix(0, atomic.LoadInt64((*int64)(g)))
-}
-
-/***********************
- *   ratelimitBucket   *
- ***********************/
-
-// ratelimitBucket holds per-route rate limit info but no methods.
-type ratelimitBucket struct {
-	sync.Mutex
-	remaining int
-	resetAt   time.Time
 }
 
 /***********************
  *   Requester         *
  ***********************/
 
-// requester handles HTTP requests with Discord rate limit compliance.
+// requester handles HTTP requests with basic retry logic, intended to be used with a proxy.
 type requester struct {
-	client               *http.Client
-	token                string
-	buckets              sync.Map // map[bucketRoute:majorParam]*Bucket
-	global               globalRateLimit
-	userAgent            string
-	logger               Logger
-	retryableStatusCodes map[int]struct{}
+	config RequesterConfig
+	logger xlog.Logger
 }
 
-// newRequester creates a new Requester with the given bot token and logger.
-func newRequester(client *http.Client, token string, logger Logger) *requester {
-	if client == nil {
-		client = &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-
-				MaxIdleConns:        500,
-				MaxIdleConnsPerHost: 100,
-				MaxConnsPerHost:     200,
-
-				IdleConnTimeout:       120 * time.Second,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-
-				DisableKeepAlives: false,
-				ForceAttemptHTTP2: true,
-			},
-		}
-	}
-
+// newRequester creates a new Requester with the given config.
+func newRequester(config RequesterConfig, logger xlog.Logger) *requester {
 	return &requester{
-		client:    client,
-		token:     "Bot " + token,
-		userAgent: "DiscordBot (dwaz)",
-		logger:    logger,
-		retryableStatusCodes: map[int]struct{}{
-			429: {}, 500: {}, 502: {}, 503: {}, 504: {},
-		},
+		config: config,
+		logger: logger,
 	}
 }
 
 // Shutdown gracefully closes the underlying HTTP client's idle connections.
-//
-// It should be called before exiting your application to ensure
-// that any idle connections in the HTTP transport are closed cleanly,
-// preventing resource leaks and keeping a clean shutdown process.
 func (r *requester) Shutdown() {
-	if r.client != nil {
-		if tr, ok := r.client.Transport.(interface{ CloseIdleConnections() }); ok {
+	if r.config.HTTPClient != nil {
+		if tr, ok := r.config.HTTPClient.Transport.(interface{ CloseIdleConnections() }); ok {
 			tr.CloseIdleConnections()
 		}
 	}
 }
 
-// updateBucket updates bucket state from headers.
-func (r *requester) updateBucket(b *ratelimitBucket, h http.Header) {
-	if rem := h.Get(headerRemaining); rem != "" {
-		if n, err := strconv.Atoi(rem); err == nil {
-			b.remaining = n
-		}
-	}
-	if resetAfter := h.Get(headerResetAfter); resetAfter != "" {
-		if dur, err := strconv.ParseFloat(resetAfter, 64); err == nil {
-			b.resetAt = time.Now().Add(time.Duration(dur * float64(time.Second)))
-		}
+func isRetryableStatus(code int) bool {
+	switch code {
+	case 429, 502, 503, 504:
+		return true
+	default:
+		return false
 	}
 }
 
-// do sends an HTTP request with automatic rate limit and retry handling.
-func (r *requester) do(method, url string, body []byte, authenticateWithToken bool, reason string) (*http.Response, error) {
-	bucketKey := r.generateBucketKey(method, url)
-
-	// Get or create bucket for rate limit tracking
-	bucket, _ := r.buckets.LoadOrStore(bucketKey, &ratelimitBucket{remaining: 1})
-	b := bucket.(*ratelimitBucket)
-
-	for tries := range maxRetries {
-		r.logger.Debug(fmt.Sprintf("Attempt #%d %s %s", tries+1, method, url))
-
-		b.Lock()
-
-		if b.remaining == 0 && time.Now().Before(b.resetAt) {
-			wait := time.Until(b.resetAt) + 50*time.Millisecond
-			r.logger.Debug(
-				fmt.Sprintf("Bucket rate limited on route %s: waiting %v before retrying", bucketKey, wait),
-			)
-			b.Unlock()
-			time.Sleep(wait)
-			b.Lock()
-		}
-
-		if now, globalReset := time.Now(), r.global.get(); globalReset.After(now) {
-			wait := globalReset.Sub(now) + 100*time.Millisecond
-			r.logger.Debug(
-				fmt.Sprintf("Global rate limit active: waiting %v before retrying request %s %s", wait, method, url),
-			)
-			b.Unlock()
-			time.Sleep(wait)
-			b.Lock()
-		}
-
-		req, err := http.NewRequest(method, baseApiUrl+url, bytes.NewReader(body))
-		if err != nil {
-			r.logger.Error(fmt.Sprintf("Failed building request for %s %s: %v", method, url, err))
-			return nil, err
-		}
-
-		if authenticateWithToken {
-			req.Header.Set("Authorization", r.token)
-		}
-		req.Header.Set("User-Agent", r.userAgent)
-		if method == "POST" || method == "PUT" || method == "PATCH" {
-			req.Header.Set("Content-Type", "application/json")
-		}
-		req.Header.Set("Accept", "application/json")
-
-		if reason != "" {
-			req.Header.Set(headerReason, reason)
-		}
-
-		// Execute request
-		resp, err := r.client.Do(req)
-		if err != nil {
-			r.logger.Warn(fmt.Sprintf("HTTP request error for %s %s: %v", method, url, err))
-			b.Unlock()
-			time.Sleep(time.Second)
-			continue
-		}
-
-		// Handle rate limits and retryable errors
-		if resp.StatusCode == 429 {
-			retry := resp.Header.Get(headerRetryAfter)
-			retryAfter := time.Second
-			if retry != "" {
-				if sec, err := strconv.ParseFloat(retry, 64); err == nil {
-					whole, frac := math.Modf(sec)
-					retryAfter = time.Duration(whole)*time.Second + time.Duration(frac*1000)*time.Millisecond
-				}
-			}
-
-			r.logger.Debug(fmt.Sprintf("429 rate limit hit on route %s, retrying after %v", bucketKey, retryAfter))
-
-			r.updateBucket(b, resp.Header)
-			if resp.Header.Get(headerGlobal) == "true" || resp.Header.Get(headerScope) == "shared" {
-				r.global.set(time.Now().Add(retryAfter))
-			}
-
-			b.Unlock()
-			resp.Body.Close()
-			time.Sleep(retryAfter)
-			continue
-		}
-
-		if _, retry := r.retryableStatusCodes[resp.StatusCode]; retry {
-			r.logger.Warn(fmt.Sprintf("Retryable status %d for %s %s, retrying...", resp.StatusCode, method, url))
-			resp.Body.Close()
-			b.Unlock()
-			time.Sleep(time.Second)
-			continue
-		}
-
-		r.updateBucket(b, resp.Header)
-		b.Unlock()
-		return resp, nil
-	}
-
-	r.logger.Error(fmt.Sprintf("Max retries reached for %s %s", method, url))
-	return nil, errors.New("max request retries reached")
+// Request represents an HTTP request to be executed by the requester.
+type Request struct {
+	// Body is the raw JSON request body or other data sent to the API.
+	Body []byte
+	// Method is the HTTP verb (GET, POST, etc.) to use for the request.
+	Method string
+	// URL is the endpoint path (e.g., "/guilds/123") relative to the base URL.
+	URL string
+	// Reason is the value for the "X-Audit-Log-Reason" header, useful for audit logs.
+	Reason string
+	// NoAuth indicates whether to skip token-based authentication for this request.
+	// If false (default), the "Authorization" header will be automatically set using the bot token.
+	NoAuth bool
 }
 
-var (
-	reSnowflake     = regexp.MustCompile(`\d{17,19}`)
-	reReactions     = regexp.MustCompile(`/reactions/.*`)
-	reWebhooksToken = regexp.MustCompile(`/webhooks/(\d{17,19})/[^/?]+`)
-)
+// DoRequest executes a request with a raw body and returns the response body as a stream.
+// The caller is responsible for closing the body.
+func (r *requester) DoRequest(req Request) result.Result[io.ReadCloser] {
+	fullURL := r.config.BaseURL + req.URL
 
-const (
-	oldMessageCutoffMS = 14 * 24 * 60 * 60 * 1000 // 14 days in milliseconds
-)
-
-func (r *requester) generateBucketKey(method, endpoint string) string {
-	if strings.HasPrefix(endpoint, "/interactions/") && strings.HasSuffix(endpoint, "/callback") {
-		return method + ":/interactions/:id/:token/callback"
-	}
-
-	majorParam := reSnowflake.FindString(endpoint)
-
-	if majorParam == "" {
-		baseRoute := reSnowflake.ReplaceAllString(endpoint, ":id")
-		baseRoute = reReactions.ReplaceAllString(baseRoute, "/reactions/:reaction")
-		baseRoute = reWebhooksToken.ReplaceAllString(baseRoute, "/webhooks/:id/:token")
-		return method + ":" + baseRoute
-	}
-
-	var b strings.Builder
-	b.Grow(len(endpoint) + 20)
-
-	start := 0
-	firstFound := false
-	for _, loc := range reSnowflake.FindAllStringIndex(endpoint, -1) {
-		b.WriteString(endpoint[start:loc[0]])
-
-		id := endpoint[loc[0]:loc[1]]
-		if !firstFound && id == majorParam {
-			b.WriteString(id)
-			firstFound = true
-		} else {
-			b.WriteString(":id")
+	for i := 0; i <= r.config.MaxRetries; i++ {
+		if i > 0 {
+			r.logger.WithFields(map[string]any{
+				"method":  req.Method,
+				"url":     fullURL,
+				"attempt": i + 1,
+			}).Debug("retrying request")
+			time.Sleep(100 * time.Millisecond)
 		}
-		start = loc[1]
-	}
-	b.WriteString(endpoint[start:])
 
-	baseRoute := b.String()
-
-	baseRoute = reReactions.ReplaceAllString(baseRoute, "/reactions/:reaction")
-	baseRoute = reWebhooksToken.ReplaceAllString(baseRoute, "/webhooks/:id/:token")
-
-	if method == "DELETE" && strings.HasPrefix(endpoint, "/channels/") && strings.Contains(endpoint, "/messages/") {
-		lastSlash := strings.LastIndex(endpoint, "/")
-		if lastSlash != -1 && lastSlash < len(endpoint)-1 {
-			messageIdStr := endpoint[lastSlash+1:]
-			if messageId, err := strconv.ParseUint(messageIdStr, 10, 64); err == nil {
-				snow := Snowflake(messageId)
-				if time.Now().UnixMilli()-snow.Timestamp().UnixMilli() > oldMessageCutoffMS {
-					baseRoute += "/oldmessage"
-				}
-			}
+		httpRequest, err := http.NewRequest(req.Method, fullURL, bytes.NewReader(req.Body))
+		if err != nil {
+			return result.Err[io.ReadCloser](fmt.Errorf("failed creating request: %v", err))
 		}
+
+		if !req.NoAuth {
+			httpRequest.Header.Set("Authorization", r.config.Token)
+		}
+		httpRequest.Header.Set("User-Agent", r.config.UserAgent)
+		httpRequest.Header.Set("Content-Type", "application/json")
+		httpRequest.Header.Set("Accept", "application/json")
+
+		if req.Reason != "" {
+			httpRequest.Header.Set(headerReason, req.Reason)
+		}
+
+		resp, err := r.config.HTTPClient.Do(httpRequest)
+		if err != nil {
+			r.logger.WithFields(map[string]any{
+				"method":   req.Method,
+				"endpoint": req.URL,
+				"error":    err,
+			}).Warn("request network error")
+			continue
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return result.Ok(resp.Body)
+		}
+
+		if isRetryableStatus(resp.StatusCode) {
+			resp.Body.Close()
+			r.logger.WithFields(map[string]any{
+				"method":   req.Method,
+				"endpoint": req.URL,
+				"status":   resp.StatusCode,
+			}).Warn("request failed with retryable status")
+			continue
+		}
+
+		resp.Body.Close()
+		return result.Err[io.ReadCloser](fmt.Errorf("request failed with status %d", resp.StatusCode))
 	}
 
-	return method + ":" + baseRoute
+	return result.Err[io.ReadCloser](fmt.Errorf("max retries reached, endpoint %s", req.URL))
 }
