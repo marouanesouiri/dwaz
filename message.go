@@ -16,10 +16,41 @@ package dwaz
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"time"
 
-	"github.com/bytedance/sonic"
+	"github.com/marouanesouiri/stdx/optional"
+)
+
+// Embed field limits as defined by Discord's API.
+//
+// Reference: https://discord.com/developers/docs/resources/channel#embed-limits
+const (
+	// EmbedTitleMaxLength is the maximum length for an embed title.
+	EmbedTitleMaxLength = 256
+
+	// EmbedDescriptionMaxLength is the maximum length for an embed description.
+	EmbedDescriptionMaxLength = 4096
+
+	// EmbedFieldsMaxCount is the maximum number of fields in an embed.
+	EmbedFieldsMaxCount = 25
+
+	// EmbedFieldNameMaxLength is the maximum length for an embed field name.
+	EmbedFieldNameMaxLength = 256
+
+	// EmbedFieldValueMaxLength is the maximum length for an embed field value.
+	EmbedFieldValueMaxLength = 1024
+
+	// EmbedFooterTextMaxLength is the maximum length for embed footer text.
+	EmbedFooterTextMaxLength = 2048
+
+	// EmbedAuthorNameMaxLength is the maximum length for an embed author name.
+	EmbedAuthorNameMaxLength = 256
+
+	// EmbedTotalCharacterLimit is the combined character limit across all embed fields.
+	// This includes title, description, field names, field values, footer text, and author name.
+	EmbedTotalCharacterLimit = 6000
 )
 
 // MessageType represents the type of a message on Discord.
@@ -232,6 +263,11 @@ func (c *MentionChannel) Mention() string {
 	return "<#" + c.ID.String() + ">"
 }
 
+// String implements the fmt.Stringer interface.
+func (c *MentionChannel) String() string {
+	return c.Mention()
+}
+
 // StickerItem represents a sticker included in a message.
 //
 // Reference: https://discord.com/developers/docs/resources/sticker#sticker-item-object
@@ -401,13 +437,13 @@ type PartialMessage struct {
 	Attachments []Attachment `json:"attachments"`
 
 	// Timestamp is when the message was sent.
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp time.Time `json:"timestamp,omitzero"`
 
 	// EditedTimestamp is when the message was last edited.
 	//
 	// Optional:
 	//   - Will be nil if the message has never been edited.
-	EditedTimestamp *time.Time `json:"edited_timestamp"`
+	EditedTimestamp *time.Time `json:"edited_timestamp,omitzero"`
 
 	// Flags is a bitfield of message flags (e.g., crossposted, ephemeral).
 	Flags MessageFlags `json:"flags"`
@@ -522,7 +558,7 @@ type MessageCall struct {
 	//
 	// Optional:
 	//   - Will be nil if the call is ongoing or not applicable.
-	EndedTimestamp *time.Time `json:"ended_timestamp"`
+	EndedTimestamp *time.Time `json:"ended_timestamp,omitzero"`
 }
 
 // MessageApplication represents a partial application object for Rich Presence or webhooks.
@@ -610,7 +646,7 @@ type Embed struct {
 	// Timestamp is the timestamp of the embed content in ISO8601 format.
 	//
 	// Optional, zero value if not set.
-	Timestamp *time.Time `json:"timestamp"`
+	Timestamp *time.Time `json:"timestamp,omitzero"`
 
 	// Color is the color code of the embed (decimal integer).
 	//
@@ -848,13 +884,13 @@ type Message struct {
 	Content string `json:"content"`
 
 	// Timestamp is when the message was sent.
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp time.Time `json:"timestamp,omitzero"`
 
 	// EditedTimestamp is when the message was last edited.
 	//
 	// Optional:
-	//   - Will be nil if the message has never been edited.
-	EditedTimestamp *time.Time `json:"edited_timestamp"`
+	//   - Will be None if the message has never been edited.
+	EditedTimestamp optional.Option[time.Time] `json:"edited_timestamp,omitzero"`
 
 	// TTS indicates whether the message is a text-to-speech message.
 	TTS bool `json:"tts"`
@@ -976,7 +1012,7 @@ type Message struct {
 	//
 	// Optional:
 	//   - Will be nil if the message is not in a thread.
-	Position *int `json:"position"`
+	Position optional.Option[int] `json:"position"`
 
 	// GuildID is the ID of the guild where the message was sent.
 	//
@@ -1006,7 +1042,7 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 		Components []json.RawMessage `json:"components"`
 		tempMessage
 	}
-	if err := sonic.Unmarshal(buf, &temp); err != nil {
+	if err := json.Unmarshal(buf, &temp); err != nil {
 		return err
 	}
 	*m = Message(temp.tempMessage)
@@ -1036,35 +1072,6 @@ func (m *Message) URL() string {
 	return "https://discord.com/channels/" + source + "/" + m.ChannelID.String() + "/" + m.ID.String()
 }
 
-type AllowedMentionType string
-
-const (
-	AllowedMentionTypeRoles    AllowedMentionType = "roles"
-	AllowedMentionTypeUsers    AllowedMentionType = "users"
-	AllowedMentionTypeEveryone AllowedMentionType = "everyone"
-)
-
-type AllowedMentions struct {
-	Parse       []AllowedMentionType `json:"parse"`
-	Roles       []Snowflake          `json:"roles"`
-	Users       []Snowflake          `json:"users"`
-	RepliedUser bool                 `json:"replied_user"`
-}
-
-type MessageCreateOptions struct {
-	Content          string             `json:"content,omitempty"`
-	Nonce            string             `json:"nonce,omitempty"`
-	TTS              bool               `json:"tts,omitempty"`
-	Embeds           []Embed            `json:"embeds,omitempty"`
-	AllowedMentions  *AllowedMentions   `json:"allowed_mentions,omitempty"`
-	MessageReference *MessageReference  `json:"message_reference,omitempty"`
-	Components       []LayoutComponent  `json:"components,omitempty"`
-	StickerIDs       []Snowflake        `json:"sticker_ids,omitempty"`
-	Flags            MessageFlags       `json:"flags,omitempty"`
-	EnforceNonce     bool               `json:"enforce_nonce,omitempty"`
-	Poll             *PollCreateOptions `json:"poll,omitempty"`
-}
-
 /////////////
 
 // EmbedBuilder helps build an Embed with chainable methods.
@@ -1079,8 +1086,8 @@ func NewEmbedBuilder() *EmbedBuilder {
 
 // SetTitle sets the embed title (max 256 chars).
 func (b *EmbedBuilder) SetTitle(title string) *EmbedBuilder {
-	if len(title) > 256 {
-		title = title[:256]
+	if len(title) > EmbedTitleMaxLength {
+		panic("Embed title must be max " + strconv.Itoa(EmbedTitleMaxLength) + " characters, got " + strconv.Itoa(len(title)))
 	}
 	b.embed.Title = title
 	return b
@@ -1088,8 +1095,8 @@ func (b *EmbedBuilder) SetTitle(title string) *EmbedBuilder {
 
 // SetDescription sets the embed description (max 4096 chars).
 func (b *EmbedBuilder) SetDescription(desc string) *EmbedBuilder {
-	if len(desc) > 4096 {
-		desc = desc[:4096]
+	if len(desc) > EmbedDescriptionMaxLength {
+		panic("Embed description must be max " + strconv.Itoa(EmbedDescriptionMaxLength) + " characters, got " + strconv.Itoa(len(desc)))
 	}
 	b.embed.Description = desc
 	return b
@@ -1115,8 +1122,8 @@ func (b *EmbedBuilder) SetColor(color Color) *EmbedBuilder {
 
 // SetFooter sets the embed footer text and optional icon URL.
 func (b *EmbedBuilder) SetFooter(text, iconURL string) *EmbedBuilder {
-	if len(text) > 2048 {
-		text = text[:2048]
+	if len(text) > EmbedFooterTextMaxLength {
+		panic("Embed footer text must be max " + strconv.Itoa(EmbedFooterTextMaxLength) + " characters, got " + strconv.Itoa(len(text)))
 	}
 	b.embed.Footer = &EmbedFooter{
 		Text:    text,
@@ -1139,8 +1146,8 @@ func (b *EmbedBuilder) SetThumbnail(url string) *EmbedBuilder {
 
 // SetAuthor sets the embed author name and optional URL/icon.
 func (b *EmbedBuilder) SetAuthor(name, url, iconURL string) *EmbedBuilder {
-	if len(name) > 256 {
-		name = name[:256]
+	if len(name) > EmbedAuthorNameMaxLength {
+		panic("Embed author name must be max " + strconv.Itoa(EmbedAuthorNameMaxLength) + " characters, got " + strconv.Itoa(len(name)))
 	}
 	b.embed.Author = &EmbedAuthor{
 		Name:    name,
@@ -1152,14 +1159,14 @@ func (b *EmbedBuilder) SetAuthor(name, url, iconURL string) *EmbedBuilder {
 
 // AddField appends a field to the embed fields slice.
 func (b *EmbedBuilder) AddField(name, value string, inline bool) *EmbedBuilder {
-	if len(b.embed.Fields) >= 25 {
-		return b
+	if len(b.embed.Fields) >= EmbedFieldsMaxCount {
+		panic("Embed can contain a maximum of " + strconv.Itoa(EmbedFieldsMaxCount) + " fields")
 	}
-	if len(name) > 256 {
-		name = name[:256]
+	if len(name) > EmbedFieldNameMaxLength {
+		panic("Embed field name must be max " + strconv.Itoa(EmbedFieldNameMaxLength) + " characters, got " + strconv.Itoa(len(name)))
 	}
-	if len(value) > 1024 {
-		value = value[:1024]
+	if len(value) > EmbedFieldValueMaxLength {
+		panic("Embed field value must be max " + strconv.Itoa(EmbedFieldValueMaxLength) + " characters, got " + strconv.Itoa(len(value)))
 	}
 	b.embed.Fields = append(b.embed.Fields, EmbedField{
 		Name:   name,
@@ -1169,20 +1176,47 @@ func (b *EmbedBuilder) AddField(name, value string, inline bool) *EmbedBuilder {
 	return b
 }
 
+// AddBlankField appends a blank field to the embed fields slice.
+func (b *EmbedBuilder) AddBlankField(inline bool) *EmbedBuilder {
+	if len(b.embed.Fields) >= EmbedFieldsMaxCount {
+		panic("Embed can contain a maximum of " + strconv.Itoa(EmbedFieldsMaxCount) + " fields")
+	}
+	b.embed.Fields = append(b.embed.Fields, EmbedField{
+		Name:   "\u200E",
+		Value:  "\u200E",
+		Inline: inline,
+	})
+	return b
+}
+
 // SetFields sets all embed fields at once.
-//
-// Note: This method does not enforce field limits or length constraints.
-// It's recommended to use EmbedBuilder.AddField for validation.
-func (e *EmbedBuilder) SetFields(fields ...EmbedField) {
+func (e *EmbedBuilder) SetFields(fields ...EmbedField) *EmbedBuilder {
+	if len(fields) > EmbedFieldsMaxCount {
+		panic("Embed can contain a maximum of " + strconv.Itoa(EmbedFieldsMaxCount) + " fields, got " + strconv.Itoa(len(fields)))
+	}
+	for i, field := range fields {
+		if len(field.Name) > EmbedFieldNameMaxLength {
+			panic("Embed field[" + strconv.Itoa(i) + "] name must be max " + strconv.Itoa(EmbedFieldNameMaxLength) + " characters, got " + strconv.Itoa(len(field.Name)))
+		}
+		if len(field.Value) > EmbedFieldValueMaxLength {
+			panic("Embed field[" + strconv.Itoa(i) + "] value must be max " + strconv.Itoa(EmbedFieldValueMaxLength) + " characters, got " + strconv.Itoa(len(field.Value)))
+		}
+	}
 	e.embed.Fields = fields
+	return e
 }
 
 // RemoveField removes a field from the EmbedBuilder
 func (b *EmbedBuilder) RemoveField(i int) *EmbedBuilder {
 	if len(b.embed.Fields) > i {
-		b.embed.Fields = append(b.embed.Fields[:i], b.embed.Fields[i+1:]...)
+		b.embed.Fields = slices.Delete(b.embed.Fields, i, i+1)
 	}
 	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *EmbedBuilder) Reset() {
+	b.embed = Embed{}
 }
 
 // Build returns the final Embed object ready to send.
