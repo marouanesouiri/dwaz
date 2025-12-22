@@ -17,8 +17,28 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strconv"
+)
 
-	"github.com/bytedance/sonic"
+// Component limits as defined by Discord's API.
+const (
+	// ActionRowMaxComponents is the maximum number of interactive components in an ActionRow.
+	ActionRowMaxComponents = 5
+
+	// StringSelectMenuMaxOptions is the maximum number of options in a StringSelectMenu.
+	StringSelectMenuMaxOptions = 25
+
+	// SectionMinComponents is the minimum number of components in a Section.
+	SectionMinComponents = 1
+
+	// SectionMaxComponents is the maximum number of components in a Section.
+	SectionMaxComponents = 3
+
+	// MediaGalleryMinItems is the minimum number of items in a MediaGallery.
+	MediaGalleryMinItems = 1
+
+	// MediaGalleryMaxItems is the maximum number of items in a MediaGallery.
+	MediaGalleryMaxItems = 10
 )
 
 // ComponentType represents the type of a Discord component.
@@ -278,7 +298,7 @@ func (c *ActionRowComponent) UnmarshalJSON(buf []byte) error {
 	}
 
 	var temp tempActionRowComponent
-	if err := sonic.Unmarshal(buf, &temp); err != nil {
+	if err := json.Unmarshal(buf, &temp); err != nil {
 		return err
 	}
 
@@ -310,7 +330,7 @@ var _ json.Marshaler = (*ActionRowComponent)(nil)
 func (c *ActionRowComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeActionRow
 	type NoMethod ActionRowComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // ButtonStyle represents different styles for interactive buttons, each with specific actions and required fields.
@@ -424,7 +444,7 @@ var _ json.Marshaler = (*ButtonComponent)(nil)
 func (c *ButtonComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeButton
 	type NoMethod ButtonComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // SelectOptionStructure represents an option in a StringSelectMenuComponent.
@@ -518,7 +538,7 @@ var _ json.Marshaler = (*StringSelectMenuComponent)(nil)
 func (c *StringSelectMenuComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeStringSelect
 	type NoMethod StringSelectMenuComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // TextInputStyle represents the style of a TextInputComponent.
@@ -590,7 +610,7 @@ var _ json.Marshaler = (*TextInputComponent)(nil)
 func (c *TextInputComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeTextInput
 	type NoMethod TextInputComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // SelectDefaultValueType represents the type of a default value in a select menu component.
@@ -665,7 +685,7 @@ var _ json.Marshaler = (*UserSelectMenuComponent)(nil)
 func (c *UserSelectMenuComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeUserSelect
 	type NoMethod UserSelectMenuComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // RoleSelectMenuComponent represents a role select menu, an interactive component allowing users to select one or more roles in a message.
@@ -721,7 +741,7 @@ var _ json.Marshaler = (*RoleSelectMenuComponent)(nil)
 func (c *RoleSelectMenuComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeRoleSelect
 	type NoMethod RoleSelectMenuComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // MentionableSelectMenuComponent represents a mentionable select menu component.
@@ -761,7 +781,7 @@ var _ json.Marshaler = (*MentionableSelectMenuComponent)(nil)
 func (c *MentionableSelectMenuComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeMentionableSelect
 	type NoMethod MentionableSelectMenuComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // ChannelSelectMenuComponent represents a channel select menu, an interactive component allowing users to select one or more channels in a message.
@@ -823,7 +843,7 @@ var _ json.Marshaler = (*ChannelSelectMenuComponent)(nil)
 func (c *ChannelSelectMenuComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeChannelSelect
 	type NoMethod ChannelSelectMenuComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // SectionComponent is a top-level layout component that contextually associates content with an accessory component.
@@ -865,7 +885,7 @@ func (c *SectionComponent) UnmarshalJSON(buf []byte) error {
 	}
 
 	var temp tempSectionComponent
-	if err := sonic.Unmarshal(buf, &temp); err != nil {
+	if err := json.Unmarshal(buf, &temp); err != nil {
 		return err
 	}
 
@@ -899,7 +919,7 @@ var _ json.Marshaler = (*SectionComponent)(nil)
 func (c *SectionComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeSection
 	type NoMethod SectionComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // TextDisplayComponent is a content component that displays markdown-formatted text, including mentions and emojis.
@@ -926,7 +946,7 @@ var _ json.Marshaler = (*TextDisplayComponent)(nil)
 func (c *TextDisplayComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeTextDisplay
 	type NoMethod TextDisplayComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 type UnfurledMediaItemLoadingState int
@@ -995,7 +1015,7 @@ var _ json.Marshaler = (*ThumbnailComponent)(nil)
 func (c *ThumbnailComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeThumbnail
 	type NoMethod ThumbnailComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // MediaGalleryItem represents an item in a MediaGallery component.
@@ -1050,7 +1070,7 @@ var _ json.Marshaler = (*MediaGalleryComponent)(nil)
 func (c *MediaGalleryComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeMediaGallery
 	type NoMethod MediaGalleryComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // FileComponent is a top-level content component that displays an uploaded file as an attachment to the message.
@@ -1086,7 +1106,7 @@ var _ json.Marshaler = (*FileComponent)(nil)
 func (c *FileComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeFile
 	type NoMethod FileComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 type SeperatorComponentSpacing int
@@ -1130,7 +1150,7 @@ var _ json.Marshaler = (*SeparatorComponent)(nil)
 func (c *SeparatorComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeSeparator
 	type NoMethod SeparatorComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // ContainerComponent is a top-level layout component that visually encapsulates a collection of child components with an optional customizable accent color bar.
@@ -1183,7 +1203,7 @@ func (c *ContainerComponent) UnmarshalJSON(buf []byte) error {
 	}
 
 	var temp tempContainerComponent
-	if err := sonic.Unmarshal(buf, &temp); err != nil {
+	if err := json.Unmarshal(buf, &temp); err != nil {
 		return err
 	}
 
@@ -1213,7 +1233,7 @@ var _ json.Marshaler = (*ContainerComponent)(nil)
 func (c *ContainerComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeContainer
 	type NoMethod ContainerComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 // LabelComponent is a top-level layout component that wraps modal components with a label and an optional description.
@@ -1264,7 +1284,7 @@ func (c *LabelComponent) UnmarshalJSON(buf []byte) error {
 	}
 
 	var temp tempLabelComponent
-	if err := sonic.Unmarshal(buf, &temp); err != nil {
+	if err := json.Unmarshal(buf, &temp); err != nil {
 		return err
 	}
 
@@ -1294,66 +1314,66 @@ var _ json.Marshaler = (*LabelComponent)(nil)
 func (c *LabelComponent) MarshalJSON() ([]byte, error) {
 	c.Type = ComponentTypeLabel
 	type NoMethod LabelComponent
-	return sonic.Marshal((*NoMethod)(c))
+	return json.Marshal((*NoMethod)(c))
 }
 
 func UnmarshalComponent(buf []byte) (Component, error) {
 	var meta struct {
 		Type ComponentType `json:"type"`
 	}
-	if err := sonic.Unmarshal(buf, &meta); err != nil {
+	if err := json.Unmarshal(buf, &meta); err != nil {
 		return nil, err
 	}
 
 	switch meta.Type {
 	case ComponentTypeActionRow:
 		var c ActionRowComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeButton:
 		var c ButtonComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeStringSelect:
 		var c StringSelectMenuComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeTextInput:
 		var c TextInputComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeUserSelect:
 		var c UserSelectMenuComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeRoleSelect:
 		var c RoleSelectMenuComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeMentionableSelect:
 		var c MentionableSelectMenuComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeChannelSelect:
 		var c ChannelSelectMenuComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeSection:
 		var c SectionComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeTextDisplay:
 		var c TextDisplayComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeThumbnail:
 		var c ThumbnailComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeMediaGallery:
 		var c MediaGalleryComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeFile:
 		var c FileComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeSeparator:
 		var c SeparatorComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeContainer:
 		var c ContainerComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	case ComponentTypeLabel:
 		var c LabelComponent
-		return &c, sonic.Unmarshal(buf, &c)
+		return &c, json.Unmarshal(buf, &c)
 	default:
 		return nil, errors.New("unknown component type")
 	}
@@ -1373,10 +1393,10 @@ func NewActionRowBuilder() *ActionRowBuilder {
 	return actionRowBuilder
 }
 
-// SetComponents sets the action row components.
+// SetComponent sets the action row components.
 func (b *ActionRowBuilder) SetComponent(components ...InteractiveComponent) *ActionRowBuilder {
-	if len(components) > 5 {
-		b.actionRow.Components = components[:5]
+	if len(components) > ActionRowMaxComponents {
+		panic("ActionRow can contain a maximum of " + strconv.Itoa(ActionRowMaxComponents) + " components, got " + strconv.Itoa(len(components)))
 	}
 	b.actionRow.Components = components
 	return b
@@ -1384,10 +1404,19 @@ func (b *ActionRowBuilder) SetComponent(components ...InteractiveComponent) *Act
 
 // AddComponent add's a component to the action row components.
 func (b *ActionRowBuilder) AddComponent(component InteractiveComponent) *ActionRowBuilder {
-	if len(b.actionRow.Components) < 5 {
-		b.actionRow.Components = append(b.actionRow.Components, component)
+	if len(b.actionRow.Components) >= ActionRowMaxComponents {
+		panic("ActionRow can contain a maximum of " + strconv.Itoa(ActionRowMaxComponents) + " components")
 	}
+	b.actionRow.Components = append(b.actionRow.Components, component)
 	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *ActionRowBuilder) Reset() {
+	b.actionRow = ActionRowComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeActionRow},
+		Components:      nil,
+	}
 }
 
 // Build returns the final ActionRowComponent.
@@ -1455,7 +1484,831 @@ func (b *ButtonBuilder) Disable() *ButtonBuilder {
 	return b
 }
 
+// Reset clears the builder state, allowing it to be reused.
+func (b *ButtonBuilder) Reset() {
+	b.button = ButtonComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeButton},
+		},
+	}
+}
+
 // Build returns the final ButtonComponent.
 func (b *ButtonBuilder) Build() *ButtonComponent {
 	return &b.button
+}
+
+// StringSelectMenuBuilder helps build a StringSelectMenuComponent with chainable methods.
+type StringSelectMenuBuilder struct {
+	selectMenu StringSelectMenuComponent
+}
+
+// NewStringSelectMenuBuilder creates a new StringSelectMenuBuilder instance.
+func NewStringSelectMenuBuilder() *StringSelectMenuBuilder {
+	builder := &StringSelectMenuBuilder{}
+	builder.selectMenu.Type = ComponentTypeStringSelect
+	return builder
+}
+
+// SetCustomID sets the custom ID.
+func (b *StringSelectMenuBuilder) SetCustomID(customID string) *StringSelectMenuBuilder {
+	b.selectMenu.CustomID = customID
+	return b
+}
+
+// SetPlaceholder sets the placeholder text.
+func (b *StringSelectMenuBuilder) SetPlaceholder(placeholder string) *StringSelectMenuBuilder {
+	b.selectMenu.Placeholder = placeholder
+	return b
+}
+
+// SetOptions sets all options at once.
+func (b *StringSelectMenuBuilder) SetOptions(options []SelectOptionStructure) *StringSelectMenuBuilder {
+	if len(options) > StringSelectMenuMaxOptions {
+		panic("StringSelectMenu can contain a maximum of " + strconv.Itoa(StringSelectMenuMaxOptions) + " options, got " + strconv.Itoa(len(options)))
+	}
+	b.selectMenu.Options = options
+	return b
+}
+
+// AddOption adds a single option.
+func (b *StringSelectMenuBuilder) AddOption(option SelectOptionStructure) *StringSelectMenuBuilder {
+	if len(b.selectMenu.Options) >= StringSelectMenuMaxOptions {
+		panic("StringSelectMenu can contain a maximum of " + strconv.Itoa(StringSelectMenuMaxOptions) + " options")
+	}
+	b.selectMenu.Options = append(b.selectMenu.Options, option)
+	return b
+}
+
+// SetMinValues sets the minimum number of selections.
+func (b *StringSelectMenuBuilder) SetMinValues(minValues *int) *StringSelectMenuBuilder {
+	b.selectMenu.MinValues = minValues
+	return b
+}
+
+// SetMaxValues sets the maximum number of selections.
+func (b *StringSelectMenuBuilder) SetMaxValues(maxValues int) *StringSelectMenuBuilder {
+	b.selectMenu.MaxValues = maxValues
+	return b
+}
+
+// SetRequired sets whether the select menu is required.
+func (b *StringSelectMenuBuilder) SetRequired(required bool) *StringSelectMenuBuilder {
+	b.selectMenu.Required = required
+	return b
+}
+
+// SetDisabled sets whether the select menu is disabled.
+func (b *StringSelectMenuBuilder) SetDisabled(disabled bool) *StringSelectMenuBuilder {
+	b.selectMenu.Disabled = disabled
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *StringSelectMenuBuilder) Reset() {
+	b.selectMenu = StringSelectMenuComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeStringSelect},
+		},
+	}
+}
+
+// Build returns the final StringSelectMenuComponent.
+func (b *StringSelectMenuBuilder) Build() *StringSelectMenuComponent {
+	return &b.selectMenu
+}
+
+// TextInputBuilder helps build a TextInputComponent with chainable methods.
+type TextInputBuilder struct {
+	textInput TextInputComponent
+}
+
+// NewTextInputBuilder creates a new TextInputBuilder instance.
+func NewTextInputBuilder() *TextInputBuilder {
+	builder := &TextInputBuilder{}
+	builder.textInput.Type = ComponentTypeTextInput
+	return builder
+}
+
+// SetCustomID sets the custom ID.
+func (b *TextInputBuilder) SetCustomID(customID string) *TextInputBuilder {
+	b.textInput.CustomID = customID
+	return b
+}
+
+// SetStyle sets the text input style.
+func (b *TextInputBuilder) SetStyle(style TextInputStyle) *TextInputBuilder {
+	b.textInput.Style = style
+	return b
+}
+
+// SetMinLength sets the minimum input length.
+func (b *TextInputBuilder) SetMinLength(minLength *int) *TextInputBuilder {
+	b.textInput.MinLength = minLength
+	return b
+}
+
+// SetMaxLength sets the maximum input length.
+func (b *TextInputBuilder) SetMaxLength(maxLength int) *TextInputBuilder {
+	b.textInput.MaxLength = maxLength
+	return b
+}
+
+// SetValue sets the pre-filled value.
+func (b *TextInputBuilder) SetValue(value string) *TextInputBuilder {
+	b.textInput.Value = value
+	return b
+}
+
+// SetPlaceholder sets the placeholder text.
+func (b *TextInputBuilder) SetPlaceholder(placeholder string) *TextInputBuilder {
+	b.textInput.Placeholder = placeholder
+	return b
+}
+
+// SetRequired sets whether the input is required.
+func (b *TextInputBuilder) SetRequired(required bool) *TextInputBuilder {
+	b.textInput.Required = required
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *TextInputBuilder) Reset() {
+	b.textInput = TextInputComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeTextInput},
+		},
+	}
+}
+
+// Build returns the final TextInputComponent.
+func (b *TextInputBuilder) Build() *TextInputComponent {
+	return &b.textInput
+}
+
+// UserSelectMenuBuilder helps build a UserSelectMenuComponent with chainable methods.
+type UserSelectMenuBuilder struct {
+	selectMenu UserSelectMenuComponent
+}
+
+// NewUserSelectMenuBuilder creates a new UserSelectMenuBuilder instance.
+func NewUserSelectMenuBuilder() *UserSelectMenuBuilder {
+	builder := &UserSelectMenuBuilder{}
+	builder.selectMenu.Type = ComponentTypeUserSelect
+	return builder
+}
+
+// SetCustomID sets the custom ID.
+func (b *UserSelectMenuBuilder) SetCustomID(customID string) *UserSelectMenuBuilder {
+	b.selectMenu.CustomID = customID
+	return b
+}
+
+// SetPlaceholder sets the placeholder text.
+func (b *UserSelectMenuBuilder) SetPlaceholder(placeholder string) *UserSelectMenuBuilder {
+	b.selectMenu.Placeholder = placeholder
+	return b
+}
+
+// SetDefaultValues sets all default values at once.
+func (b *UserSelectMenuBuilder) SetDefaultValues(defaults []SelectDefaultValue) *UserSelectMenuBuilder {
+	b.selectMenu.DefaultValues = defaults
+	return b
+}
+
+// AddDefaultValue adds a single default value.
+func (b *UserSelectMenuBuilder) AddDefaultValue(defaultValue SelectDefaultValue) *UserSelectMenuBuilder {
+	b.selectMenu.DefaultValues = append(b.selectMenu.DefaultValues, defaultValue)
+	return b
+}
+
+// SetMinValues sets the minimum number of selections.
+func (b *UserSelectMenuBuilder) SetMinValues(minValues *int) *UserSelectMenuBuilder {
+	b.selectMenu.MinValues = minValues
+	return b
+}
+
+// SetMaxValues sets the maximum number of selections.
+func (b *UserSelectMenuBuilder) SetMaxValues(maxValues int) *UserSelectMenuBuilder {
+	b.selectMenu.MaxValues = maxValues
+	return b
+}
+
+// SetDisabled sets whether the select menu is disabled.
+func (b *UserSelectMenuBuilder) SetDisabled(disabled bool) *UserSelectMenuBuilder {
+	b.selectMenu.Disabled = disabled
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *UserSelectMenuBuilder) Reset() {
+	b.selectMenu = UserSelectMenuComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeUserSelect},
+		},
+	}
+}
+
+// Build returns the final UserSelectMenuComponent.
+func (b *UserSelectMenuBuilder) Build() *UserSelectMenuComponent {
+	return &b.selectMenu
+}
+
+// RoleSelectMenuBuilder helps build a RoleSelectMenuComponent with chainable methods.
+type RoleSelectMenuBuilder struct {
+	selectMenu RoleSelectMenuComponent
+}
+
+// NewRoleSelectMenuBuilder creates a new RoleSelectMenuBuilder instance.
+func NewRoleSelectMenuBuilder() *RoleSelectMenuBuilder {
+	builder := &RoleSelectMenuBuilder{}
+	builder.selectMenu.Type = ComponentTypeRoleSelect
+	return builder
+}
+
+// SetCustomID sets the custom ID.
+func (b *RoleSelectMenuBuilder) SetCustomID(customID string) *RoleSelectMenuBuilder {
+	b.selectMenu.CustomID = customID
+	return b
+}
+
+// SetPlaceholder sets the placeholder text.
+func (b *RoleSelectMenuBuilder) SetPlaceholder(placeholder string) *RoleSelectMenuBuilder {
+	b.selectMenu.Placeholder = placeholder
+	return b
+}
+
+// SetDefaultValues sets all default values at once.
+func (b *RoleSelectMenuBuilder) SetDefaultValues(defaults []SelectDefaultValue) *RoleSelectMenuBuilder {
+	b.selectMenu.DefaultValues = defaults
+	return b
+}
+
+// AddDefaultValue adds a single default value.
+func (b *RoleSelectMenuBuilder) AddDefaultValue(defaultValue SelectDefaultValue) *RoleSelectMenuBuilder {
+	b.selectMenu.DefaultValues = append(b.selectMenu.DefaultValues, defaultValue)
+	return b
+}
+
+// SetMinValues sets the minimum number of selections.
+func (b *RoleSelectMenuBuilder) SetMinValues(minValues *int) *RoleSelectMenuBuilder {
+	b.selectMenu.MinValues = minValues
+	return b
+}
+
+// SetMaxValues sets the maximum number of selections.
+func (b *RoleSelectMenuBuilder) SetMaxValues(maxValues int) *RoleSelectMenuBuilder {
+	b.selectMenu.MaxValues = maxValues
+	return b
+}
+
+// SetDisabled sets whether the select menu is disabled.
+func (b *RoleSelectMenuBuilder) SetDisabled(disabled bool) *RoleSelectMenuBuilder {
+	b.selectMenu.Disabled = disabled
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *RoleSelectMenuBuilder) Reset() {
+	b.selectMenu = RoleSelectMenuComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeRoleSelect},
+		},
+	}
+}
+
+// Build returns the final RoleSelectMenuComponent.
+func (b *RoleSelectMenuBuilder) Build() *RoleSelectMenuComponent {
+	return &b.selectMenu
+}
+
+// MentionableSelectMenuBuilder helps build a MentionableSelectMenuComponent with chainable methods.
+type MentionableSelectMenuBuilder struct {
+	selectMenu MentionableSelectMenuComponent
+}
+
+// NewMentionableSelectMenuBuilder creates a new MentionableSelectMenuBuilder instance.
+func NewMentionableSelectMenuBuilder() *MentionableSelectMenuBuilder {
+	builder := &MentionableSelectMenuBuilder{}
+	builder.selectMenu.Type = ComponentTypeMentionableSelect
+	return builder
+}
+
+// SetCustomID sets the custom ID.
+func (b *MentionableSelectMenuBuilder) SetCustomID(customID string) *MentionableSelectMenuBuilder {
+	b.selectMenu.CustomID = customID
+	return b
+}
+
+// SetPlaceholder sets the placeholder text.
+func (b *MentionableSelectMenuBuilder) SetPlaceholder(placeholder string) *MentionableSelectMenuBuilder {
+	b.selectMenu.Placeholder = placeholder
+	return b
+}
+
+// SetDefaultValues sets all default values at once.
+func (b *MentionableSelectMenuBuilder) SetDefaultValues(defaults []SelectDefaultValue) *MentionableSelectMenuBuilder {
+	b.selectMenu.DefaultValues = defaults
+	return b
+}
+
+// AddDefaultValue adds a single default value.
+func (b *MentionableSelectMenuBuilder) AddDefaultValue(defaultValue SelectDefaultValue) *MentionableSelectMenuBuilder {
+	b.selectMenu.DefaultValues = append(b.selectMenu.DefaultValues, defaultValue)
+	return b
+}
+
+// SetMinValues sets the minimum number of selections.
+func (b *MentionableSelectMenuBuilder) SetMinValues(minValues *int) *MentionableSelectMenuBuilder {
+	b.selectMenu.MinValues = minValues
+	return b
+}
+
+// SetMaxValues sets the maximum number of selections.
+func (b *MentionableSelectMenuBuilder) SetMaxValues(maxValues int) *MentionableSelectMenuBuilder {
+	b.selectMenu.MaxValues = maxValues
+	return b
+}
+
+// SetDisabled sets whether the select menu is disabled.
+func (b *MentionableSelectMenuBuilder) SetDisabled(disabled bool) *MentionableSelectMenuBuilder {
+	b.selectMenu.Disabled = disabled
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *MentionableSelectMenuBuilder) Reset() {
+	b.selectMenu = MentionableSelectMenuComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeMentionableSelect},
+		},
+	}
+}
+
+// Build returns the final MentionableSelectMenuComponent.
+func (b *MentionableSelectMenuBuilder) Build() *MentionableSelectMenuComponent {
+	return &b.selectMenu
+}
+
+// ChannelSelectMenuBuilder helps build a ChannelSelectMenuComponent with chainable methods.
+type ChannelSelectMenuBuilder struct {
+	selectMenu ChannelSelectMenuComponent
+}
+
+// NewChannelSelectMenuBuilder creates a new ChannelSelectMenuBuilder instance.
+func NewChannelSelectMenuBuilder() *ChannelSelectMenuBuilder {
+	builder := &ChannelSelectMenuBuilder{}
+	builder.selectMenu.Type = ComponentTypeChannelSelect
+	return builder
+}
+
+// SetCustomID sets the custom ID.
+func (b *ChannelSelectMenuBuilder) SetCustomID(customID string) *ChannelSelectMenuBuilder {
+	b.selectMenu.CustomID = customID
+	return b
+}
+
+// SetChannelTypes sets all channel types at once.
+func (b *ChannelSelectMenuBuilder) SetChannelTypes(types []ChannelType) *ChannelSelectMenuBuilder {
+	b.selectMenu.ChannelTypes = types
+	return b
+}
+
+// AddChannelType adds a single channel type.
+func (b *ChannelSelectMenuBuilder) AddChannelType(channelType ChannelType) *ChannelSelectMenuBuilder {
+	b.selectMenu.ChannelTypes = append(b.selectMenu.ChannelTypes, channelType)
+	return b
+}
+
+// SetPlaceholder sets the placeholder text.
+func (b *ChannelSelectMenuBuilder) SetPlaceholder(placeholder string) *ChannelSelectMenuBuilder {
+	b.selectMenu.Placeholder = placeholder
+	return b
+}
+
+// SetDefaultValues sets all default values at once.
+func (b *ChannelSelectMenuBuilder) SetDefaultValues(defaults []SelectDefaultValue) *ChannelSelectMenuBuilder {
+	b.selectMenu.DefaultValues = defaults
+	return b
+}
+
+// AddDefaultValue adds a single default value.
+func (b *ChannelSelectMenuBuilder) AddDefaultValue(defaultValue SelectDefaultValue) *ChannelSelectMenuBuilder {
+	b.selectMenu.DefaultValues = append(b.selectMenu.DefaultValues, defaultValue)
+	return b
+}
+
+// SetMinValues sets the minimum number of selections.
+func (b *ChannelSelectMenuBuilder) SetMinValues(minValues *int) *ChannelSelectMenuBuilder {
+	b.selectMenu.MinValues = minValues
+	return b
+}
+
+// SetMaxValues sets the maximum number of selections.
+func (b *ChannelSelectMenuBuilder) SetMaxValues(maxValues int) *ChannelSelectMenuBuilder {
+	b.selectMenu.MaxValues = maxValues
+	return b
+}
+
+// SetDisabled sets whether the select menu is disabled.
+func (b *ChannelSelectMenuBuilder) SetDisabled(disabled bool) *ChannelSelectMenuBuilder {
+	b.selectMenu.Disabled = disabled
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *ChannelSelectMenuBuilder) Reset() {
+	b.selectMenu = ChannelSelectMenuComponent{
+		InteractiveComponentFields: InteractiveComponentFields{
+			ComponentFields: ComponentFields{Type: ComponentTypeChannelSelect},
+		},
+	}
+}
+
+// Build returns the final ChannelSelectMenuComponent.
+func (b *ChannelSelectMenuBuilder) Build() *ChannelSelectMenuComponent {
+	return &b.selectMenu
+}
+
+// SectionBuilder helps build a SectionComponent with chainable methods.
+type SectionBuilder struct {
+	section SectionComponent
+}
+
+// NewSectionBuilder creates a new SectionBuilder instance.
+func NewSectionBuilder() *SectionBuilder {
+	builder := &SectionBuilder{}
+	builder.section.Type = ComponentTypeSection
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *SectionBuilder) SetID(id int) *SectionBuilder {
+	b.section.ID = id
+	return b
+}
+
+// SetComponents sets all components at once.
+func (b *SectionBuilder) SetComponents(components []SectionSubComponent) *SectionBuilder {
+	if len(components) < SectionMinComponents || len(components) > SectionMaxComponents {
+		panic("Section must contain between " + strconv.Itoa(SectionMinComponents) + " and " + strconv.Itoa(SectionMaxComponents) + " components, got " + strconv.Itoa(len(components)))
+	}
+	b.section.Components = components
+	return b
+}
+
+// AddComponent adds a single component.
+func (b *SectionBuilder) AddComponent(component SectionSubComponent) *SectionBuilder {
+	if len(b.section.Components) >= SectionMaxComponents {
+		panic("Section can contain a maximum of " + strconv.Itoa(SectionMaxComponents) + " components")
+	}
+	b.section.Components = append(b.section.Components, component)
+	return b
+}
+
+// SetAccessory sets the accessory component.
+func (b *SectionBuilder) SetAccessory(accessory SectionAccessoryComponent) *SectionBuilder {
+	b.section.Accessory = accessory
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *SectionBuilder) Reset() {
+	b.section = SectionComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeSection},
+		Components:      nil,
+		Accessory:       nil,
+	}
+}
+
+// Build returns the final SectionComponent.
+func (b *SectionBuilder) Build() *SectionComponent {
+	return &b.section
+}
+
+// TextDisplayBuilder helps build a TextDisplayComponent with chainable methods.
+type TextDisplayBuilder struct {
+	textDisplay TextDisplayComponent
+}
+
+// NewTextDisplayBuilder creates a new TextDisplayBuilder instance.
+func NewTextDisplayBuilder() *TextDisplayBuilder {
+	builder := &TextDisplayBuilder{}
+	builder.textDisplay.Type = ComponentTypeTextDisplay
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *TextDisplayBuilder) SetID(id int) *TextDisplayBuilder {
+	b.textDisplay.ID = id
+	return b
+}
+
+// SetContent sets the markdown content.
+func (b *TextDisplayBuilder) SetContent(content string) *TextDisplayBuilder {
+	b.textDisplay.Content = content
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *TextDisplayBuilder) Reset() {
+	b.textDisplay = TextDisplayComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeTextDisplay},
+	}
+}
+
+// Build returns the final TextDisplayComponent.
+func (b *TextDisplayBuilder) Build() *TextDisplayComponent {
+	return &b.textDisplay
+}
+
+// ThumbnailBuilder helps build a ThumbnailComponent with chainable methods.
+type ThumbnailBuilder struct {
+	thumbnail ThumbnailComponent
+}
+
+// NewThumbnailBuilder creates a new ThumbnailBuilder instance.
+func NewThumbnailBuilder() *ThumbnailBuilder {
+	builder := &ThumbnailBuilder{}
+	builder.thumbnail.Type = ComponentTypeThumbnail
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *ThumbnailBuilder) SetID(id int) *ThumbnailBuilder {
+	b.thumbnail.ID = id
+	return b
+}
+
+// SetMedia sets the media item.
+func (b *ThumbnailBuilder) SetMedia(media UnfurledMediaItem) *ThumbnailBuilder {
+	b.thumbnail.Media = media
+	return b
+}
+
+// SetDescription sets the alt text description.
+func (b *ThumbnailBuilder) SetDescription(description string) *ThumbnailBuilder {
+	b.thumbnail.Description = description
+	return b
+}
+
+// SetSpoiler sets whether the thumbnail is a spoiler.
+func (b *ThumbnailBuilder) SetSpoiler(spoiler bool) *ThumbnailBuilder {
+	b.thumbnail.Spoiler = spoiler
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *ThumbnailBuilder) Reset() {
+	b.thumbnail = ThumbnailComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeThumbnail},
+	}
+}
+
+// Build returns the final ThumbnailComponent.
+func (b *ThumbnailBuilder) Build() *ThumbnailComponent {
+	return &b.thumbnail
+}
+
+// MediaGalleryBuilder helps build a MediaGalleryComponent with chainable methods.
+type MediaGalleryBuilder struct {
+	gallery MediaGalleryComponent
+}
+
+// NewMediaGalleryBuilder creates a new MediaGalleryBuilder instance.
+func NewMediaGalleryBuilder() *MediaGalleryBuilder {
+	builder := &MediaGalleryBuilder{}
+	builder.gallery.Type = ComponentTypeMediaGallery
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *MediaGalleryBuilder) SetID(id int) *MediaGalleryBuilder {
+	b.gallery.ID = id
+	return b
+}
+
+// SetItems sets all gallery items at once.
+func (b *MediaGalleryBuilder) SetItems(items []MediaGalleryItem) *MediaGalleryBuilder {
+	if len(items) < MediaGalleryMinItems || len(items) > MediaGalleryMaxItems {
+		panic("MediaGallery must contain between " + strconv.Itoa(MediaGalleryMinItems) + " and " + strconv.Itoa(MediaGalleryMaxItems) + " items, got " + strconv.Itoa(len(items)))
+	}
+	b.gallery.Items = items
+	return b
+}
+
+// AddItem adds a single gallery item.
+func (b *MediaGalleryBuilder) AddItem(item MediaGalleryItem) *MediaGalleryBuilder {
+	if len(b.gallery.Items) >= MediaGalleryMaxItems {
+		panic("MediaGallery can contain a maximum of " + strconv.Itoa(MediaGalleryMaxItems) + " items")
+	}
+	b.gallery.Items = append(b.gallery.Items, item)
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *MediaGalleryBuilder) Reset() {
+	b.gallery = MediaGalleryComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeMediaGallery},
+		Items:           nil,
+	}
+}
+
+// Build returns the final MediaGalleryComponent.
+func (b *MediaGalleryBuilder) Build() *MediaGalleryComponent {
+	return &b.gallery
+}
+
+// FileBuilder helps build a FileComponent with chainable methods.
+type FileBuilder struct {
+	file FileComponent
+}
+
+// NewFileBuilder creates a new FileBuilder instance.
+func NewFileBuilder() *FileBuilder {
+	builder := &FileBuilder{}
+	builder.file.Type = ComponentTypeFile
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *FileBuilder) SetID(id int) *FileBuilder {
+	b.file.ID = id
+	return b
+}
+
+// SetFile sets the file media item.
+func (b *FileBuilder) SetFile(file UnfurledMediaItem) *FileBuilder {
+	b.file.File = file
+	return b
+}
+
+// SetSpoiler sets whether the file is a spoiler.
+func (b *FileBuilder) SetSpoiler(spoiler bool) *FileBuilder {
+	b.file.Spoiler = spoiler
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *FileBuilder) Reset() {
+	b.file = FileComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeFile},
+	}
+}
+
+// Build returns the final FileComponent.
+func (b *FileBuilder) Build() *FileComponent {
+	return &b.file
+}
+
+// SeparatorBuilder helps build a SeparatorComponent with chainable methods.
+type SeparatorBuilder struct {
+	separator SeparatorComponent
+}
+
+// NewSeparatorBuilder creates a new SeparatorBuilder instance.
+func NewSeparatorBuilder() *SeparatorBuilder {
+	builder := &SeparatorBuilder{}
+	builder.separator.Type = ComponentTypeSeparator
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *SeparatorBuilder) SetID(id int) *SeparatorBuilder {
+	b.separator.ID = id
+	return b
+}
+
+// SetDivider sets whether a visual divider is shown.
+func (b *SeparatorBuilder) SetDivider(divider bool) *SeparatorBuilder {
+	b.separator.Divider = divider
+	return b
+}
+
+// SetSpacing sets the vertical padding size.
+func (b *SeparatorBuilder) SetSpacing(spacing SeperatorComponentSpacing) *SeparatorBuilder {
+	b.separator.Spacing = spacing
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *SeparatorBuilder) Reset() {
+	b.separator = SeparatorComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeSeparator},
+	}
+}
+
+// Build returns the final SeparatorComponent.
+func (b *SeparatorBuilder) Build() *SeparatorComponent {
+	return &b.separator
+}
+
+// ContainerBuilder helps build a ContainerComponent with chainable methods.
+type ContainerBuilder struct {
+	container ContainerComponent
+}
+
+// NewContainerBuilder creates a new ContainerBuilder instance.
+func NewContainerBuilder() *ContainerBuilder {
+	builder := &ContainerBuilder{}
+	builder.container.Type = ComponentTypeContainer
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *ContainerBuilder) SetID(id int) *ContainerBuilder {
+	b.container.ID = id
+	return b
+}
+
+// SetComponents sets all components at once.
+func (b *ContainerBuilder) SetComponents(components []ContainerSubComponent) *ContainerBuilder {
+	b.container.Components = components
+	return b
+}
+
+// AddComponent adds a single component.
+func (b *ContainerBuilder) AddComponent(component ContainerSubComponent) *ContainerBuilder {
+	b.container.Components = append(b.container.Components, component)
+	return b
+}
+
+// SetAccentColor sets the accent color.
+func (b *ContainerBuilder) SetAccentColor(color Color) *ContainerBuilder {
+	b.container.AccentColor = color
+	return b
+}
+
+// SetSpoiler sets whether the container is a spoiler.
+func (b *ContainerBuilder) SetSpoiler(spoiler bool) *ContainerBuilder {
+	b.container.Spoiler = spoiler
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *ContainerBuilder) Reset() {
+	b.container = ContainerComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeContainer},
+		Components:      nil,
+	}
+}
+
+// Build returns the final ContainerComponent.
+func (b *ContainerBuilder) Build() *ContainerComponent {
+	return &b.container
+}
+
+// LabelBuilder helps build a LabelComponent with chainable methods.
+type LabelBuilder struct {
+	label LabelComponent
+}
+
+// NewLabelBuilder creates a new LabelBuilder instance.
+func NewLabelBuilder() *LabelBuilder {
+	builder := &LabelBuilder{}
+	builder.label.Type = ComponentTypeLabel
+	return builder
+}
+
+// SetID sets the component ID.
+func (b *LabelBuilder) SetID(id int) *LabelBuilder {
+	b.label.ID = id
+	return b
+}
+
+// SetLabel sets the label text.
+func (b *LabelBuilder) SetLabel(label string) *LabelBuilder {
+	b.label.Label = label
+	return b
+}
+
+// SetDescription sets the description text.
+func (b *LabelBuilder) SetDescription(description string) *LabelBuilder {
+	b.label.Description = description
+	return b
+}
+
+// SetComponents sets all components at once.
+func (b *LabelBuilder) SetComponents(components []LabelSubComponent) *LabelBuilder {
+	b.label.Components = components
+	return b
+}
+
+// AddComponent adds a single component.
+func (b *LabelBuilder) AddComponent(component LabelSubComponent) *LabelBuilder {
+	b.label.Components = append(b.label.Components, component)
+	return b
+}
+
+// Reset clears the builder state, allowing it to be reused.
+func (b *LabelBuilder) Reset() {
+	b.label = LabelComponent{
+		ComponentFields: ComponentFields{Type: ComponentTypeLabel},
+		Components:      nil,
+	}
+}
+
+// Build returns the final LabelComponent.
+func (b *LabelBuilder) Build() *LabelComponent {
+	return &b.label
 }
