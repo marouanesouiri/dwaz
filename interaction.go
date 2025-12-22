@@ -17,8 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/bytedance/sonic"
 )
 
 // InteractionType represents the type of an interaction in Discord.
@@ -432,39 +430,37 @@ func UnmarshalInteraction(buf []byte) (Interaction, error) {
 			Type ApplicationCommandType `json:"type"`
 		} `json:"data"`
 	}
-	if err := sonic.Unmarshal(buf, &meta); err != nil {
+	if err := json.Unmarshal(buf, &meta); err != nil {
 		return nil, err
 	}
 
 	switch meta.Type {
 	case InteractionTypePing:
 		var i PingInteraction
-		return &i, sonic.Unmarshal(buf, &i)
-
+		return &i, json.Unmarshal(buf, &i)
 	case InteractionTypeApplicationCommand:
 		switch meta.Data.Type {
 		case ApplicationCommandTypeChatInput:
 			var i ChatInputCommandInteraction
-			return &i, sonic.Unmarshal(buf, &i)
+			return &i, json.Unmarshal(buf, &i)
 		case ApplicationCommandTypeUser:
 			var i UserCommandInteraction
-			return &i, sonic.Unmarshal(buf, &i)
+			return &i, json.Unmarshal(buf, &i)
 		case ApplicationCommandTypeMessage:
 			var i MessageCommandInteraction
-			return &i, sonic.Unmarshal(buf, &i)
+			return &i, json.Unmarshal(buf, &i)
 		default:
 			return nil, errors.New("unknown application interacton type")
 		}
-
 	case InteractionTypeComponent:
 		var i ComponentInteraction
-		return &i, sonic.Unmarshal(buf, &i)
+		return &i, json.Unmarshal(buf, &i)
 	case InteractionTypeAutocomplete:
 		var i AutoCompleteInteraction
-		return &i, sonic.Unmarshal(buf, &i)
+		return &i, json.Unmarshal(buf, &i)
 	case InteractionTypeModalSubmit:
 		var i ModalSubmitInteraction
-		return &i, sonic.Unmarshal(buf, &i)
+		return &i, json.Unmarshal(buf, &i)
 	default:
 		return nil, errors.New("unknown interaction type")
 	}
