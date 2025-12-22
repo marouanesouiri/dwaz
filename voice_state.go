@@ -56,7 +56,13 @@ type VoiceState struct {
 	//
 	// Optional:
 	//  - May be nil if the user has not requested to speak.
-	RequestToSpeakTimestamp *time.Time `json:"request_to_speak_timestamp,omitempty"`
+	RequestToSpeakTimestamp *time.Time `json:"request_to_speak_timestamp,omitzero"`
+}
+
+type GatewayVoiceState struct {
+	VoiceState
+
+	Member FullMember `json:"member"`
 }
 
 // VoiceRegion represents a Discord voice region.
