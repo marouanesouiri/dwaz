@@ -17,38 +17,44 @@ import "encoding/json"
 
 // ReadyCreateEvent Shard is ready
 type ReadyEvent struct {
-	ShardsID int // shard that dispatched this event
-	Guilds   []Guild
+	Client  *Client
+	ShardID int // shard that dispatched this event
+	Guilds  []Guild
 }
 
 // GuildCreateEvent Guild was created
 type GuildCreateEvent struct {
-	ShardsID int // shard that dispatched this event
-	Guild    GatewayGuild
+	Client  *Client
+	ShardID int // shard that dispatched this event
+	Guild   GatewayGuild
 }
 
 // MessageCreateEvent Message was created
 type MessageCreateEvent struct {
-	ShardsID int // shard that dispatched this event
+	Client  *Client
+	ShardID int // shard that dispatched this event
 	Message Message
 }
 
 // MessageCreateEvent Message was created
 type MessageUpdateEvent struct {
-	ShardsID   int // shard that dispatched this event
+	Client     *Client
+	ShardID    int // shard that dispatched this event
 	OldMessage Message
 	NewMessage Message
 }
 
 // MessageDeleteEvent Message was deleted
 type MessageDeleteEvent struct {
-	ShardsID int // shard that dispatched this event
-	Message  Message
+	Client  *Client
+	ShardID int // shard that dispatched this event
+	Message Message
 }
 
 // InteractionCreateEvent Interaction created
 type InteractionCreateEvent struct {
-	ShardsID    int // shard that dispatched this event
+	Client      *Client
+	ShardID     int // shard that dispatched this event
 	Interaction Interaction
 }
 
@@ -65,7 +71,8 @@ func (c *InteractionCreateEvent) UnmarshalJSON(buf []byte) error {
 
 // VoiceStateUpdateEvent VoiceState was updated
 type VoiceStateUpdateEvent struct {
-	ShardsID int // shard that dispatched this event
+	Client   *Client
+	ShardID  int // shard that dispatched this event
 	OldState GatewayVoiceState
 	NewState GatewayVoiceState
 }

@@ -30,15 +30,15 @@ type readyHandlers struct {
 }
 
 // handleEvent parses the READY event data and calls each registered handler.
-func (h *readyHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := ReadyEvent{ShardsID: shardID}
+func (h *readyHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := ReadyEvent{Client: client, ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("readyHandlers: Failed parsing event data")
 		return
 	}
 
 	for i := range len(evt.Guilds) {
-		cache.PutGuild(evt.Guilds[i])
+		client.PutGuild(evt.Guilds[i])
 	}
 
 	if runAsync {
@@ -70,42 +70,42 @@ type guildCreateHandlers struct {
 }
 
 // handleEvent parses the GUILD_CREATE event data and calls each registered handler.
-func (h *guildCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := GuildCreateEvent{ShardsID: shardID}
+func (h *guildCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := GuildCreateEvent{Client: client, ShardID: shardID}
 
 	if err := json.Unmarshal(data, &evt.Guild); err != nil {
 		h.logger.Error("guildCreateHandlers: Failed parsing event data")
 		return
 	}
 
-	flags := cache.Flags()
+	flags := client.Flags()
 
 	if flags.Has(CacheFlagGuilds) {
-		cache.PutGuild(evt.Guild.Guild)
+		client.PutGuild(evt.Guild.Guild)
 	}
 	if flags.Has(CacheFlagChannels) {
 		for i := range len(evt.Guild.Channels) {
-			cache.PutChannel(evt.Guild.Channels[i])
+			client.PutChannel(evt.Guild.Channels[i])
 		}
 	}
 	if flags.Has(CacheFlagRoles) {
 		for i := range len(evt.Guild.Roles) {
-			cache.PutRole(evt.Guild.Roles[i])
+			client.PutRole(evt.Guild.Roles[i])
 		}
 	}
 	if flags.Has(CacheFlagVoiceStates) {
 		for i := range len(evt.Guild.VoiceStates) {
-			cache.PutVoiceState(evt.Guild.VoiceStates[i])
+			client.PutVoiceState(evt.Guild.VoiceStates[i])
 		}
 	}
 	if flags.Has(CacheFlagMembers) {
 		for i := range len(evt.Guild.Members) {
-			cache.PutMember(evt.Guild.Members[i].Member)
+			client.PutMember(evt.Guild.Members[i].Member)
 		}
 	}
 	if flags.Has(CacheFlagUsers) {
 		for i := range len(evt.Guild.Members) {
-			cache.PutUser(evt.Guild.Members[i].User)
+			client.PutUser(evt.Guild.Members[i].User)
 		}
 	}
 
@@ -138,16 +138,16 @@ type messageCreateHandlers struct {
 }
 
 // handleEvent parses the MESSAGE_CREATE event data and calls each registered handler.
-func (h *messageCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := MessageCreateEvent{ShardsID: shardID}
+func (h *messageCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := MessageCreateEvent{Client: client, ShardID: shardID}
 
 	if err := json.Unmarshal(data, &evt.Message); err != nil {
 		h.logger.Error("messageCreateHandlers: Failed parsing event data")
 		return
 	}
 
-	if cache.Flags().Has(CacheFlagMessages) {
-		cache.PutMessage(evt.Message)
+	if client.Flags().Has(CacheFlagMessages) {
+		client.PutMessage(evt.Message)
 	}
 
 	if runAsync {
@@ -179,17 +179,17 @@ type messageDeleteHandlers struct {
 }
 
 // handleEvent parses the MESSAGE_DELETE event data and calls each registered handler.
-func (h *messageDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := MessageDeleteEvent{ShardsID: shardID}
+func (h *messageDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := MessageDeleteEvent{Client: client, ShardID: shardID}
 	if err := json.Unmarshal(data, &evt.Message); err != nil {
 		h.logger.Error("messageDeleteHandlers: Failed parsing event data")
 		return
 	}
 
-	if msgOpt := cache.GetMessage(evt.Message.ID); msgOpt.IsPresent() {
+	if msgOpt := client.GetMessage(evt.Message.ID); msgOpt.IsPresent() {
 		evt.Message = msgOpt.Get()
 	}
-	cache.DelMessage(evt.Message.ID)
+	client.DelMessage(evt.Message.ID)
 
 	if runAsync {
 		for _, handler := range h.handlers {
@@ -220,14 +220,14 @@ type messageUpdateHandlers struct {
 }
 
 // handleEvent parses the MESSAGE_UPDATE event data and calls each registered handler.
-func (h *messageUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := MessageUpdateEvent{ShardsID: shardID}
+func (h *messageUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := MessageUpdateEvent{Client: client, ShardID: shardID}
 	if err := json.Unmarshal(data, &evt.NewMessage); err != nil {
 		h.logger.Error("messageUpdateHandlers: Failed parsing event data")
 		return
 	}
 
-	if oldMsgOpt := cache.GetMessage(evt.NewMessage.ID); oldMsgOpt.IsPresent() {
+	if oldMsgOpt := client.GetMessage(evt.NewMessage.ID); oldMsgOpt.IsPresent() {
 		evt.OldMessage = oldMsgOpt.Get()
 	} else {
 		evt.OldMessage.ID = evt.NewMessage.ID
@@ -238,8 +238,8 @@ func (h *messageUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, s
 		evt.OldMessage.ApplicationID = evt.NewMessage.ApplicationID
 	}
 
-	if cache.Flags().Has(CacheFlagMessages) {
-		cache.PutMessage(evt.NewMessage)
+	if client.Flags().Has(CacheFlagMessages) {
+		client.PutMessage(evt.NewMessage)
 	}
 
 	if runAsync {
@@ -271,8 +271,8 @@ type interactionCreateHandlers struct {
 }
 
 // handleEvent parses the INTERACTION_CREATE event data and calls each registered handler.
-func (h *interactionCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := InteractionCreateEvent{ShardsID: shardID}
+func (h *interactionCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := InteractionCreateEvent{Client: client, ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("interactionCreateHandlers: Failed parsing event data")
 		return
@@ -307,14 +307,14 @@ type voiceStateUpdateHandlers struct {
 }
 
 // handleEvent parses the VOICE_STATE_UPDATE event data and calls each registered handler.
-func (h *voiceStateUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
-	evt := VoiceStateUpdateEvent{ShardsID: shardID}
+func (h *voiceStateUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
+	evt := VoiceStateUpdateEvent{Client: client, ShardID: shardID}
 	if err := json.Unmarshal(data, &evt.NewState); err != nil {
 		h.logger.Error("voiceStateCreateHandlers: Failed parsing event data")
 		return
 	}
 
-	if oldVoiceStateOpt := cache.GetVoiceState(evt.NewState.GuildID, evt.NewState.UserID); oldVoiceStateOpt.IsPresent() {
+	if oldVoiceStateOpt := client.GetVoiceState(evt.NewState.GuildID, evt.NewState.UserID); oldVoiceStateOpt.IsPresent() {
 		evt.OldState.VoiceState = oldVoiceStateOpt.Get()
 	} else {
 		evt.OldState = evt.NewState
@@ -323,8 +323,8 @@ func (h *voiceStateUpdateHandlers) handleEvent(cache CacheManager, runAsync bool
 
 	evt.OldState.Member = evt.NewState.Member
 
-	if cache.Flags().Has(CacheFlagVoiceStates) {
-		cache.PutVoiceState(evt.NewState.VoiceState)
+	if client.Flags().Has(CacheFlagVoiceStates) {
+		client.PutVoiceState(evt.NewState.VoiceState)
 	}
 
 	if runAsync {
@@ -354,7 +354,7 @@ type applicationCommandPermissionsUpdateHandlers struct {
 	handlers []func(ApplicationCommandPermissionsUpdateEvent)
 }
 
-func (h *applicationCommandPermissionsUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *applicationCommandPermissionsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ApplicationCommandPermissionsUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("applicationCommandPermissionsUpdateHandlers: Failed parsing event data")
@@ -384,7 +384,7 @@ type autoModerationRuleCreateHandlers struct {
 	handlers []func(AutoModerationRuleCreateEvent)
 }
 
-func (h *autoModerationRuleCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *autoModerationRuleCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt AutoModerationRuleCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("autoModerationRuleCreateHandlers: Failed parsing event data")
@@ -410,7 +410,7 @@ type autoModerationRuleUpdateHandlers struct {
 	handlers []func(AutoModerationRuleUpdateEvent)
 }
 
-func (h *autoModerationRuleUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *autoModerationRuleUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt AutoModerationRuleUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("autoModerationRuleUpdateHandlers: Failed parsing event data")
@@ -436,7 +436,7 @@ type autoModerationRuleDeleteHandlers struct {
 	handlers []func(AutoModerationRuleDeleteEvent)
 }
 
-func (h *autoModerationRuleDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *autoModerationRuleDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt AutoModerationRuleDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("autoModerationRuleDeleteHandlers: Failed parsing event data")
@@ -462,7 +462,7 @@ type autoModerationActionExecutionHandlers struct {
 	handlers []func(AutoModerationActionExecutionEvent)
 }
 
-func (h *autoModerationActionExecutionHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *autoModerationActionExecutionHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt AutoModerationActionExecutionEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("autoModerationActionExecutionHandlers: Failed parsing event data")
@@ -492,7 +492,7 @@ type channelCreateHandlers struct {
 	handlers []func(ChannelCreateEvent)
 }
 
-func (h *channelCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *channelCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ChannelCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("channelCreateHandlers: Failed parsing event data")
@@ -518,7 +518,7 @@ type channelUpdateHandlers struct {
 	handlers []func(ChannelUpdateEvent)
 }
 
-func (h *channelUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *channelUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ChannelUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("channelUpdateHandlers: Failed parsing event data")
@@ -544,7 +544,7 @@ type channelDeleteHandlers struct {
 	handlers []func(ChannelDeleteEvent)
 }
 
-func (h *channelDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *channelDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ChannelDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("channelDeleteHandlers: Failed parsing event data")
@@ -570,7 +570,7 @@ type channelPinsUpdateHandlers struct {
 	handlers []func(ChannelPinsUpdateEvent)
 }
 
-func (h *channelPinsUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *channelPinsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ChannelPinsUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("channelPinsUpdateHandlers: Failed parsing event data")
@@ -600,7 +600,7 @@ type threadCreateHandlers struct {
 	handlers []func(ThreadCreateEvent)
 }
 
-func (h *threadCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *threadCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ThreadCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("threadCreateHandlers: Failed parsing event data")
@@ -626,7 +626,7 @@ type threadUpdateHandlers struct {
 	handlers []func(ThreadUpdateEvent)
 }
 
-func (h *threadUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *threadUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ThreadUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("threadUpdateHandlers: Failed parsing event data")
@@ -652,7 +652,7 @@ type threadDeleteHandlers struct {
 	handlers []func(ThreadDeleteEvent)
 }
 
-func (h *threadDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *threadDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ThreadDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("threadDeleteHandlers: Failed parsing event data")
@@ -678,7 +678,7 @@ type threadListSyncHandlers struct {
 	handlers []func(ThreadListSyncEvent)
 }
 
-func (h *threadListSyncHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *threadListSyncHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ThreadListSyncEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("threadListSyncHandlers: Failed parsing event data")
@@ -704,7 +704,7 @@ type threadMemberUpdateHandlers struct {
 	handlers []func(ThreadMemberUpdateEvent)
 }
 
-func (h *threadMemberUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *threadMemberUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ThreadMemberUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("threadMemberUpdateHandlers: Failed parsing event data")
@@ -730,7 +730,7 @@ type threadMembersUpdateHandlers struct {
 	handlers []func(ThreadMembersUpdateEvent)
 }
 
-func (h *threadMembersUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *threadMembersUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt ThreadMembersUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("threadMembersUpdateHandlers: Failed parsing event data")
@@ -760,7 +760,7 @@ type entitlementCreateHandlers struct {
 	handlers []func(EntitlementCreateEvent)
 }
 
-func (h *entitlementCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *entitlementCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt EntitlementCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("entitlementCreateHandlers: Failed parsing event data")
@@ -786,7 +786,7 @@ type entitlementUpdateHandlers struct {
 	handlers []func(EntitlementUpdateEvent)
 }
 
-func (h *entitlementUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *entitlementUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt EntitlementUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("entitlementUpdateHandlers: Failed parsing event data")
@@ -812,7 +812,7 @@ type entitlementDeleteHandlers struct {
 	handlers []func(EntitlementDeleteEvent)
 }
 
-func (h *entitlementDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *entitlementDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt EntitlementDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("entitlementDeleteHandlers: Failed parsing event data")
@@ -842,7 +842,7 @@ type guildUpdateHandlers struct {
 	handlers []func(GuildUpdateEvent)
 }
 
-func (h *guildUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildUpdateHandlers: Failed parsing event data")
@@ -868,7 +868,7 @@ type guildDeleteHandlers struct {
 	handlers []func(GuildDeleteEvent)
 }
 
-func (h *guildDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildDeleteHandlers: Failed parsing event data")
@@ -894,7 +894,7 @@ type guildAuditLogEntryCreateHandlers struct {
 	handlers []func(GuildAuditLogEntryCreateEvent)
 }
 
-func (h *guildAuditLogEntryCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildAuditLogEntryCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildAuditLogEntryCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildAuditLogEntryCreateHandlers: Failed parsing event data")
@@ -920,7 +920,7 @@ type guildBanAddHandlers struct {
 	handlers []func(GuildBanAddEvent)
 }
 
-func (h *guildBanAddHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildBanAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildBanAddEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildBanAddHandlers: Failed parsing event data")
@@ -946,7 +946,7 @@ type guildBanRemoveHandlers struct {
 	handlers []func(GuildBanRemoveEvent)
 }
 
-func (h *guildBanRemoveHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildBanRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildBanRemoveEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildBanRemoveHandlers: Failed parsing event data")
@@ -972,7 +972,7 @@ type guildEmojisUpdateHandlers struct {
 	handlers []func(GuildEmojisUpdateEvent)
 }
 
-func (h *guildEmojisUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildEmojisUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildEmojisUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildEmojisUpdateHandlers: Failed parsing event data")
@@ -998,7 +998,7 @@ type guildStickersUpdateHandlers struct {
 	handlers []func(GuildStickersUpdateEvent)
 }
 
-func (h *guildStickersUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildStickersUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildStickersUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildStickersUpdateHandlers: Failed parsing event data")
@@ -1024,7 +1024,7 @@ type guildIntegrationsUpdateHandlers struct {
 	handlers []func(GuildIntegrationsUpdateEvent)
 }
 
-func (h *guildIntegrationsUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildIntegrationsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildIntegrationsUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildIntegrationsUpdateHandlers: Failed parsing event data")
@@ -1048,7 +1048,7 @@ type guildMemberAddHandlers struct {
 	handlers []func(GuildMemberAddEvent)
 }
 
-func (h *guildMemberAddHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildMemberAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildMemberAddEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildMemberAddHandlers: Failed parsing event data")
@@ -1074,7 +1074,7 @@ type guildMemberRemoveHandlers struct {
 	handlers []func(GuildMemberRemoveEvent)
 }
 
-func (h *guildMemberRemoveHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildMemberRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildMemberRemoveEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildMemberRemoveHandlers: Failed parsing event data")
@@ -1100,7 +1100,7 @@ type guildMemberUpdateHandlers struct {
 	handlers []func(GuildMemberUpdateEvent)
 }
 
-func (h *guildMemberUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildMemberUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildMemberUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildMemberUpdateHandlers: Failed parsing event data")
@@ -1126,7 +1126,7 @@ type guildMembersChunkHandlers struct {
 	handlers []func(GuildMembersChunkEvent)
 }
 
-func (h *guildMembersChunkHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildMembersChunkHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildMembersChunkEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildMembersChunkHandlers: Failed parsing event data")
@@ -1152,7 +1152,7 @@ type guildRoleCreateHandlers struct {
 	handlers []func(GuildRoleCreateEvent)
 }
 
-func (h *guildRoleCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildRoleCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildRoleCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildRoleCreateHandlers: Failed parsing event data")
@@ -1178,7 +1178,7 @@ type guildRoleUpdateHandlers struct {
 	handlers []func(GuildRoleUpdateEvent)
 }
 
-func (h *guildRoleUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildRoleUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildRoleUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildRoleUpdateHandlers: Failed parsing event data")
@@ -1204,7 +1204,7 @@ type guildRoleDeleteHandlers struct {
 	handlers []func(GuildRoleDeleteEvent)
 }
 
-func (h *guildRoleDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildRoleDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildRoleDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildRoleDeleteHandlers: Failed parsing event data")
@@ -1230,7 +1230,7 @@ type guildScheduledEventCreateHandlers struct {
 	handlers []func(GuildScheduledEventCreateEvent)
 }
 
-func (h *guildScheduledEventCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildScheduledEventCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildScheduledEventCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildScheduledEventCreateHandlers: Failed parsing event data")
@@ -1256,7 +1256,7 @@ type guildScheduledEventUpdateHandlers struct {
 	handlers []func(GuildScheduledEventUpdateEvent)
 }
 
-func (h *guildScheduledEventUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildScheduledEventUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildScheduledEventUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildScheduledEventUpdateHandlers: Failed parsing event data")
@@ -1282,7 +1282,7 @@ type guildScheduledEventDeleteHandlers struct {
 	handlers []func(GuildScheduledEventDeleteEvent)
 }
 
-func (h *guildScheduledEventDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildScheduledEventDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildScheduledEventDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildScheduledEventDeleteHandlers: Failed parsing event data")
@@ -1308,7 +1308,7 @@ type guildScheduledEventUserAddHandlers struct {
 	handlers []func(GuildScheduledEventUserAddEvent)
 }
 
-func (h *guildScheduledEventUserAddHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildScheduledEventUserAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildScheduledEventUserAddEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildScheduledEventUserAddHandlers: Failed parsing event data")
@@ -1334,7 +1334,7 @@ type guildScheduledEventUserRemoveHandlers struct {
 	handlers []func(GuildScheduledEventUserRemoveEvent)
 }
 
-func (h *guildScheduledEventUserRemoveHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildScheduledEventUserRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildScheduledEventUserRemoveEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildScheduledEventUserRemoveHandlers: Failed parsing event data")
@@ -1360,7 +1360,7 @@ type guildSoundboardSoundCreateHandlers struct {
 	handlers []func(GuildSoundboardSoundCreateEvent)
 }
 
-func (h *guildSoundboardSoundCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildSoundboardSoundCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildSoundboardSoundCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildSoundboardSoundCreateHandlers: Failed parsing event data")
@@ -1386,7 +1386,7 @@ type guildSoundboardSoundUpdateHandlers struct {
 	handlers []func(GuildSoundboardSoundUpdateEvent)
 }
 
-func (h *guildSoundboardSoundUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildSoundboardSoundUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildSoundboardSoundUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildSoundboardSoundUpdateHandlers: Failed parsing event data")
@@ -1412,7 +1412,7 @@ type guildSoundboardSoundDeleteHandlers struct {
 	handlers []func(GuildSoundboardSoundDeleteEvent)
 }
 
-func (h *guildSoundboardSoundDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildSoundboardSoundDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildSoundboardSoundDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildSoundboardSoundDeleteHandlers: Failed parsing event data")
@@ -1438,7 +1438,7 @@ type guildSoundboardSoundsUpdateHandlers struct {
 	handlers []func(GuildSoundboardSoundsUpdateEvent)
 }
 
-func (h *guildSoundboardSoundsUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *guildSoundboardSoundsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt GuildSoundboardSoundsUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("guildSoundboardSoundsUpdateHandlers: Failed parsing event data")
@@ -1464,7 +1464,7 @@ type soundboardSoundsHandlers struct {
 	handlers []func(SoundboardSoundsEvent)
 }
 
-func (h *soundboardSoundsHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *soundboardSoundsHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt SoundboardSoundsEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("soundboardSoundsHandlers: Failed parsing event data")
@@ -1494,7 +1494,7 @@ type integrationCreateHandlers struct {
 	handlers []func(IntegrationCreateEvent)
 }
 
-func (h *integrationCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *integrationCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt IntegrationCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("integrationCreateHandlers: Failed parsing event data")
@@ -1520,7 +1520,7 @@ type integrationUpdateHandlers struct {
 	handlers []func(IntegrationUpdateEvent)
 }
 
-func (h *integrationUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *integrationUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt IntegrationUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("integrationUpdateHandlers: Failed parsing event data")
@@ -1546,7 +1546,7 @@ type integrationDeleteHandlers struct {
 	handlers []func(IntegrationDeleteEvent)
 }
 
-func (h *integrationDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *integrationDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt IntegrationDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("integrationDeleteHandlers: Failed parsing event data")
@@ -1576,7 +1576,7 @@ type inviteCreateHandlers struct {
 	handlers []func(InviteCreateEvent)
 }
 
-func (h *inviteCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *inviteCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt InviteCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("inviteCreateHandlers: Failed parsing event data")
@@ -1602,7 +1602,7 @@ type inviteDeleteHandlers struct {
 	handlers []func(InviteDeleteEvent)
 }
 
-func (h *inviteDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *inviteDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt InviteDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("inviteDeleteHandlers: Failed parsing event data")
@@ -1632,7 +1632,7 @@ type messageDeleteBulkHandlers struct {
 	handlers []func(MessageDeleteBulkEvent)
 }
 
-func (h *messageDeleteBulkHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messageDeleteBulkHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessageDeleteBulkEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messageDeleteBulkHandlers: Failed parsing event data")
@@ -1658,7 +1658,7 @@ type messageReactionAddHandlers struct {
 	handlers []func(MessageReactionAddEvent)
 }
 
-func (h *messageReactionAddHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messageReactionAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessageReactionAddEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messageReactionAddHandlers: Failed parsing event data")
@@ -1684,7 +1684,7 @@ type messageReactionRemoveHandlers struct {
 	handlers []func(MessageReactionRemoveEvent)
 }
 
-func (h *messageReactionRemoveHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messageReactionRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessageReactionRemoveEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messageReactionRemoveHandlers: Failed parsing event data")
@@ -1710,7 +1710,7 @@ type messageReactionRemoveAllHandlers struct {
 	handlers []func(MessageReactionRemoveAllEvent)
 }
 
-func (h *messageReactionRemoveAllHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messageReactionRemoveAllHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessageReactionRemoveAllEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messageReactionRemoveAllHandlers: Failed parsing event data")
@@ -1736,7 +1736,7 @@ type messageReactionRemoveEmojiHandlers struct {
 	handlers []func(MessageReactionRemoveEmojiEvent)
 }
 
-func (h *messageReactionRemoveEmojiHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messageReactionRemoveEmojiHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessageReactionRemoveEmojiEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messageReactionRemoveEmojiHandlers: Failed parsing event data")
@@ -1762,7 +1762,7 @@ type messagePollVoteAddHandlers struct {
 	handlers []func(MessagePollVoteAddEvent)
 }
 
-func (h *messagePollVoteAddHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messagePollVoteAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessagePollVoteAddEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messagePollVoteAddHandlers: Failed parsing event data")
@@ -1788,7 +1788,7 @@ type messagePollVoteRemoveHandlers struct {
 	handlers []func(MessagePollVoteRemoveEvent)
 }
 
-func (h *messagePollVoteRemoveHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *messagePollVoteRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt MessagePollVoteRemoveEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("messagePollVoteRemoveHandlers: Failed parsing event data")
@@ -1818,7 +1818,7 @@ type presenceUpdateHandlers struct {
 	handlers []func(PresenceUpdateEvent)
 }
 
-func (h *presenceUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *presenceUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt PresenceUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("presenceUpdateHandlers: Failed parsing event data")
@@ -1848,7 +1848,7 @@ type stageInstanceCreateHandlers struct {
 	handlers []func(StageInstanceCreateEvent)
 }
 
-func (h *stageInstanceCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *stageInstanceCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt StageInstanceCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("stageInstanceCreateHandlers: Failed parsing event data")
@@ -1874,7 +1874,7 @@ type stageInstanceUpdateHandlers struct {
 	handlers []func(StageInstanceUpdateEvent)
 }
 
-func (h *stageInstanceUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *stageInstanceUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt StageInstanceUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("stageInstanceUpdateHandlers: Failed parsing event data")
@@ -1900,7 +1900,7 @@ type stageInstanceDeleteHandlers struct {
 	handlers []func(StageInstanceDeleteEvent)
 }
 
-func (h *stageInstanceDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *stageInstanceDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt StageInstanceDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("stageInstanceDeleteHandlers: Failed parsing event data")
@@ -1930,7 +1930,7 @@ type subscriptionCreateHandlers struct {
 	handlers []func(SubscriptionCreateEvent)
 }
 
-func (h *subscriptionCreateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *subscriptionCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt SubscriptionCreateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("subscriptionCreateHandlers: Failed parsing event data")
@@ -1956,7 +1956,7 @@ type subscriptionUpdateHandlers struct {
 	handlers []func(SubscriptionUpdateEvent)
 }
 
-func (h *subscriptionUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *subscriptionUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt SubscriptionUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("subscriptionUpdateHandlers: Failed parsing event data")
@@ -1982,7 +1982,7 @@ type subscriptionDeleteHandlers struct {
 	handlers []func(SubscriptionDeleteEvent)
 }
 
-func (h *subscriptionDeleteHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *subscriptionDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt SubscriptionDeleteEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("subscriptionDeleteHandlers: Failed parsing event data")
@@ -2012,7 +2012,7 @@ type typingStartHandlers struct {
 	handlers []func(TypingStartEvent)
 }
 
-func (h *typingStartHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *typingStartHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt TypingStartEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("typingStartHandlers: Failed parsing event data")
@@ -2042,7 +2042,7 @@ type userUpdateHandlers struct {
 	handlers []func(UserUpdateEvent)
 }
 
-func (h *userUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *userUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt UserUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("userUpdateHandlers: Failed parsing event data")
@@ -2072,7 +2072,7 @@ type voiceChannelEffectSendHandlers struct {
 	handlers []func(VoiceChannelEffectSendEvent)
 }
 
-func (h *voiceChannelEffectSendHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *voiceChannelEffectSendHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt VoiceChannelEffectSendEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("voiceChannelEffectSendHandlers: Failed parsing event data")
@@ -2098,7 +2098,7 @@ type voiceServerUpdateHandlers struct {
 	handlers []func(VoiceServerUpdateEvent)
 }
 
-func (h *voiceServerUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *voiceServerUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt VoiceServerUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("voiceServerUpdateHandlers: Failed parsing event data")
@@ -2128,7 +2128,7 @@ type webhooksUpdateHandlers struct {
 	handlers []func(WebhooksUpdateEvent)
 }
 
-func (h *webhooksUpdateHandlers) handleEvent(cache CacheManager, runAsync bool, shardID int, data []byte) {
+func (h *webhooksUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
 	var evt WebhooksUpdateEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
 		h.logger.Error("webhooksUpdateHandlers: Failed parsing event data")

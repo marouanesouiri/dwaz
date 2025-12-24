@@ -28,7 +28,7 @@ import (
 // Implementations must support adding handlers and dispatching raw JSON event data to those handlers.
 type eventhandlersManager interface {
 	// handleEvent unmarshals the raw JSON data and calls all registered handlers.
-	handleEvent(cache CacheManager, runAsync bool, shardID int, buf []byte)
+	handleEvent(client *Client, runAsync bool, shardID int, buf []byte)
 	// addHandler adds a new handler function for the event type.
 	addHandler(handler any)
 }
@@ -57,7 +57,7 @@ const (
 //   - Dispatching handlers is done asynchronously in separate goroutines for each event.
 type dispatcher struct {
 	logger               xlog.Logger
-	cacheManager         CacheManager
+	client               *Client
 	handlersManagers     map[string]eventhandlersManager
 	handlerExecutionMode HandlerExecutionMode
 }
@@ -65,13 +65,13 @@ type dispatcher struct {
 // newDispatcher creates a new dispatcher instance.
 //
 // If logger is nil, it creates a default logger that writes to os.Stdout with debug-level logging.
-func newDispatcher(logger xlog.Logger, cacheManager CacheManager, mode HandlerExecutionMode) *dispatcher {
+func newDispatcher(logger xlog.Logger, client *Client, mode HandlerExecutionMode) *dispatcher {
 	if logger == nil {
 		logger = xlog.NewTextLogger(nil, xlog.LogLevelInfoLevel)
 	}
 	d := &dispatcher{
 		logger:               logger,
-		cacheManager:         cacheManager,
+		client:               client,
 		handlerExecutionMode: mode,
 		handlersManagers:     make(map[string]eventhandlersManager, 20),
 	}
@@ -109,7 +109,7 @@ func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
 		}()
 
 		if hm, ok := d.handlersManagers[eventName]; ok {
-			hm.handleEvent(d.cacheManager, d.handlerExecutionMode == HandlerExecutionAsync, shardID, data)
+			hm.handleEvent(d.client, d.handlerExecutionMode == HandlerExecutionAsync, shardID, data)
 		}
 	}()
 }
