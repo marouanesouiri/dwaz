@@ -175,6 +175,7 @@ type Component interface {
 // ContainerComponent, LabelComponent
 type LayoutComponent interface {
 	Component
+	layoutComponent()
 }
 
 // InteractiveComponent is an interface for components that can be included in an ActionRowComponent.
@@ -191,6 +192,7 @@ type InteractiveComponent interface {
 // TextDisplayComponent
 type SectionSubComponent interface {
 	Component
+	sectionSubComponent()
 }
 
 // SectionAccessoryComponent is an interface for all components that can be present in a SectionComponent.
@@ -198,13 +200,16 @@ type SectionSubComponent interface {
 // ButtonComponent, ThumbnailComponent
 type SectionAccessoryComponent interface {
 	Component
+	sectionAccessoryComponent()
 }
 
 // ContainerSubComponent is an interface for all components that can be present in a ContainerComponent.
 //
-// ActionRowComponent, TextDisplayComponent, MediaGalleryComponent, SeparatorComponent, FileComponent
+// ActionRowComponent, TextDisplayComponent, MediaGalleryComponent,
+// SeparatorComponent, FileComponent, SectionComponent
 type ContainerSubComponent interface {
 	Component
+	containerSubComponent()
 }
 
 // LabelSubComponent is an interface for all components that can be present in a LabelComponent.
@@ -212,6 +217,7 @@ type ContainerSubComponent interface {
 // TextInputComponent, StringSelectMenuComponent
 type LabelSubComponent interface {
 	Component
+	labelSubComponent()
 }
 
 // ComponentFields holds common fields for all components.
@@ -288,6 +294,9 @@ type ActionRowComponent struct {
 	//   - ChannelSelectMenuComponent (1)
 	Components []InteractiveComponent `json:"components"`
 }
+
+func (ActionRowComponent) layoutComponent()
+func (ActionRowComponent) containerSubComponent()
 
 var _ json.Unmarshaler = (*ActionRowComponent)(nil)
 
@@ -439,6 +448,8 @@ type ButtonComponent struct {
 	Disabled bool `json:"disabled,omitempty"`
 }
 
+func (ButtonComponent) sectionAccessoryComponent()
+
 var _ json.Marshaler = (*ButtonComponent)(nil)
 
 func (c *ButtonComponent) MarshalJSON() ([]byte, error) {
@@ -533,6 +544,8 @@ type StringSelectMenuComponent struct {
 	Disabled bool `json:"disabled,omitempty"`
 }
 
+func (StringSelectMenuComponent) labelSubComponent()
+
 var _ json.Marshaler = (*StringSelectMenuComponent)(nil)
 
 func (c *StringSelectMenuComponent) MarshalJSON() ([]byte, error) {
@@ -604,6 +617,8 @@ type TextInputComponent struct {
 	//   - Maximum of 100 characters.
 	Placeholder string `json:"placeholder,omitempty"`
 }
+
+func (TextInputComponent) labelSubComponent()
 
 var _ json.Marshaler = (*TextInputComponent)(nil)
 
@@ -875,6 +890,9 @@ type SectionComponent struct {
 	Accessory SectionAccessoryComponent `json:"accessory,omitempty"`
 }
 
+func (SectionComponent) layoutComponent()
+func (SectionComponent) containerSubComponent()
+
 var _ json.Unmarshaler = (*SectionComponent)(nil)
 
 func (c *SectionComponent) UnmarshalJSON(buf []byte) error {
@@ -901,7 +919,11 @@ func (c *SectionComponent) UnmarshalJSON(buf []byte) error {
 			if err != nil {
 				return err
 			}
-			c.Components = append(c.Components, component)
+			if sub, ok := component.(SectionSubComponent); ok {
+				c.Components = append(c.Components, sub)
+			} else {
+				return errors.New("cannot unmarshal non-SectionSubComponent into SectionSubComponent")
+			}
 		}
 	}
 
@@ -909,7 +931,9 @@ func (c *SectionComponent) UnmarshalJSON(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	c.Accessory = accessory
+	if sub, ok := accessory.(SectionAccessoryComponent); ok {
+		c.Accessory = sub
+	}
 
 	return nil
 }
@@ -940,6 +964,10 @@ type TextDisplayComponent struct {
 	// Content is the markdown-formatted text to be displayed, similar to a message's content field.
 	Content string `json:"content,omitempty"`
 }
+
+func (TextDisplayComponent) layoutComponent()
+func (TextDisplayComponent) sectionSubComponent()
+func (TextDisplayComponent) containerSubComponent()
 
 var _ json.Marshaler = (*TextDisplayComponent)(nil)
 
@@ -1010,6 +1038,8 @@ type ThumbnailComponent struct {
 	Spoiler bool `json:"spoiler,omitempty"`
 }
 
+func (ThumbnailComponent) sectionAccessoryComponent()
+
 var _ json.Marshaler = (*ThumbnailComponent)(nil)
 
 func (c *ThumbnailComponent) MarshalJSON() ([]byte, error) {
@@ -1017,10 +1047,6 @@ func (c *ThumbnailComponent) MarshalJSON() ([]byte, error) {
 	type NoMethod ThumbnailComponent
 	return json.Marshal((*NoMethod)(c))
 }
-
-// MediaGalleryItem represents an item in a MediaGallery component.
-//
-// Reference: https://discord.com/developers/docs/components/reference#media-gallery-media-galleryowaną
 
 // MediaGalleryItem represents an item in a MediaGallery component.
 //
@@ -1065,6 +1091,9 @@ type MediaGalleryComponent struct {
 	Items []MediaGalleryItem `json:"items"`
 }
 
+func (MediaGalleryComponent) layoutComponent()
+func (MediaGalleryComponent) containerSubComponent()
+
 var _ json.Marshaler = (*MediaGalleryComponent)(nil)
 
 func (c *MediaGalleryComponent) MarshalJSON() ([]byte, error) {
@@ -1100,6 +1129,9 @@ type FileComponent struct {
 	// Size is the size of the file in bytes. This field is ignored and provided by the API as part of the response.
 	Size int `json:"size,omitempty"`
 }
+
+func (FileComponent) layoutComponent()
+func (FileComponent) containerSubComponent()
 
 var _ json.Marshaler = (*FileComponent)(nil)
 
@@ -1144,6 +1176,9 @@ type SeparatorComponent struct {
 	//   - Defaults to 1.
 	Spacing SeperatorComponentSpacing `json:"spacing,omitempty"`
 }
+
+func (SeparatorComponent) layoutComponent()
+func (SeparatorComponent) containerSubComponent()
 
 var _ json.Marshaler = (*SeparatorComponent)(nil)
 
@@ -1192,6 +1227,8 @@ type ContainerComponent struct {
 	Spoiler bool `json:"spoiler,omitempty"`
 }
 
+func (ContainerComponent) layoutComponent()
+
 var _ json.Unmarshaler = (*ContainerComponent)(nil)
 
 func (c *ContainerComponent) UnmarshalJSON(buf []byte) error {
@@ -1221,7 +1258,11 @@ func (c *ContainerComponent) UnmarshalJSON(buf []byte) error {
 			if err != nil {
 				return err
 			}
-			c.Components = append(c.Components, component)
+			if sub, ok := component.(ContainerSubComponent); ok {
+				c.Components = append(c.Components, sub)
+			} else {
+				return errors.New("cannot unmarshal non-ContainerSubComponent into ContainerSubComponent")
+			}
 		}
 	}
 
@@ -1273,6 +1314,8 @@ type LabelComponent struct {
 	Components []LabelSubComponent `json:"components"`
 }
 
+func (LabelComponent) layoutComponent()
+
 var _ json.Unmarshaler = (*LabelComponent)(nil)
 
 func (c *LabelComponent) UnmarshalJSON(buf []byte) error {
@@ -1302,7 +1345,11 @@ func (c *LabelComponent) UnmarshalJSON(buf []byte) error {
 			if err != nil {
 				return err
 			}
-			c.Components = append(c.Components, component)
+			if sub, ok := component.(LabelSubComponent); ok {
+				c.Components = append(c.Components, sub)
+			} else {
+				return errors.New("cannot unmarshal non-LabelSubComponent into LabelSubComponent")
+			}
 		}
 	}
 
