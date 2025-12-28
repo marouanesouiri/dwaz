@@ -1056,7 +1056,9 @@ func (m *Message) UnmarshalJSON(buf []byte) error {
 			if err != nil {
 				return err
 			}
-			m.Components = append(m.Components, component)
+			if lComponent, ok := component.(LayoutComponent); ok {
+				m.Components = append(m.Components, lComponent)
+			}
 		}
 	}
 	return nil
