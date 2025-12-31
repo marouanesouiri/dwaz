@@ -265,6 +265,15 @@ func (m *Member) Permissions() Permissions {
 	return perms
 }
 
+// PermissionsIn returns the member's permissions in a specific guild channel,
+//
+// Example usage:
+//
+//	perms := member.PermissionsIn(channel)
+func (m *Member) PermissionsIn(channel GuildChannel) Permissions {
+	return channel.PermissionsFor(*m)
+}
+
 // FullMember represents a complete guild member with their associated user information.
 //
 // This extends Member with the full User object, combining both
