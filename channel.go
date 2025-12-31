@@ -183,6 +183,79 @@ type PermissionOverwrite struct {
 	Deny Permissions `json:"deny,omitempty"`
 }
 
+// MemberPermissionOverwrites contains the permission overwrites relevant to a specific member.
+type MemberPermissionOverwrites struct {
+	// Everyone contains the @everyone role overwrite if it exists.
+	Everyone optional.Option[PermissionOverwrite]
+
+	// Roles contains role-specific overwrites (excluding @everyone).
+	Roles []PermissionOverwrite
+
+	// Member contains the member-specific overwrite if it exists.
+	Member optional.Option[PermissionOverwrite]
+}
+
+// permissionOverwritesFor is a helper function to compute member permission overwrites.
+func permissionOverwritesFor(guildID Snowflake, overwrites []PermissionOverwrite, m Member) MemberPermissionOverwrites {
+	var result MemberPermissionOverwrites
+
+	roleMap := make(map[Snowflake]struct{}, len(m.RoleIDs))
+	for _, roleID := range m.RoleIDs {
+		roleMap[roleID] = struct{}{}
+	}
+
+	for _, overwrite := range overwrites {
+		if overwrite.Type == PermissionOverwriteTypeMember && overwrite.ID == m.ID {
+			result.Member = optional.Some(overwrite)
+			continue
+		}
+
+		if overwrite.Type == PermissionOverwriteTypeRole {
+			if overwrite.ID == guildID {
+				result.Everyone = optional.Some(overwrite)
+				continue
+			}
+
+			if _, hasMemberRole := roleMap[overwrite.ID]; hasMemberRole {
+				result.Roles = append(result.Roles, overwrite)
+			}
+		}
+	}
+
+	return result
+}
+
+// permissionsFor is a helper function to compute member permissions in a channel.
+func permissionsFor(basePerms Permissions, overwrites MemberPermissionOverwrites) Permissions {
+	perms := basePerms
+
+	if perms.Has(PermissionAdministrator) {
+		return PermissionAll
+	}
+
+	if overwrites.Everyone.IsPresent() {
+		everyone := overwrites.Everyone.Get()
+		perms.Remove(everyone.Deny)
+		perms.Add(everyone.Allow)
+	}
+
+	var roleDeny, roleAllow Permissions
+	for _, overwrite := range overwrites.Roles {
+		roleDeny.Add(overwrite.Deny)
+		roleAllow.Add(overwrite.Allow)
+	}
+	perms.Remove(roleDeny)
+	perms.Add(roleAllow)
+
+	if overwrites.Member.IsPresent() {
+		memberOverwrite := overwrites.Member.Get()
+		perms.Remove(memberOverwrite.Deny)
+		perms.Add(memberOverwrite.Allow)
+	}
+
+	return perms
+}
+
 // ForumTag represents a tag that can be applied to a thread
 // in a GuildForum or GuildMedia channel.
 //
@@ -281,6 +354,8 @@ type ThreadMetaData struct {
 //
 // Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
 type ChannelFields struct {
+	client *Client
+
 	// ID is the unique Discord snowflake ID of the channel.
 	ID Snowflake `json:"id"`
 
@@ -361,6 +436,17 @@ func (c *GuildChannelFields) JumpURL() string {
 	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
 }
 
+// PermissionOverwritesFor returns all permission overwrites relevant to the member.
+func (c *GuildChannelFields) PermissionOverwritesFor(m Member) MemberPermissionOverwrites {
+	return permissionOverwritesFor(c.GuildID, c.PermissionOverwrites, m)
+}
+
+// PermissionsFor returns the member's calculated permissions in the channel.
+func (c *GuildChannelFields) PermissionsFor(m Member) Permissions {
+	overwrites := c.PermissionOverwritesFor(m)
+	return permissionsFor(m.Permissions(), overwrites)
+}
+
 // ThreadChannelFields embeds BaseChannel and adds fields common to thread channels.
 type ThreadChannelFields struct {
 	ChannelFields
@@ -399,6 +485,17 @@ func (c *ThreadChannelFields) GetFlags() ChannelFlags {
 
 func (c *ThreadChannelFields) JumpURL() string {
 	return "https://discord.com/channels/" + c.GuildID.String() + "/" + c.ID.String()
+}
+
+// PermissionOverwritesFor returns all permission overwrites relevant to the member.
+func (c *ThreadChannelFields) PermissionOverwritesFor(m Member) MemberPermissionOverwrites {
+	return permissionOverwritesFor(c.GuildID, c.PermissionOverwrites, m)
+}
+
+// PermissionsFor returns the member's calculated permissions in the channel.
+func (c *ThreadChannelFields) PermissionsFor(m Member) Permissions {
+	overwrites := c.PermissionOverwritesFor(m)
+	return permissionsFor(m.Permissions(), overwrites)
 }
 
 // CategorizedChannelFields holds the parent category field for categorized guild channels.
@@ -869,6 +966,8 @@ type GuildChannel interface {
 	GetPermissionOverwrites() []PermissionOverwrite
 	GetFlags() ChannelFlags
 	JumpURL() string
+	PermissionOverwritesFor(member Member) MemberPermissionOverwrites
+	PermissionsFor(member Member) Permissions
 }
 
 var (
