@@ -74,6 +74,8 @@ func (f MemberFlags) Has(flags ...MemberFlags) bool {
 //
 // This contains guild-specific information like nickname, roles, and join date.
 type Member struct {
+	Client *Client
+
 	// ID is the user's unique Discord ID.
 	ID Snowflake `json:"id"`
 
@@ -230,6 +232,37 @@ func (m *Member) AvatarDecorationURLWith(size ImageSize) string {
 		AvatarDecorationURL(m.AvatarDecorationData.Asset, size)
 	}
 	return ""
+}
+
+// Permissions returns the member's base permissions in the guild.
+//
+// It calculates permissions by combining all permissions from the member's roles,
+// including the @everyone role permissions.
+//
+// Note:
+//   - This does not include channel-specific permission overwrites.
+//
+// Example usage:
+//
+//	perms := member.Permissions()
+func (m *Member) Permissions() Permissions {
+	if m.Client == nil {
+		return PermissionNone
+	}
+	if memberGuild := m.Client.GetGuild(m.GuildID); memberGuild.IsPresent() && memberGuild.Get().OwnerID == m.ID {
+		return PermissionAdministrator
+	}
+
+	roles := m.Client.GetRoles(m.RoleIDs...)
+	if everyone := m.Client.GetRole(m.GuildID); everyone.IsPresent() {
+		roles[m.GuildID] = everyone.Get()
+	}
+
+	var perms Permissions
+	for _, role := range roles {
+		perms.Add(role.Permissions)
+	}
+	return perms
 }
 
 // FullMember represents a complete guild member with their associated user information.
