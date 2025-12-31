@@ -251,10 +251,66 @@ const (
 	// Channel types: Text
 	PermissionPinMessages Permissions = 1 << 51
 
-	// PermissionPinMessages allows pinning and unpinning messages.
+	// PermissionBypassSlowmode allows bypassing slowmode.
 	//
 	// Channel types: Text, Voice, Stage
 	PermissionBypassSlowmode Permissions = 1 << 52
+
+	// PermissionNone represents no permissions.
+	PermissionNone Permissions = 0
+
+	// PermissionAll is a combination of all permissions except Administrator.
+	PermissionAll Permissions = PermissionCreateInstantInvite |
+		PermissionKickMembers |
+		PermissionBanMembers |
+		PermissionAdministrator |
+		PermissionManageChannels |
+		PermissionManageGuild |
+		PermissionAddReactions |
+		PermissionViewAuditLog |
+		PermissionPrioritySpeaker |
+		PermissionStream |
+		PermissionViewChannel |
+		PermissionSendMessages |
+		PermissionSendTTSMessages |
+		PermissionManageMessages |
+		PermissionEmbedLinks |
+		PermissionAttachFiles |
+		PermissionReadMessageHistory |
+		PermissionMentionEveryone |
+		PermissionUseExternalEmojis |
+		PermissionViewGuildInsights |
+		PermissionConnect |
+		PermissionSpeak |
+		PermissionMuteMembers |
+		PermissionDeafenMembers |
+		PermissionMoveMembers |
+		PermissionUseVAD |
+		PermissionChangeNickname |
+		PermissionManageNicknames |
+		PermissionManageRoles |
+		PermissionManageWebhooks |
+		PermissionManageGuildExpressions |
+		PermissionUseApplicationCommands |
+		PermissionRequestToSpeak |
+		PermissionManageEvents |
+		PermissionManageThreads |
+		PermissionCreatePublicThreads |
+		PermissionCreatePrivateThreads |
+		PermissionUseExternalStickers |
+		PermissionSendMessagesInThreads |
+		PermissionUseEmbeddedActivities |
+		PermissionModerateMembers |
+		PermissionViewCreatorMonetizationAnalytics |
+		PermissionUseSoundboard |
+		PermissionCreateGuildExpressions |
+		PermissionCreateEvents |
+		PermissionUseExternalSounds |
+		PermissionSendVoiceMessages |
+		PermissionSendPolls |
+		PermissionUseExternalApps |
+		PermissionPinMessages |
+		PermissionBypassSlowmode
 )
 
 // PermissionName is a human-readable name for a Discord permission.
@@ -315,7 +371,11 @@ const (
 )
 
 // Has returns true if all given permissions are set.
+// If Administrator is set, it always returns true.
 func (p Permissions) Has(perms ...Permissions) bool {
+	if BitFieldHas(p, PermissionAdministrator) {
+		return true
+	}
 	return BitFieldHas(p, perms...)
 }
 
@@ -328,6 +388,9 @@ func (p Permissions) Has(perms ...Permissions) bool {
 //	missing := p.Missing(PermissionSendMessages, PermissionManageChannels)
 //	// missing will contain PermissionManageChannels
 func (p Permissions) Missing(perms ...Permissions) Permissions {
+	if BitFieldHas(p, PermissionAdministrator) {
+		return PermissionNone
+	}
 	return BitFieldMissing(p, perms...)
 }
 
@@ -342,7 +405,12 @@ func (p *Permissions) Remove(perms ...Permissions) {
 }
 
 // PermissionsToNames returns a slice of PermissionName for all permissions set in the mask.
+// If Administrator is set, it returns only ["Administrator"].
 func (p Permissions) Names() []PermissionName {
+	if p.Has(PermissionAdministrator) {
+		return []PermissionName{PermissionNameAdministrator}
+	}
+
 	var names []PermissionName
 	for bit := Permissions(1); bit != 0; bit <<= 1 {
 		if p&bit != 0 {
