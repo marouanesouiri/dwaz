@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"encoding/json"
@@ -39,6 +39,11 @@ const (
 	// InteractionTypeModalSubmit is triggered when a user submits a modal dialog.
 	InteractionTypeModalSubmit
 )
+
+// Is returns true if this InteractionType matches the provided one.
+func (v InteractionType) Is(other InteractionType) bool {
+	return v == other
+}
 
 // InteractionContextType is the context in Discord where an interaction can be used, or where it was triggered from.
 // Details about using interaction contexts for application commands is in the commands context [documentation].
@@ -323,6 +328,16 @@ type ApplicationCommandInteractionFields struct {
 	AttachmentSizeLimit int `json:"attachment_size_limit"`
 }
 
+// Author returns the user who triggered the interaction.
+// It returns &Member.User if the interaction was triggered in a guild,
+// or User if triggered in a DM. Returns nil if neither is present.
+func (i *ApplicationCommandInteractionFields) Author() *User {
+	if i.Member != nil {
+		return &i.Member.User
+	}
+	return i.User
+}
+
 // PingInteraction represents a Discord Ping interaction.
 //
 // Reference: https://discord.com/developers/docs/interactions/receiving-and-responding
@@ -360,15 +375,42 @@ type MessageCommandInteraction struct {
 	Data MessageCommandInteractionData `json:"data"`
 }
 
-// TODO: continue the three interactions under this comment.
+// ComponentInteractionData represents the data payload for message component interactions (buttons, select menus).
+type ComponentInteractionData struct {
+	CustomID      string        `json:"custom_id"`
+	ComponentType ComponentType `json:"component_type"`
+	Values        []string      `json:"values,omitempty"`
+}
+
+// ComponentInteraction represents an interaction triggered by a message component (button, select menu).
 type ComponentInteraction struct {
-	InteractionFields
+	ApplicationCommandInteractionFields
+	Data    ComponentInteractionData `json:"data"`
+	Message Message                  `json:"message"`
 }
+
+// AutoCompleteInteractionData represents the data payload for autocomplete interactions.
+type AutoCompleteInteractionData struct {
+	ApplicationCommandInteractionDataFields
+	Options []ChatInputInteractionCommandOption `json:"options"`
+}
+
+// AutoCompleteInteraction represents an interaction triggered by an autocomplete event.
 type AutoCompleteInteraction struct {
-	InteractionFields
+	ApplicationCommandInteractionFields
+	Data AutoCompleteInteractionData `json:"data"`
 }
+
+// ModalSubmitInteractionData represents the data payload for modal submit interactions.
+type ModalSubmitInteractionData struct {
+	CustomID   string      `json:"custom_id"`
+	Components []Component `json:"components"`
+}
+
+// ModalSubmitInteraction represents an interaction triggered by a modal submission.
 type ModalSubmitInteraction struct {
-	InteractionFields
+	ApplicationCommandInteractionFields
+	Data ModalSubmitInteractionData `json:"data"`
 }
 
 // Interaction is the interface representing a Discord interaction.
