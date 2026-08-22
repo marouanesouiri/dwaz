@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,19 +11,13 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/url"
-	"strconv"
 	"time"
-
-	"github.com/marouanesouiri/stdx/optional"
-	"github.com/marouanesouiri/stdx/result"
 )
 
 // ChannelType represents Discord channel types.
@@ -186,13 +180,13 @@ type PermissionOverwrite struct {
 // MemberPermissionOverwrites contains the permission overwrites relevant to a specific member.
 type MemberPermissionOverwrites struct {
 	// Everyone contains the @everyone role overwrite if it exists.
-	Everyone optional.Option[PermissionOverwrite]
+	Everyone *PermissionOverwrite
 
 	// Roles contains role-specific overwrites (excluding @everyone).
 	Roles []PermissionOverwrite
 
 	// Member contains the member-specific overwrite if it exists.
-	Member optional.Option[PermissionOverwrite]
+	Member *PermissionOverwrite
 }
 
 // permissionOverwritesFor is a helper function to compute member permission overwrites.
@@ -206,13 +200,15 @@ func permissionOverwritesFor(guildID Snowflake, overwrites []PermissionOverwrite
 
 	for _, overwrite := range overwrites {
 		if overwrite.Type == PermissionOverwriteTypeMember && overwrite.ID == m.ID {
-			result.Member = optional.Some(overwrite)
+			o := overwrite
+			result.Member = &o
 			continue
 		}
 
 		if overwrite.Type == PermissionOverwriteTypeRole {
 			if overwrite.ID == guildID {
-				result.Everyone = optional.Some(overwrite)
+				o := overwrite
+				result.Everyone = &o
 				continue
 			}
 
@@ -233,10 +229,9 @@ func permissionsFor(basePerms Permissions, overwrites MemberPermissionOverwrites
 		return PermissionAll
 	}
 
-	if overwrites.Everyone.IsPresent() {
-		everyone := overwrites.Everyone.Get()
-		perms.Remove(everyone.Deny)
-		perms.Add(everyone.Allow)
+	if overwrites.Everyone != nil {
+		perms.Remove(overwrites.Everyone.Deny)
+		perms.Add(overwrites.Everyone.Allow)
 	}
 
 	var roleDeny, roleAllow Permissions
@@ -247,10 +242,9 @@ func permissionsFor(basePerms Permissions, overwrites MemberPermissionOverwrites
 	perms.Remove(roleDeny)
 	perms.Add(roleAllow)
 
-	if overwrites.Member.IsPresent() {
-		memberOverwrite := overwrites.Member.Get()
-		perms.Remove(memberOverwrite.Deny)
-		perms.Add(memberOverwrite.Allow)
+	if overwrites.Member != nil {
+		perms.Remove(overwrites.Member.Deny)
+		perms.Add(overwrites.Member.Allow)
 	}
 
 	return perms
@@ -354,8 +348,6 @@ type ThreadMetaData struct {
 //
 // Reference: https://discord.com/developers/docs/resources/channel#channel-object-channel-structure
 type ChannelFields struct {
-	client *Client
-
 	// ID is the unique Discord snowflake ID of the channel.
 	ID Snowflake `json:"id"`
 
@@ -441,10 +433,10 @@ func (c *GuildChannelFields) PermissionOverwritesFor(m Member) MemberPermissionO
 	return permissionOverwritesFor(c.GuildID, c.PermissionOverwrites, m)
 }
 
-// PermissionsFor returns the member's calculated permissions in the channel.
-func (c *GuildChannelFields) PermissionsFor(m Member) Permissions {
+// PermissionsFor returns the member's calculated permissions in the channel given their base permissions.
+func (c *GuildChannelFields) PermissionsFor(basePerms Permissions, m Member) Permissions {
 	overwrites := c.PermissionOverwritesFor(m)
-	return permissionsFor(m.Permissions(), overwrites)
+	return permissionsFor(basePerms, overwrites)
 }
 
 // ThreadChannelFields embeds BaseChannel and adds fields common to thread channels.
@@ -492,10 +484,10 @@ func (c *ThreadChannelFields) PermissionOverwritesFor(m Member) MemberPermission
 	return permissionOverwritesFor(c.GuildID, c.PermissionOverwrites, m)
 }
 
-// PermissionsFor returns the member's calculated permissions in the channel.
-func (c *ThreadChannelFields) PermissionsFor(m Member) Permissions {
+// PermissionsFor returns the member's calculated permissions in the channel given their base permissions.
+func (c *ThreadChannelFields) PermissionsFor(basePerms Permissions, m Member) Permissions {
 	overwrites := c.PermissionOverwritesFor(m)
-	return permissionsFor(m.Permissions(), overwrites)
+	return permissionsFor(basePerms, overwrites)
 }
 
 // CategorizedChannelFields holds the parent category field for categorized guild channels.
@@ -807,6 +799,7 @@ func (c *GroupDMChannel) MarshalJSON() ([]byte, error) {
 //	}
 type Channel interface {
 	json.Marshaler
+	fmt.Stringer
 	GetID() Snowflake
 	GetType() ChannelType
 	CreatedAt() time.Time
@@ -824,6 +817,7 @@ var (
 	_ Channel = (*ThreadChannel)(nil)
 	_ Channel = (*DMChannel)(nil)
 	_ Channel = (*GroupDMChannel)(nil)
+	_ Channel = (*FollowedChannel)(nil)
 )
 
 // MessageChannel represents a Discord text channel.
@@ -967,7 +961,7 @@ type GuildChannel interface {
 	GetFlags() ChannelFlags
 	JumpURL() string
 	PermissionOverwritesFor(member Member) MemberPermissionOverwrites
-	PermissionsFor(member Member) Permissions
+	PermissionsFor(basePerms Permissions, member Member) Permissions
 }
 
 var (
@@ -1314,470 +1308,9 @@ const (
 	VideoQualityModesFull
 )
 
-// FetchChannel retrieves a channel by its ID.
-//
-// Returns a Channel interface which can be asserted to specific types.
-func (r *requester) FetchChannel(channelID Snowflake) result.Result[Channel] {
-	res := r.DoRequest(Request{
-		Method: "GET",
-		URL:    "/channels/" + channelID.String(),
-	})
-	if res.IsErr() {
-		return result.Err[Channel](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	bodyBytes, err := io.ReadAll(body)
-	if err != nil {
-		return result.Err[Channel](err)
-	}
-
-	channel, err := UnmarshalChannel(bodyBytes)
-	if err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/channels/{id}",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[Channel](err)
-	}
-	return result.Ok(channel)
-}
-
-func (r *requester) modifyChannel(channelID Snowflake, reqBody []byte, reason string) (Channel, error) {
-	res := r.DoRequest(Request{
-		Method: "PATCH",
-		URL:    "/channels/" + channelID.String(),
-		Body:   reqBody,
-		Reason: reason,
-	})
-	if res.IsErr() {
-		return nil, res.Err()
-	}
-	body := res.Value()
-	defer body.Close()
-
-	bodyBytes, err := io.ReadAll(body)
-	if err != nil {
-		return nil, res.Err()
-	}
-
-	channel, err := UnmarshalChannel(bodyBytes)
-	if err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "PATCH",
-			"url":    "/channels/{id}",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return nil, res.Err()
-	}
-	return channel, nil
-}
-
-// ModifyGroupDMOptions contains parameters for modifying a Group DM channel.
-type ModifyGroupDMOptions struct {
-	// Name is the channel's name (1-100 characters).
-	Name string `json:"name,omitempty"`
-
-	// Icon sets the icon for Group DM.
-	Icon Base64Image `json:"icon,omitempty"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// ModifyGroupDMChannel updates a group DM channel's settings.
-func (r *requester) ModifyGroupDMChannel(channelID Snowflake, opts ModifyGroupDMOptions) result.Result[*GroupDMChannel] {
-	reqBody, _ := json.Marshal(opts)
-	channel, err := r.modifyChannel(channelID, reqBody, opts.Reason)
-	if err != nil {
-		return result.Err[*GroupDMChannel](err)
-	}
-	if groupdmChannel, ok := channel.(*GroupDMChannel); ok {
-		return result.From(groupdmChannel, err)
-	}
-	return result.Err[*GroupDMChannel](fmt.Errorf("ModifyGroupDMChannel: channel ID %v is not a Group DM", channelID))
-}
-
-// ModifyGuildChannelOptions contains parameters for modifying a Guild channel.
-type ModifyGuildChannelOptions struct {
-	// Name is the channel's name (1-100 characters).
-	Name string `json:"name,omitempty"`
-
-	// Type specifies the type of channel to update.
-	//
-	// Note:
-	//  - Defaults to ChannelTypeGuildText if unset.
-	//  - Valid values include ChannelTypeGuildText, ChannelTypeGuildVoice, ChannelTypeGuildForum, etc.
-	//
-	// Applies to All Channels.
-	Type optional.Option[ChannelType] `json:"type,omitzero"`
-
-	// Position determines the channel’s position in the server’s channel list (lower numbers appear higher).
-	//
-	// Note:
-	//  - Channels with the same position are sorted by their internal ID.
-	//
-	// Applies to All Channels.
-	Position optional.Option[int] `json:"position,omitzero"`
-
-	// Topic is a description of the channel (0-1024 characters).
-	//
-	// Note:
-	//  - This field is optional.
-	//
-	// Applies to Channels of Type: Text, Announcement, Forum, Media.
-	Topic optional.Option[string] `json:"topic,omitzero"`
-
-	// Nsfw marks the channel as Not Safe For Work, restricting it to 18+ users.
-	//
-	// Note:
-	//  - Set to true to enable the age restriction.
-	//
-	// Applies to Channels of Type: Text, Voice, Announcement, Stage, Forum.
-	Nsfw optional.Option[bool] `json:"nsfw,omitzero"`
-
-	// RateLimitPerUser sets the seconds a user must wait before sending another message (0-21600).
-	//
-	// Note:
-	//  - Bots and users with manage_messages or manage_channel permissions are unaffected.
-	//
-	// Applies to Channels of Type: Text, Voice, Stage, Forum, Media.
-	RateLimitPerUser optional.Option[int] `json:"rate_limit_per_user,omitzero"`
-
-	// Bitrate sets the audio quality for voice or stage channels (in bits, minimum 8000).
-	//
-	// Note:
-	//  - This field is ignored for non-voice channels.
-	//
-	// Applies to Channels of Type: Voice, Stage.
-	Bitrate optional.Option[int] `json:"bitrate,omitzero"`
-
-	// UserLimit caps the number of users in a voice or stage channel (0 for unlimited, 1-99 for a limit).
-	//
-	// Note:
-	//  - Set to 0 to allow unlimited users.
-	//
-	// Applies to Channels of Type: Voice, Stage.
-	UserLimit optional.Option[int] `json:"user_limit,omitzero"`
-
-	// PermissionOverwrites defines custom permissions for specific roles or users.
-	//
-	// Note:
-	//  - This field requires valid overwrite objects.
-	//
-	// Applies to All Channels.
-	PermissionOverwrites optional.Option[[]PermissionOverwrite] `json:"permission_overwrites,omitzero"`
-
-	// ParentID is the ID of the category to nest the channel under.
-	//
-	// Note:
-	//  - This field is ignored for category channels.
-	//
-	// Applies to Channels of Type: Text, Voice, Announcement, Stage, Forum, Media.
-	ParentID optional.Option[Snowflake] `json:"parent_id,omitzero"`
-
-	// RtcRegion sets the voice region id for the voice channel.
-	//
-	// Note:
-	//  - Automatic when set to null (or empty string in Option).
-	//
-	// Applies to Channels of Type: Voice, Stage.
-	RtcRegion optional.Option[string] `json:"rtc_region,omitzero"`
-
-	// VideoQualityMode sets the camera video quality for voice or stage channels.
-	//
-	// Note:
-	//  - Valid options are defined in VideoQualityModes.
-	//
-	// Applies to Channels of Type: Voice, Stage.
-	VideoQualityMode optional.Option[VideoQualityModes] `json:"video_quality_mode,omitzero"`
-
-	// DefaultAutoArchiveDuration sets the default auto archive duration for new threads in this channel.
-	DefaultAutoArchiveDuration optional.Option[AutoArchiveDuration] `json:"default_auto_archive_duration,omitzero"`
-
-	// Flags sets the channel flags.
-	Flags optional.Option[ChannelFlags] `json:"flags,omitzero"`
-
-	// AvailableTags sets the available tags for a forum/media channel.
-	AvailableTags optional.Option[[]ForumTag] `json:"available_tags,omitzero"`
-
-	// DefaultReactionEmoji sets the default reaction emoji for a forum/media channel.
-	DefaultReactionEmoji optional.Option[DefaultReactionEmoji] `json:"default_reaction_emoji,omitzero"`
-
-	// DefaultThreadRateLimitPerUser sets the default thread slowmode.
-	DefaultThreadRateLimitPerUser optional.Option[int] `json:"default_thread_rate_limit_per_user,omitzero"`
-
-	// DefaultSortOrder sets the default sort order for a forum/media channel.
-	DefaultSortOrder optional.Option[ForumPostsSortOrder] `json:"default_sort_order,omitzero"`
-
-	// DefaultForumLayout sets the default layout for a forum channel.
-	DefaultForumLayout optional.Option[ForumLayout] `json:"default_forum_layout,omitzero"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// ModifyGuildChannel updates a guild channel's settings.
-//
-// Requires the PermissionManageChannels permission.
-func (r *requester) ModifyGuildChannel(channelID Snowflake, opts ModifyGuildChannelOptions) result.Result[GuildChannel] {
-	reqBody, _ := json.Marshal(opts)
-	channel, err := r.modifyChannel(channelID, reqBody, opts.Reason)
-	if err != nil {
-		return result.Err[GuildChannel](err)
-	}
-	if gChannel, ok := channel.(GuildChannel); ok {
-		return result.From(gChannel, err)
-	}
-	return result.Err[GuildChannel](fmt.Errorf("ModifyGuildChannel: channel ID %v is not a Guild channel", channelID))
-}
-
-// ModifyGuildThreadOptions contains parameters for modifying a Guild thread's settings.
-type ModifyGuildThreadOptions struct {
-	// Name is the channel's name (1-100 characters).
-	Name string `json:"name,omitempty"`
-
-	// Archived sets the archived state of the thread.
-	Archived optional.Option[bool] `json:"archived,omitzero"`
-
-	// AutoArchiveDuration sets the duration after which the thread will automatically archive.
-	AutoArchiveDuration optional.Option[AutoArchiveDuration] `json:"auto_archive_duration,omitzero"`
-
-	// Locked sets the locked state of the thread.
-	Locked optional.Option[bool] `json:"locked,omitzero"`
-
-	// Invitable sets whether non-moderators can invite others to the thread (private threads only).
-	Invitable optional.Option[bool] `json:"invitable,omitzero"`
-
-	// RateLimitPerUser sets the seconds a user must wait before sending another message (0-21600).
-	//
-	// Note:
-	//  - Bots and users with manage_messages or manage_channel permissions are unaffected.
-	RateLimitPerUser optional.Option[int] `json:"rate_limit_per_user,omitzero"`
-
-	// Flags sets the channel flags.
-	Flags optional.Option[ChannelFlags] `json:"flags,omitzero"`
-
-	// AppliedTags sets the tags applied to a thread.
-	AppliedTags optional.Option[[]Snowflake] `json:"applied_tags,omitzero"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// ModifyGuildThread updates a guild thread channel's settings.
-//
-// Requires the PermissionManageThreads permission.
-func (r *requester) ModifyGuildThread(channelID Snowflake, opts ModifyGuildThreadOptions) result.Result[*ThreadChannel] {
-	reqBody, _ := json.Marshal(opts)
-	channel, err := r.modifyChannel(channelID, reqBody, opts.Reason)
-	if err != nil {
-		return result.Err[*ThreadChannel](err)
-	}
-	if threadChannel, ok := channel.(*ThreadChannel); ok {
-		return result.From(threadChannel, err)
-	}
-	return result.Err[*ThreadChannel](fmt.Errorf("ModifyGuildThread: channel ID %v is not a Thread channel", channelID))
-}
-
-// DeleteChannelOptions contains parameters for deleting a channel, or closing a private message.
-type DeleteChannelOptions struct {
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// DeleteChannel deletes/Close a channel.
-//
-// Note:
-//   - For Community guilds, the Rules or Guidelines channelID
-//     and the Community Updates channel cannot be deleted.
-//   - Deleting a category does not delete its child channels;
-//
-// Requires the PermissionManageChannels permission for the guild, or PermissionManageThreads if the channel is a thread.
-func (r *requester) DeleteChannel(channelID Snowflake, opts DeleteChannelOptions) result.Result[Channel] {
-	res := r.DoRequest(Request{
-		Method: "DELETE",
-		URL:    "/channels/" + channelID.String(),
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.Err[Channel](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	bodyBytes, err := io.ReadAll(body)
-	if err != nil {
-		return result.Err[Channel](err)
-	}
-
-	channel, err := UnmarshalChannel(bodyBytes)
-	if err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "DELETE",
-			"url":    "/channels/{id}",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[Channel](err)
-	}
-	return result.Ok(channel)
-}
-
-// EditChannelPermissionsOptions contains parameters for updating a channel overwrite permissions.
-type EditChannelPermissionsOptions struct {
-	// Allow is the permissions to allow for the overwite.
-	Allow optional.Option[Permissions] `json:"allow,omitzero"`
-
-	// Deny is the permissions to deny for the overwite.
-	Deny optional.Option[Permissions] `json:"deny,omitzero"`
-
-	// Type is the type of the overwite.
-	Type PermissionOverwriteType `json:"type"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// EditChannelPermissions edits the channel permission overwrites for a user or role in a channel.
-func (r *requester) EditChannelPermissions(channelID Snowflake, overwriteID Snowflake, opts EditChannelPermissionsOptions) result.Void {
-	reqBody, _ := json.Marshal(opts)
-	res := r.DoRequest(Request{
-		Method: "PUT",
-		URL:    "/channels/" + channelID.String() + "/permissions/" + overwriteID.String(),
-		Body:   reqBody,
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// FetchChannelInvites Returns a list of invite objects for the channel
-//
-// Note:
-//   - Only usable for guild channels.
-//
-// Requires the PermissionManageChannels permission.
-func (r *requester) FetchChannelInvites(channelID Snowflake) result.Result[[]FullInvite] {
-	res := r.DoRequest(Request{
-		Method: "GET",
-		URL:    "/channels/" + channelID.String() + "/invites",
-	})
-	if res.IsErr() {
-		return result.Err[[]FullInvite](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var invites []FullInvite
-	if err := json.NewDecoder(body).Decode(&invites); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/channels/{id}/invites",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[[]FullInvite](err)
-	}
-	return result.Ok(invites)
-}
-
-// CreateChannelInviteOptions contains parameters for creating a new invite for a channel.
-type CreateChannelInviteOptions struct {
-	// MaxAge is the duration of invite in seconds before expiry, or 0 for never. between 0 and 604800 (7 days).
-	MaxAge optional.Option[int] `json:"max_age,omitzero"`
-
-	// MaxUses is the max number of uses or 0 for unlimited. between 0 and 100.
-	MaxUses int `json:"max_uses,omitempty"`
-
-	// Temporary is whether this invite only grants temporary membership.
-	Temporary bool `json:"temporary,omitempty"`
-
-	// Unique if true, don't try to reuse a similar invite (useful for creating many unique one time use invites)
-	Unique bool `json:"unique,omitzero"`
-
-	// TargetType is the type of target for this voice channel invite.
-	TargetType InviteTargetType `json:"target_type,omitzero"`
-
-	// TargetUserID is the id of the user whose stream to display for this invite,
-	// required if TargetType is InviteTargetTypeStream, the user must be streaming in the channel.
-	TargetUserID Snowflake `json:"target_user_id,omitempty"`
-
-	// TargetApplicationID is the id of the embedded application to open for this invite,
-	// required if TargetType is InviteTargetTypeEmbeddedApplication, the application must have the EMBEDDED flag.
-	TargetApplicationID Snowflake `json:"target_application_id,omitempty"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// CreateChannelInvite creates a new invite object for the channel.
-//
-// Note:
-//   - Only usable for guild channels.
-//
-// Requires the PermissionCreateInstantInvite permission.
-func (r *requester) CreateChannelInvite(channelID Snowflake, opts CreateChannelInviteOptions) result.Result[Invite] {
-	reqBody, _ := json.Marshal(opts)
-	res := r.DoRequest(Request{
-		Method: "POST",
-		URL:    "/channels/" + channelID.String() + "/invites",
-		Body:   reqBody,
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.Err[Invite](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var invite Invite
-	if err := json.NewDecoder(body).Decode(&invite); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "POST",
-			"url":    "/channels/{id}/invites",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[Invite](err)
-	}
-	return result.Ok(invite)
-}
-
-// DeleteChannelPermissionOptions contains parameters for deleting a channel permission.
-type DeleteChannelPermissionOptions struct {
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// DeleteChannelPermission deletes a channel permission overwrite for a user or role in a channel.
-//
-// Note:
-//   - Only usable for guild channels.
-//
-// Requires the PermissionManageRoles permission.
-func (r *requester) DeleteChannelPermission(channelID Snowflake, overwriteID Snowflake, opts DeleteChannelPermissionOptions) result.Void {
-	res := r.DoRequest(Request{
-		Method: "DELETE",
-		URL:    "/channels/" + channelID.String() + "/permissions/" + overwriteID.String(),
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// FollowAnnouncementChannelOptions contains parameters for following a Announcement channel.
-type FollowAnnouncementChannelOptions struct {
-	// WebhookChannelID is the id of target channel.
-	WebhookChannelID Snowflake `json:"webhook_channel_id"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
+// Is returns true if this VideoQualityModes matches the provided one.
+func (v VideoQualityModes) Is(other VideoQualityModes) bool {
+	return v == other
 }
 
 // FollowedChannel represents a channel that is followed.
@@ -1789,10 +1322,24 @@ type FollowedChannel struct {
 	WebhookID Snowflake `json:"webhook_id"`
 }
 
+var _ Channel = (*FollowedChannel)(nil)
+
+// GetID returns the ID of the channel.
+func (c *FollowedChannel) GetID() Snowflake {
+	return c.ChannelID
+}
+
+// GetType returns the ChannelType of this channel.
+func (c *FollowedChannel) GetType() ChannelType {
+	return ChannelTypeGuildAnnouncement
+}
+
+// CreatedAt returns the timestamp when the channel was created.
 func (c *FollowedChannel) CreatedAt() time.Time {
 	return c.ChannelID.Timestamp()
 }
 
+// FollowedAt returns the timestamp when the channel was followed.
 func (c *FollowedChannel) FollowedAt() time.Time {
 	return c.WebhookID.Timestamp()
 }
@@ -1809,434 +1356,13 @@ func (c *FollowedChannel) String() string {
 	return c.Mention()
 }
 
-// FollowAnnouncementChannel follows an Announcement Channel to send messages to a target channel.
-//
-// Note:
-//   - Only usable for guild channels.
-//
-// Requires the PermissionManageWebhooks permission in the target channel.
-func (r *requester) FollowAnnouncementChannel(channelID Snowflake, opts FollowAnnouncementChannelOptions) result.Result[FollowedChannel] {
-	reqBody, _ := json.Marshal(opts)
-	res := r.DoRequest(Request{
-		Method: "POST",
-		URL:    "/channels/" + channelID.String() + "/followers",
-		Body:   reqBody,
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.Err[FollowedChannel](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var followedChannel FollowedChannel
-	if err := json.NewDecoder(body).Decode(&followedChannel); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "POST",
-			"url":    "/channels/{id}/followers",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[FollowedChannel](err)
-	}
-	return result.Ok(followedChannel)
+// MarshalJSON marshals FollowedChannel to JSON.
+func (c *FollowedChannel) MarshalJSON() ([]byte, error) {
+	type NoMethod FollowedChannel
+	return json.Marshal((*NoMethod)(c))
 }
 
-// TriggerTypingIndicator posts a typing indicator for the specified channel.
-//
-// Note:
-//   - The typing indicator expires after 10 seconds.
-func (r *requester) TriggerTypingIndicator(channelID Snowflake) result.Void {
-	res := r.DoRequest(Request{
-		Method: "POST",
-		URL:    "/channels/" + channelID.String() + "/typing",
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// GroupDMAddRecipientOptions contains parameters for adding a recipient to a group dm channel.
-type GroupDMAddRecipientOptions struct {
-	// AccessToken is the access token of a user that has granted your app the 'gdm.join' scope.
-	AccessToken string `json:"access_token"`
-
-	// Nick is the nickname of the user being added.
-	Nick string `json:"nick,omitempty"`
-}
-
-// GroupDMAddRecipient adds a recipient to a Group DM using their access token.
-func (r *requester) GroupDMAddRecipient(channelID Snowflake, userID Snowflake, opts GroupDMAddRecipientOptions) result.Void {
-	reqBody, _ := json.Marshal(opts)
-	res := r.DoRequest(Request{
-		Method: "PUT",
-		URL:    "/channels/" + channelID.String() + "/recipients/" + userID.String(),
-		Body:   reqBody,
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// GroupDMRemoveRecipient removes a recipient from a Group DM.
-func (r *requester) GroupDMRemoveRecipient(channelID Snowflake, userID Snowflake) result.Void {
-	res := r.DoRequest(Request{
-		Method: "DELETE",
-		URL:    "/channels/" + channelID.String() + "/recipients/" + userID.String(),
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// StartThreadFromMessageOptions contains parameters for starting a thread from a message.
-type StartThreadFromMessageOptions struct {
-	// Name is a 1-100 character channel name
-	Name string `json:"name"`
-
-	// AutoArchiveDuration is the number of minutes of inactivity after which the
-	// thread will be automatically archived and stop showing in the channel list.
-	// Valid values are: 60, 1440, 4320, and 10080.
-	AutoArchiveDuration AutoArchiveDuration `json:"auto_archive_duration,omitempty"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message (0-21600).
-	RateLimitPerUser int `json:"rate_limit_per_user"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// StartThreadFromMessage creates a new thread from an existing message.
-//
-// Note:
-//
-//   - When called on a 'GuildText' channel, creates a 'PublicThread'.
-//     When called on a 'GuildAnnouncement' channel, creates a 'AnnouncementThread'.
-//     Does not work on a 'GuildForum' or a 'GuildMedia' channel.
-//
-//   - The id of the created thread will be the same as the id of the source message,
-//     and as such a message can only have a single thread created from it.
-//
-// Requires the PermissionManageWebhooks permission in the target channel.
-func (r *requester) StartThreadFromMessage(channelID Snowflake, messageID Snowflake, opts StartThreadFromMessageOptions) result.Result[GuildChannel] {
-	reqBody, _ := json.Marshal(opts)
-	res := r.DoRequest(Request{
-		Method: "POST",
-		URL:    "/channels/" + channelID.String() + "/messages/" + messageID.String() + "/threads",
-		Body:   reqBody,
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.Err[GuildChannel](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	bodyBytes, err := io.ReadAll(body)
-	if err != nil {
-		return result.Err[GuildChannel](err)
-	}
-
-	channel, err := UnmarshalChannel(bodyBytes)
-	if err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "POST",
-			"url":    "/channels/{id}/messages/{msg_id}/threads",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[GuildChannel](err)
-	}
-	return result.Ok(channel.(GuildChannel))
-}
-
-// StartThreadWithoutMessageOptions contains parameters for starting a thread without a message.
-type StartThreadWithoutMessageOptions struct {
-	// Type the type of thread to create
-	//
-	// Can be one of: ChannelTypeAnnouncementThread, ChannelTypePublicThread or ChannelTypePrivateThread.
-	Type ChannelType `json:"type,omitzero"`
-
-	// Name is a 1-100 character channel name
-	Name string `json:"name"`
-
-	// AutoArchiveDuration is the number of minutes of inactivity after which the
-	// thread will be automatically archived and stop showing in the channel list.
-	// Valid values are: 60, 1440, 4320, and 10080.
-	AutoArchiveDuration AutoArchiveDuration `json:"auto_archive_duration,omitempty"`
-
-	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message (0-21600).
-	RateLimitPerUser int `json:"rate_limit_per_user"`
-
-	// Invitable is whether non-moderators can add other non-moderators to a thread
-	//
-	// Note:
-	//   - only available when creating a private thread.
-	Invitable optional.Option[bool] `json:"invitable,omitzero"`
-
-	// Reason specifies the audit log reason for this action.
-	Reason string `json:"-"`
-}
-
-// StartThreadWithoutMessage creates a new thread.
-func (r *requester) StartThreadWithoutMessage(channelID Snowflake, opts StartThreadWithoutMessageOptions) result.Result[GuildChannel] {
-	reqBody, _ := json.Marshal(opts)
-	res := r.DoRequest(Request{
-		Method: "POST",
-		URL:    "/channels/" + channelID.String() + "/threads",
-		Body:   reqBody,
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.Err[GuildChannel](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	bodyBytes, err := io.ReadAll(body)
-	if err != nil {
-		return result.Err[GuildChannel](err)
-	}
-
-	channel, err := UnmarshalChannel(bodyBytes)
-	if err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "POST",
-			"url":    "/channels/{id}/threads",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[GuildChannel](err)
-	}
-	return result.Ok(channel.(GuildChannel))
-}
-
-// JoinThread adds the current user to a thread.
-func (r *requester) JoinThread(channelID Snowflake) result.Void {
-	res := r.DoRequest(Request{
-		Method: "PUT",
-		URL:    "/channels/" + channelID.String() + "/thread-members/@me",
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// AddThreadMember adds a member to a thread.
-func (r *requester) AddThreadMember(channelID Snowflake, userID Snowflake) result.Void {
-	res := r.DoRequest(Request{
-		Method: "PUT",
-		URL:    "/channels/" + channelID.String() + "/thread-members/" + userID.String(),
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// LeaveThread removes the current user from a thread.
-func (r *requester) LeaveThread(channelID Snowflake) result.Void {
-	res := r.DoRequest(Request{
-		Method: "DELETE",
-		URL:    "/channels/" + channelID.String() + "/thread-members/@me",
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// RemoveThreadMember removes a member from a thread.
-//
-// Requires the PermissionManageThreads permission, or the creator of the thread if it is a 'PrivateThread'.
-func (r *requester) RemoveThreadMember(channelID Snowflake, userID Snowflake) result.Void {
-	res := r.DoRequest(Request{
-		Method: "DELETE",
-		URL:    "/channels/" + channelID.String() + "/thread-members/" + userID.String(),
-	})
-	if res.IsErr() {
-		return result.ErrVoid(res.Err())
-	}
-	res.Value().Close()
-	return result.OkVoid()
-}
-
-// FetchThreadMemberOptions contains parameters for fetching a thread member.
-type FetchThreadMemberOptions struct {
-	// WithMember is whether to include a guild member object for the thread member.
-	WithMember bool `json:"member,omitempty"`
-}
-
-// FetchThreadMember retrieves a thread member.
-func (r *requester) FetchThreadMember(channelID Snowflake, userID Snowflake, opts FetchThreadMemberOptions) result.Result[ThreadMember] {
-	endpoint := "/channels/" + channelID.String() + "/thread-members/" + userID.String() + "?with_member=" + strconv.FormatBool(opts.WithMember)
-	res := r.DoRequest(Request{Method: "GET", URL: endpoint})
-	if res.IsErr() {
-		return result.Err[ThreadMember](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var member ThreadMember
-	if err := json.NewDecoder(body).Decode(&member); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/channels/{id}/thread-members/{id}",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[ThreadMember](err)
-	}
-	return result.Ok(member)
-}
-
-// ListThreadMembersOptions contains parameters for listing a thread members.
-type ListThreadMembersOptions struct {
-	// WithMember is whether to include a guild member object for the thread member.
-	WithMember bool `json:"member,omitempty"`
-
-	// Limit is the maximum number of members to return (1-100).
-	//
-	//  Note:
-	//   - Defaults to 100 if not specified.
-	Limit int `json:"limit,omitempty"`
-
-	// After is the member ID to start after for pagination.
-	// Used to get the next page of results.
-	After Snowflake `json:"after,omitempty"`
-}
-
-// ListThreadMembers retrieves a list of thread members.
-func (r *requester) ListThreadMembers(channelID Snowflake, opts ListThreadMembersOptions) result.Result[[]ThreadMember] {
-	params := url.Values{}
-	params.Set("with_member", strconv.FormatBool(opts.WithMember))
-
-	if opts.Limit > 0 {
-		params.Set("limit", strconv.Itoa(opts.Limit))
-	}
-	if !opts.After.UnSet() {
-		params.Set("after", opts.After.String())
-	}
-
-	endpoint := "/channels/" + channelID.String() + "/thread-members?" + params.Encode()
-
-	res := r.DoRequest(Request{Method: "GET", URL: endpoint})
-	if res.IsErr() {
-		return result.Err[[]ThreadMember](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var member []ThreadMember
-	if err := json.NewDecoder(body).Decode(&member); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/channels/{id}/thread-members",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[[]ThreadMember](err)
-	}
-	return result.Ok(member)
-}
-
-// ListArchivedThreadsOptions contains parameters for listing archived threads.
-type ListArchivedThreadsOptions struct {
-	// Limit is the maximum number of members to return (1-100).
-	//
-	//  Note:
-	//   - Defaults to 100 if not specified.
-	Limit int `json:"limit,omitempty"`
-
-	// Returns threads archived before this timestamp.
-	Before time.Time `json:"before,omitzero"`
-}
-
-type ListArchivedThreadsResponse struct {
-	// Threads are the archived threads.
-	Threads []ThreadChannel `json:"threads"`
-
-	// A thread member object for each returned thread the current user has joined.
-	Members []ThreadMember `json:"members"`
-
-	// HasMore is whether there are potentially additional threads that could be returned on a subsequent call.
-	HasMore bool `json:"has_more"`
-}
-
-func (r *requester) listArchivedThreads(channelID Snowflake, subEndPoint string, params url.Values) result.Result[ListArchivedThreadsResponse] {
-	endpoint := "/channels/" + channelID.String() + subEndPoint
-	if len(params) > 0 {
-		endpoint += "?" + params.Encode()
-	}
-
-	res := r.DoRequest(Request{Method: "GET", URL: endpoint})
-	if res.IsErr() {
-		return result.Err[ListArchivedThreadsResponse](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var response ListArchivedThreadsResponse
-	if err := json.NewDecoder(body).Decode(&response); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/channels/{id}" + subEndPoint,
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[ListArchivedThreadsResponse](err)
-	}
-	return result.Ok(response)
-}
-
-// ListPublicArchivedThreads retrieves a list of public archived threads.
-func (r *requester) ListPublicArchivedThreads(channelID Snowflake, opts ListArchivedThreadsOptions) result.Result[ListArchivedThreadsResponse] {
-	params := url.Values{}
-	if opts.Limit > 0 {
-		params.Set("limit", strconv.Itoa(opts.Limit))
-	}
-	if !opts.Before.IsZero() {
-		params.Set("before", opts.Before.Format(time.RFC3339))
-	}
-	return r.listArchivedThreads(channelID, "/threads/archived/public", params)
-}
-
-// ListPrivateArchivedThreads retrieves a list of private archived threads.
-func (r *requester) ListPrivateArchivedThreads(channelID Snowflake, opts ListArchivedThreadsOptions) result.Result[ListArchivedThreadsResponse] {
-	params := url.Values{}
-	if opts.Limit > 0 {
-		params.Set("limit", strconv.Itoa(opts.Limit))
-	}
-	if !opts.Before.IsZero() {
-		params.Set("before", opts.Before.Format(time.RFC3339))
-	}
-	return r.listArchivedThreads(channelID, "/threads/archived/private", params)
-}
-
-// ListJoinedPrivateArchivedThreadsOptions contains parameters for listing joined private archived threads.
-type ListJoinedPrivateArchivedThreadsOptions struct {
-	// Limit is the maximum number of members to return (1-100).
-	//
-	//  Note:
-	//   - Defaults to 100 if not specified.
-	Limit int `json:"limit,omitempty"`
-
-	// Returns threads archived before this id.
-	Before Snowflake `json:"before,omitzero"`
-}
-
-// ListJoinedPrivateArchivedThreads retrieves a list of private archived threads that the current user has joined.
-func (r *requester) ListJoinedPrivateArchivedThreads(channelID Snowflake, opts ListJoinedPrivateArchivedThreadsOptions) result.Result[ListArchivedThreadsResponse] {
-	params := url.Values{}
-	if opts.Limit > 0 {
-		params.Set("limit", strconv.Itoa(opts.Limit))
-	}
-	if !opts.Before.UnSet() {
-		params.Set("before", opts.Before.String())
-	}
-	return r.listArchivedThreads(channelID, "/users/@me/threads/archived/private", params)
+// Has returns true if the flags contain all of the provided flags.
+func (f ThreadMemberFlags) Has(flags ...ThreadMemberFlags) bool {
+	return BitFieldHas(f, flags...)
 }
