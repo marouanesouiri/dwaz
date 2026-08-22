@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"bytes"
@@ -51,7 +51,7 @@ const (
 	//
 	// Style: Layout
 	// Usage: Message
-	ComponentTypeActionRow = 1 + iota
+	ComponentTypeActionRow ComponentType = 1 + iota
 
 	// ComponentTypeButton represents a button object.
 	//
@@ -295,8 +295,8 @@ type ActionRowComponent struct {
 	Components []InteractiveComponent `json:"components"`
 }
 
-func (ActionRowComponent) layoutComponent()
-func (ActionRowComponent) containerSubComponent()
+func (ActionRowComponent) layoutComponent()       {}
+func (ActionRowComponent) containerSubComponent() {}
 
 var _ json.Unmarshaler = (*ActionRowComponent)(nil)
 
@@ -448,7 +448,7 @@ type ButtonComponent struct {
 	Disabled bool `json:"disabled,omitempty"`
 }
 
-func (ButtonComponent) sectionAccessoryComponent()
+func (ButtonComponent) sectionAccessoryComponent() {}
 
 var _ json.Marshaler = (*ButtonComponent)(nil)
 
@@ -544,7 +544,7 @@ type StringSelectMenuComponent struct {
 	Disabled bool `json:"disabled,omitempty"`
 }
 
-func (StringSelectMenuComponent) labelSubComponent()
+func (StringSelectMenuComponent) labelSubComponent() {}
 
 var _ json.Marshaler = (*StringSelectMenuComponent)(nil)
 
@@ -618,7 +618,7 @@ type TextInputComponent struct {
 	Placeholder string `json:"placeholder,omitempty"`
 }
 
-func (TextInputComponent) labelSubComponent()
+func (TextInputComponent) labelSubComponent() {}
 
 var _ json.Marshaler = (*TextInputComponent)(nil)
 
@@ -890,8 +890,8 @@ type SectionComponent struct {
 	Accessory SectionAccessoryComponent `json:"accessory,omitempty"`
 }
 
-func (SectionComponent) layoutComponent()
-func (SectionComponent) containerSubComponent()
+func (SectionComponent) layoutComponent()       {}
+func (SectionComponent) containerSubComponent() {}
 
 var _ json.Unmarshaler = (*SectionComponent)(nil)
 
@@ -965,9 +965,9 @@ type TextDisplayComponent struct {
 	Content string `json:"content,omitempty"`
 }
 
-func (TextDisplayComponent) layoutComponent()
-func (TextDisplayComponent) sectionSubComponent()
-func (TextDisplayComponent) containerSubComponent()
+func (TextDisplayComponent) layoutComponent()       {}
+func (TextDisplayComponent) sectionSubComponent()   {}
+func (TextDisplayComponent) containerSubComponent() {}
 
 var _ json.Marshaler = (*TextDisplayComponent)(nil)
 
@@ -985,6 +985,11 @@ const (
 	UnfurledMediaItemLoadingStateLoadedSuccess
 	UnfurledMediaItemLoadingStateLoadedNotFound
 )
+
+// Is returns true if this UnfurledMediaItemLoadingState matches the provided one.
+func (v UnfurledMediaItemLoadingState) Is(other UnfurledMediaItemLoadingState) bool {
+	return v == other
+}
 
 // UnfurledMediaItem represents an unfurled media item.
 //
@@ -1038,7 +1043,7 @@ type ThumbnailComponent struct {
 	Spoiler bool `json:"spoiler,omitempty"`
 }
 
-func (ThumbnailComponent) sectionAccessoryComponent()
+func (ThumbnailComponent) sectionAccessoryComponent() {}
 
 var _ json.Marshaler = (*ThumbnailComponent)(nil)
 
@@ -1091,8 +1096,8 @@ type MediaGalleryComponent struct {
 	Items []MediaGalleryItem `json:"items"`
 }
 
-func (MediaGalleryComponent) layoutComponent()
-func (MediaGalleryComponent) containerSubComponent()
+func (MediaGalleryComponent) layoutComponent()       {}
+func (MediaGalleryComponent) containerSubComponent() {}
 
 var _ json.Marshaler = (*MediaGalleryComponent)(nil)
 
@@ -1130,8 +1135,8 @@ type FileComponent struct {
 	Size int `json:"size,omitempty"`
 }
 
-func (FileComponent) layoutComponent()
-func (FileComponent) containerSubComponent()
+func (FileComponent) layoutComponent()       {}
+func (FileComponent) containerSubComponent() {}
 
 var _ json.Marshaler = (*FileComponent)(nil)
 
@@ -1147,6 +1152,11 @@ const (
 	SeperatorComponentSpacingSmall SeperatorComponentSpacing = 1 + iota
 	SeperatorComponentSpacingLarge
 )
+
+// Is returns true if this SeperatorComponentSpacing matches the provided one.
+func (v SeperatorComponentSpacing) Is(other SeperatorComponentSpacing) bool {
+	return v == other
+}
 
 // SeparatorComponent is a top-level layout component that adds vertical padding and an optional visual divider between other components.
 //
@@ -1177,8 +1187,8 @@ type SeparatorComponent struct {
 	Spacing SeperatorComponentSpacing `json:"spacing,omitempty"`
 }
 
-func (SeparatorComponent) layoutComponent()
-func (SeparatorComponent) containerSubComponent()
+func (SeparatorComponent) layoutComponent()       {}
+func (SeparatorComponent) containerSubComponent() {}
 
 var _ json.Marshaler = (*SeparatorComponent)(nil)
 
@@ -1227,7 +1237,7 @@ type ContainerComponent struct {
 	Spoiler bool `json:"spoiler,omitempty"`
 }
 
-func (ContainerComponent) layoutComponent()
+func (ContainerComponent) layoutComponent() {}
 
 var _ json.Unmarshaler = (*ContainerComponent)(nil)
 
@@ -1314,7 +1324,7 @@ type LabelComponent struct {
 	Components []LabelSubComponent `json:"components"`
 }
 
-func (LabelComponent) layoutComponent()
+func (LabelComponent) layoutComponent() {}
 
 var _ json.Unmarshaler = (*LabelComponent)(nil)
 
