@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,9 +11,11 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
-import "time"
+import (
+	"time"
+)
 
 // PollLayoutType represents the layout type of a Discord poll.
 // It defines the visual or structural arrangement of the poll.
@@ -128,7 +130,7 @@ type Poll struct {
 	//
 	// Optional:
 	//  - Will be nil if the poll has no expiry.
-	Expiry *time.Time `json:"expiry,omitzero"`
+	Expiry *time.Time `json:"expiry,omitempty"`
 
 	// AllowMultiselect indicates whether a user can select multiple answers.
 	AllowMultiselect bool `json:"allow_multiselect"`
@@ -177,4 +179,10 @@ type PollCreateOptions struct {
 	//
 	// Defaults to PollLayoutTypeDefault if omitted.
 	LayoutType PollLayoutType `json:"layout_type,omitempty"`
+}
+
+// PollAnswerVotersResponse represents the response containing users who voted for a poll answer.
+type PollAnswerVotersResponse struct {
+	// Users is the list of users who voted for this answer.
+	Users []User `json:"users"`
 }
