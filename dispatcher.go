@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,1045 +11,745 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
+	"context"
 	"runtime/debug"
-
-	"github.com/marouanesouiri/stdx/xlog"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
-/*****************************
- *   EventhandlersManager
- *****************************/
+// GatewayEvent represents the name of a Discord Gateway event.
+type GatewayEvent string
+
+const (
+	GatewayEventReady                               GatewayEvent = "READY"
+	GatewayEventResumed                             GatewayEvent = "RESUMED"
+	GatewayEventGuildCreate                         GatewayEvent = "GUILD_CREATE"
+	GatewayEventGuildUpdate                         GatewayEvent = "GUILD_UPDATE"
+	GatewayEventGuildDelete                         GatewayEvent = "GUILD_DELETE"
+	GatewayEventChannelCreate                       GatewayEvent = "CHANNEL_CREATE"
+	GatewayEventChannelUpdate                       GatewayEvent = "CHANNEL_UPDATE"
+	GatewayEventChannelDelete                       GatewayEvent = "CHANNEL_DELETE"
+	GatewayEventChannelPinsUpdate                   GatewayEvent = "CHANNEL_PINS_UPDATE"
+	GatewayEventThreadCreate                        GatewayEvent = "THREAD_CREATE"
+	GatewayEventThreadUpdate                        GatewayEvent = "THREAD_UPDATE"
+	GatewayEventThreadDelete                        GatewayEvent = "THREAD_DELETE"
+	GatewayEventThreadListSync                      GatewayEvent = "THREAD_LIST_SYNC"
+	GatewayEventThreadMemberUpdate                  GatewayEvent = "THREAD_MEMBER_UPDATE"
+	GatewayEventThreadMembersUpdate                 GatewayEvent = "THREAD_MEMBERS_UPDATE"
+	GatewayEventGuildMemberAdd                      GatewayEvent = "GUILD_MEMBER_ADD"
+	GatewayEventGuildMemberUpdate                   GatewayEvent = "GUILD_MEMBER_UPDATE"
+	GatewayEventGuildMemberRemove                   GatewayEvent = "GUILD_MEMBER_REMOVE"
+	GatewayEventGuildMembersChunk                   GatewayEvent = "GUILD_MEMBERS_CHUNK"
+	GatewayEventGuildRoleCreate                     GatewayEvent = "GUILD_ROLE_CREATE"
+	GatewayEventGuildRoleUpdate                     GatewayEvent = "GUILD_ROLE_UPDATE"
+	GatewayEventGuildRoleDelete                     GatewayEvent = "GUILD_ROLE_DELETE"
+	GatewayEventGuildEmojisUpdate                   GatewayEvent = "GUILD_EMOJIS_UPDATE"
+	GatewayEventGuildStickersUpdate                 GatewayEvent = "GUILD_STICKERS_UPDATE"
+	GatewayEventGuildIntegrationsUpdate             GatewayEvent = "GUILD_INTEGRATIONS_UPDATE"
+	GatewayEventGuildAuditLogEntryCreate            GatewayEvent = "GUILD_AUDIT_LOG_ENTRY_CREATE"
+	GatewayEventGuildBanAdd                         GatewayEvent = "GUILD_BAN_ADD"
+	GatewayEventGuildBanRemove                      GatewayEvent = "GUILD_BAN_REMOVE"
+	GatewayEventGuildScheduledEventCreate           GatewayEvent = "GUILD_SCHEDULED_EVENT_CREATE"
+	GatewayEventGuildScheduledEventUpdate           GatewayEvent = "GUILD_SCHEDULED_EVENT_UPDATE"
+	GatewayEventGuildScheduledEventDelete           GatewayEvent = "GUILD_SCHEDULED_EVENT_DELETE"
+	GatewayEventGuildScheduledEventUserAdd          GatewayEvent = "GUILD_SCHEDULED_EVENT_USER_ADD"
+	GatewayEventGuildScheduledEventUserRemove       GatewayEvent = "GUILD_SCHEDULED_EVENT_USER_REMOVE"
+	GatewayEventGuildSoundboardSoundCreate          GatewayEvent = "GUILD_SOUNDBOARD_SOUND_CREATE"
+	GatewayEventGuildSoundboardSoundUpdate          GatewayEvent = "GUILD_SOUNDBOARD_SOUND_UPDATE"
+	GatewayEventGuildSoundboardSoundDelete          GatewayEvent = "GUILD_SOUNDBOARD_SOUND_DELETE"
+	GatewayEventGuildSoundboardSoundsUpdate         GatewayEvent = "GUILD_SOUNDBOARD_SOUNDS_UPDATE"
+	GatewayEventSoundboardSounds                    GatewayEvent = "SOUNDBOARD_SOUNDS"
+	GatewayEventIntegrationCreate                   GatewayEvent = "INTEGRATION_CREATE"
+	GatewayEventIntegrationUpdate                   GatewayEvent = "INTEGRATION_UPDATE"
+	GatewayEventIntegrationDelete                   GatewayEvent = "INTEGRATION_DELETE"
+	GatewayEventInteractionCreate                   GatewayEvent = "INTERACTION_CREATE"
+	GatewayEventInviteCreate                        GatewayEvent = "INVITE_CREATE"
+	GatewayEventInviteDelete                        GatewayEvent = "INVITE_DELETE"
+	GatewayEventMessageCreate                       GatewayEvent = "MESSAGE_CREATE"
+	GatewayEventMessageUpdate                       GatewayEvent = "MESSAGE_UPDATE"
+	GatewayEventMessageDelete                       GatewayEvent = "MESSAGE_DELETE"
+	GatewayEventMessageDeleteBulk                   GatewayEvent = "MESSAGE_DELETE_BULK"
+	GatewayEventMessageReactionAdd                  GatewayEvent = "MESSAGE_REACTION_ADD"
+	GatewayEventMessageReactionRemove               GatewayEvent = "MESSAGE_REACTION_REMOVE"
+	GatewayEventMessageReactionRemoveAll            GatewayEvent = "MESSAGE_REACTION_REMOVE_ALL"
+	GatewayEventMessageReactionRemoveEmoji          GatewayEvent = "MESSAGE_REACTION_REMOVE_EMOJI"
+	GatewayEventMessagePollVoteAdd                  GatewayEvent = "MESSAGE_POLL_VOTE_ADD"
+	GatewayEventMessagePollVoteRemove               GatewayEvent = "MESSAGE_POLL_VOTE_REMOVE"
+	GatewayEventPresenceUpdate                      GatewayEvent = "PRESENCE_UPDATE"
+	GatewayEventStageInstanceCreate                 GatewayEvent = "STAGE_INSTANCE_CREATE"
+	GatewayEventStageInstanceUpdate                 GatewayEvent = "STAGE_INSTANCE_UPDATE"
+	GatewayEventStageInstanceDelete                 GatewayEvent = "STAGE_INSTANCE_DELETE"
+	GatewayEventSubscriptionCreate                  GatewayEvent = "SUBSCRIPTION_CREATE"
+	GatewayEventSubscriptionUpdate                  GatewayEvent = "SUBSCRIPTION_UPDATE"
+	GatewayEventSubscriptionDelete                  GatewayEvent = "SUBSCRIPTION_DELETE"
+	GatewayEventTypingStart                         GatewayEvent = "TYPING_START"
+	GatewayEventUserUpdate                          GatewayEvent = "USER_UPDATE"
+	GatewayEventVoiceChannelEffectSend              GatewayEvent = "VOICE_CHANNEL_EFFECT_SEND"
+	GatewayEventVoiceStateUpdate                    GatewayEvent = "VOICE_STATE_UPDATE"
+	GatewayEventVoiceServerUpdate                   GatewayEvent = "VOICE_SERVER_UPDATE"
+	GatewayEventWebhooksUpdate                      GatewayEvent = "WEBHOOKS_UPDATE"
+	GatewayEventApplicationCommandPermissionsUpdate GatewayEvent = "APPLICATION_COMMAND_PERMISSIONS_UPDATE"
+	GatewayEventAutoModerationRuleCreate            GatewayEvent = "AUTO_MODERATION_RULE_CREATE"
+	GatewayEventAutoModerationRuleUpdate            GatewayEvent = "AUTO_MODERATION_RULE_UPDATE"
+	GatewayEventAutoModerationRuleDelete            GatewayEvent = "AUTO_MODERATION_RULE_DELETE"
+	GatewayEventAutoModerationActionExecution       GatewayEvent = "AUTO_MODERATION_ACTION_EXECUTION"
+	GatewayEventEntitlementCreate                   GatewayEvent = "ENTITLEMENT_CREATE"
+	GatewayEventEntitlementUpdate                   GatewayEvent = "ENTITLEMENT_UPDATE"
+	GatewayEventEntitlementDelete                   GatewayEvent = "ENTITLEMENT_DELETE"
+	GatewayEventChannelInfo                         GatewayEvent = "CHANNEL_INFO"
+	GatewayEventVoiceChannelStatusUpdate            GatewayEvent = "VOICE_CHANNEL_STATUS_UPDATE"
+	GatewayEventVoiceChannelStartTimeUpdate         GatewayEvent = "VOICE_CHANNEL_START_TIME_UPDATE"
+	GatewayEventApplicationAuthorized               GatewayEvent = "APPLICATION_AUTHORIZED"
+	GatewayEventApplicationDeauthorized             GatewayEvent = "APPLICATION_DEAUTHORIZED"
+	GatewayEventRateLimited                         GatewayEvent = "RATE_LIMITED"
+	GatewayEventQuestUserEnrollment                 GatewayEvent = "QUEST_USER_ENROLLMENT"
+	GatewayEventLobbyMessageCreate                  GatewayEvent = "LOBBY_MESSAGE_CREATE"
+	GatewayEventLobbyMessageUpdate                  GatewayEvent = "LOBBY_MESSAGE_UPDATE"
+	GatewayEventLobbyMessageDelete                  GatewayEvent = "LOBBY_MESSAGE_DELETE"
+	GatewayEventGameDirectMessageCreate             GatewayEvent = "GAME_DIRECT_MESSAGE_CREATE"
+	GatewayEventGameDirectMessageUpdate             GatewayEvent = "GAME_DIRECT_MESSAGE_UPDATE"
+	GatewayEventGameDirectMessageDelete             GatewayEvent = "GAME_DIRECT_MESSAGE_DELETE"
+)
+
+// Is returns true if this GatewayEvent matches the provided one.
+func (e GatewayEvent) Is(other GatewayEvent) bool {
+	return e == other
+}
 
 // eventhandlersManager defines the interface for managing event handlers of a specific event type.
-//
-// Implementations must support adding handlers and dispatching raw JSON event data to those handlers.
 type eventhandlersManager interface {
-	// handleEvent unmarshals the raw JSON data and calls all registered handlers.
-	handleEvent(client *Client, runAsync bool, shardID int, buf []byte)
-	// addHandler adds a new handler function for the event type.
+	handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, buf []byte)
 	addHandler(handler any)
 }
 
-/*****************************
- *        dispatcher
- *****************************/
-
-// HandlerExecutionMode defines how event handlers are executed.
-type HandlerExecutionMode int
+// HandlersExecutionMode defines how event handlers are executed.
+type HandlersExecutionMode int
 
 const (
-	// HandlerExecutionSync runs all handlers for an event sequentially in the dispatch goroutine.
-	HandlerExecutionSync HandlerExecutionMode = iota
-	// HandlerExecutionAsync runs each handler for an event in a separate goroutine/task using the executor.
-	HandlerExecutionAsync
+	HandlersExecutionSequential HandlersExecutionMode = iota
+	HandlersExecutionConcurrent
 )
 
-// dispatcher manages registration of event handlers and dispatching of events.
-//
-// It stores handlers by event name string and invokes the correct handlers for incoming events.
-//
-// WARNING:
-//   - This implementation is not fully thread-safe for handler registration. You must register
-//     all handlers sequentially before starting event dispatching (usually at startup).
-//   - Dispatching handlers is done asynchronously in separate goroutines for each event.
-type dispatcher struct {
-	logger               xlog.Logger
-	client               *Client
-	handlersManagers     map[string]eventhandlersManager
-	handlerExecutionMode HandlerExecutionMode
+// Is returns true if this HandlersExecutionMode matches the provided one.
+func (v HandlersExecutionMode) Is(other HandlersExecutionMode) bool {
+	return v == other
 }
 
-// newDispatcher creates a new dispatcher instance.
-//
-// If logger is nil, it creates a default logger that writes to os.Stdout with debug-level logging.
-func newDispatcher(logger xlog.Logger, client *Client, mode HandlerExecutionMode) *dispatcher {
-	if logger == nil {
-		logger = xlog.NewTextLogger(nil, xlog.LogLevelInfoLevel)
+// DispatcherConfig holds configuration parameters for the event dispatcher.
+type DispatcherConfig struct {
+	// ExecutionMode defines whether event handlers are executed sequentially or concurrently.
+	ExecutionMode HandlersExecutionMode
+}
+
+// DefaultDispatcherConfig returns standard dispatcher configuration defaults.
+func DefaultDispatcherConfig() DispatcherConfig {
+	return DispatcherConfig{
+		ExecutionMode: HandlersExecutionSequential,
 	}
+}
+
+// dispatcher manages registration of event handlers and dispatching of events.
+type dispatcher struct {
+	ctx                   context.Context
+	cache                 CacheManager
+	logger                Logger
+	handlersManagers      map[GatewayEvent]eventhandlersManager
+	handlersExecutionMode HandlersExecutionMode
+	wg                    sync.WaitGroup
+	closed                atomic.Bool
+}
+
+func newDispatcher(ctx context.Context, cache CacheManager, logger Logger, mode HandlersExecutionMode) *dispatcher {
 	d := &dispatcher{
-		logger:               logger,
-		client:               client,
-		handlerExecutionMode: mode,
-		handlersManagers:     make(map[string]eventhandlersManager, 20),
+		ctx:                   ctx,
+		cache:                 cache,
+		logger:                logger,
+		handlersExecutionMode: mode,
+		handlersManagers:      make(map[GatewayEvent]eventhandlersManager, 80),
 	}
 
-	// Register some necessary events for caching
-	d.handlersManagers["READY"] = &readyHandlers{logger: logger}
-	d.handlersManagers["GUILD_CREATE"] = &guildCreateHandlers{logger: logger}
+	// register all handler managers
+	d.handlersManagers[GatewayEventReady] = &readyHandlers{logger: logger}
+	d.handlersManagers[GatewayEventResumed] = &resumedHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildCreate] = &guildCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildUpdate] = &guildUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildDelete] = &guildDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventChannelCreate] = &channelCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventChannelUpdate] = &channelUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventChannelDelete] = &channelDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventChannelPinsUpdate] = &channelPinsUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventThreadCreate] = &threadCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventThreadUpdate] = &threadUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventThreadDelete] = &threadDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventThreadListSync] = &threadListSyncHandlers{logger: logger}
+	d.handlersManagers[GatewayEventThreadMemberUpdate] = &threadMemberUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventThreadMembersUpdate] = &threadMembersUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildMemberAdd] = &guildMemberAddHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildMemberUpdate] = &guildMemberUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildMemberRemove] = &guildMemberRemoveHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildMembersChunk] = &guildMembersChunkHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildRoleCreate] = &guildRoleCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildRoleUpdate] = &guildRoleUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildRoleDelete] = &guildRoleDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildEmojisUpdate] = &guildEmojisUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildStickersUpdate] = &guildStickersUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildIntegrationsUpdate] = &guildIntegrationsUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildAuditLogEntryCreate] = &guildAuditLogEntryCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildBanAdd] = &guildBanAddHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildBanRemove] = &guildBanRemoveHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildScheduledEventCreate] = &guildScheduledEventCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildScheduledEventUpdate] = &guildScheduledEventUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildScheduledEventDelete] = &guildScheduledEventDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildScheduledEventUserAdd] = &guildScheduledEventUserAddHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildScheduledEventUserRemove] = &guildScheduledEventUserRemoveHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildSoundboardSoundCreate] = &guildSoundboardSoundCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildSoundboardSoundUpdate] = &guildSoundboardSoundUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildSoundboardSoundDelete] = &guildSoundboardSoundDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGuildSoundboardSoundsUpdate] = &guildSoundboardSoundsUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventSoundboardSounds] = &soundboardSoundsHandlers{logger: logger}
+	d.handlersManagers[GatewayEventIntegrationCreate] = &integrationCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventIntegrationUpdate] = &integrationUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventIntegrationDelete] = &integrationDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventInteractionCreate] = &interactionCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventInviteCreate] = &inviteCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventInviteDelete] = &inviteDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageCreate] = &messageCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageUpdate] = &messageUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageDelete] = &messageDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageDeleteBulk] = &messageDeleteBulkHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageReactionAdd] = &messageReactionAddHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageReactionRemove] = &messageReactionRemoveHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageReactionRemoveAll] = &messageReactionRemoveAllHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessageReactionRemoveEmoji] = &messageReactionRemoveEmojiHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessagePollVoteAdd] = &messagePollVoteAddHandlers{logger: logger}
+	d.handlersManagers[GatewayEventMessagePollVoteRemove] = &messagePollVoteRemoveHandlers{logger: logger}
+	d.handlersManagers[GatewayEventPresenceUpdate] = &presenceUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventStageInstanceCreate] = &stageInstanceCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventStageInstanceUpdate] = &stageInstanceUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventStageInstanceDelete] = &stageInstanceDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventSubscriptionCreate] = &subscriptionCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventSubscriptionUpdate] = &subscriptionUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventSubscriptionDelete] = &subscriptionDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventTypingStart] = &typingStartHandlers{logger: logger}
+	d.handlersManagers[GatewayEventUserUpdate] = &userUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventVoiceChannelEffectSend] = &voiceChannelEffectSendHandlers{logger: logger}
+	d.handlersManagers[GatewayEventVoiceStateUpdate] = &voiceStateUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventVoiceServerUpdate] = &voiceServerUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventWebhooksUpdate] = &webhooksUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventApplicationCommandPermissionsUpdate] = &applicationCommandPermissionsUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventAutoModerationRuleCreate] = &autoModerationRuleCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventAutoModerationRuleUpdate] = &autoModerationRuleUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventAutoModerationRuleDelete] = &autoModerationRuleDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventAutoModerationActionExecution] = &autoModerationActionExecutionHandlers{logger: logger}
+	d.handlersManagers[GatewayEventEntitlementCreate] = &entitlementCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventEntitlementUpdate] = &entitlementUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventEntitlementDelete] = &entitlementDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventChannelInfo] = &channelInfoHandlers{logger: logger}
+	d.handlersManagers[GatewayEventVoiceChannelStatusUpdate] = &voiceChannelStatusUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventVoiceChannelStartTimeUpdate] = &voiceChannelStartTimeUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventApplicationAuthorized] = &applicationAuthorizedHandlers{logger: logger}
+	d.handlersManagers[GatewayEventApplicationDeauthorized] = &applicationDeauthorizedHandlers{logger: logger}
+	d.handlersManagers[GatewayEventRateLimited] = &rateLimitedHandlers{logger: logger}
+	d.handlersManagers[GatewayEventQuestUserEnrollment] = &questUserEnrollmentHandlers{logger: logger}
+	d.handlersManagers[GatewayEventLobbyMessageCreate] = &lobbyMessageCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventLobbyMessageUpdate] = &lobbyMessageUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventLobbyMessageDelete] = &lobbyMessageDeleteHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGameDirectMessageCreate] = &gameDirectMessageCreateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGameDirectMessageUpdate] = &gameDirectMessageUpdateHandlers{logger: logger}
+	d.handlersManagers[GatewayEventGameDirectMessageDelete] = &gameDirectMessageDeleteHandlers{logger: logger}
 
 	return d
 }
 
-/*****************************
- *     Dispatch Event
- *****************************/
-
-// dispatch sends raw event JSON data to all registered handlers for that event name.
-//
-// The eventName must exactly match the Discord event string (e.g., "MESSAGE_CREATE").
-//
-// This method spawns a new goroutine for each dispatch to avoid blocking the main event loop.
-func (d *dispatcher) dispatch(shardID int, eventName string, data []byte) {
-	d.logger.WithFields(map[string]any{
-		"shard_id": shardID,
-		"event":    eventName,
-	}).Debug("event dispatched")
+func (d *dispatcher) Dispatch(shardID ShardID, eventName string, data []byte) {
+	if d.closed.Load() {
+		return
+	}
+	d.wg.Add(1)
+	d.logger.Debug("event dispatched", "shard_id", shardID, "event", eventName)
 	go func() {
+		defer d.wg.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				d.logger.WithField("event", eventName).
-					WithField("shard_id", shardID).
-					WithField("panic", r).
-					WithField("stack", string(debug.Stack())).
-					Error("Recovered from panic while handling event")
+				d.logger.Error("Recovered from panic while handling event",
+					"event", eventName,
+					"shard_id", shardID,
+					"panic", r,
+					"stack", string(debug.Stack()),
+				)
 			}
 		}()
 
-		if hm, ok := d.handlersManagers[eventName]; ok {
-			hm.handleEvent(d.client, d.handlerExecutionMode == HandlerExecutionAsync, shardID, data)
+		if hm, ok := d.handlersManagers[GatewayEvent(eventName)]; ok {
+			hm.handleEvent(d.ctx, d.cache, d.handlersExecutionMode == HandlersExecutionConcurrent, shardID, data)
 		}
 	}()
 }
 
-/*****************************
- *      Register Handlers
- *****************************/
-
-// OnMessageCreate registers a handler function for 'MESSAGE_CREATE' events.
-func (d *dispatcher) OnMessageCreate(h func(MessageCreateEvent)) {
-	const key = "MESSAGE_CREATE" // event name
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
-}
+// Shutdown stops dispatching new events and gracefully waits for in-flight event handlers to complete.
+func (d *dispatcher) Shutdown(timeout time.Duration) {
+	d.closed.Store(true)
+	done := make(chan struct{})
+	go func() {
+		d.wg.Wait()
+		close(done)
+	}()
 
-// OnMessageDelete registers a handler function for 'MESSAGE_DELETE' events.
-func (d *dispatcher) OnMessageDelete(h func(MessageDeleteEvent)) {
-	const key = "MESSAGE_DELETE" // event name
-	d.logger.Debug(key + " event handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
+	select {
+	case <-done:
+		d.logger.Debug("all in-flight event handlers drained successfully")
+	case <-time.After(timeout):
+		d.logger.Warn("timed out waiting for in-flight event handlers to drain", "timeout", timeout.String())
 	}
-	hm.addHandler(h)
 }
-
-// OnMessageUpdate registers a handler function for 'MESSAGE_UPDATE' events.
-func (d *dispatcher) OnMessageUpdate(h func(MessageDeleteEvent)) {
-	const key = "MESSAGE_UPDATE" // event name
-	d.logger.Debug(key + " event handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
+func (d *dispatcher) register(event GatewayEvent, h any) {
+	d.logger.Debug("handler registered", "event", string(event))
+	if hm, ok := d.handlersManagers[event]; ok {
+		hm.addHandler(h)
 	}
-	hm.addHandler(h)
 }
 
-// OnInteractionCreate registers a handler function for 'INTERACTION_CREATE' events.
-func (d *dispatcher) OnInteractionCreate(h func(InteractionCreateEvent)) {
-	const key = "INTERACTION_CREATE" // event name
-	d.logger.Debug(key + " event handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &interactionCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnReady registers a handler for 'READY' (GatewayEventReady) events.
+func (d *dispatcher) OnReady(h func(context.Context, ReadyEvent)) {
+	d.register(GatewayEventReady, h)
 }
 
-// OnVoiceStateUpdate registers a handler function for 'VOICE_STATE_UPDATE' events.
-func (d *dispatcher) OnVoiceStateUpdate(h func(VoiceStateUpdateEvent)) {
-	const key = "VOICE_STATE_UPDATE" // event name
-	d.logger.Debug(key + " event handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &voiceStateUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnResumed registers a handler for 'RESUMED' (GatewayEventResumed) events.
+func (d *dispatcher) OnResumed(h func(context.Context, ResumedEvent)) {
+	d.register(GatewayEventResumed, h)
 }
 
-// OnApplicationCommandPermissionsUpdate registers a handler for 'APPLICATION_COMMAND_PERMISSIONS_UPDATE' events.
-func (d *dispatcher) OnApplicationCommandPermissionsUpdate(h func(ApplicationCommandPermissionsUpdateEvent)) {
-	const key = "APPLICATION_COMMAND_PERMISSIONS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &applicationCommandPermissionsUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildCreate registers a handler for 'GUILD_CREATE' (GatewayEventGuildCreate) events.
+func (d *dispatcher) OnGuildCreate(h func(context.Context, GuildCreateEvent)) {
+	d.register(GatewayEventGuildCreate, h)
 }
 
-// OnAutoModerationRuleCreate registers a handler for 'AUTO_MODERATION_RULE_CREATE' events.
-func (d *dispatcher) OnAutoModerationRuleCreate(h func(AutoModerationRuleCreateEvent)) {
-	const key = "AUTO_MODERATION_RULE_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &autoModerationRuleCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildUpdate registers a handler for 'GUILD_UPDATE' (GatewayEventGuildUpdate) events.
+func (d *dispatcher) OnGuildUpdate(h func(context.Context, GuildUpdateEvent)) {
+	d.register(GatewayEventGuildUpdate, h)
 }
 
-// OnAutoModerationRuleUpdate registers a handler for 'AUTO_MODERATION_RULE_UPDATE' events.
-func (d *dispatcher) OnAutoModerationRuleUpdate(h func(AutoModerationRuleUpdateEvent)) {
-	const key = "AUTO_MODERATION_RULE_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &autoModerationRuleUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildDelete registers a handler for 'GUILD_DELETE' (GatewayEventGuildDelete) events.
+func (d *dispatcher) OnGuildDelete(h func(context.Context, GuildDeleteEvent)) {
+	d.register(GatewayEventGuildDelete, h)
 }
 
-// OnAutoModerationRuleDelete registers a handler for 'AUTO_MODERATION_RULE_DELETE' events.
-func (d *dispatcher) OnAutoModerationRuleDelete(h func(AutoModerationRuleDeleteEvent)) {
-	const key = "AUTO_MODERATION_RULE_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &autoModerationRuleDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnChannelCreate registers a handler for 'CHANNEL_CREATE' (GatewayEventChannelCreate) events.
+func (d *dispatcher) OnChannelCreate(h func(context.Context, ChannelCreateEvent)) {
+	d.register(GatewayEventChannelCreate, h)
 }
-
-// OnAutoModerationActionExecution registers a handler for 'AUTO_MODERATION_ACTION_EXECUTION' events.
-func (d *dispatcher) OnAutoModerationActionExecution(h func(AutoModerationActionExecutionEvent)) {
-	const key = "AUTO_MODERATION_ACTION_EXECUTION"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &autoModerationActionExecutionHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnChannelUpdate registers a handler for 'CHANNEL_UPDATE' (GatewayEventChannelUpdate) events.
+func (d *dispatcher) OnChannelUpdate(h func(context.Context, ChannelUpdateEvent)) {
+	d.register(GatewayEventChannelUpdate, h)
 }
-
-// OnChannelCreate registers a handler for 'CHANNEL_CREATE' events.
-func (d *dispatcher) OnChannelCreate(h func(ChannelCreateEvent)) {
-	const key = "CHANNEL_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &channelCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnChannelDelete registers a handler for 'CHANNEL_DELETE' (GatewayEventChannelDelete) events.
+func (d *dispatcher) OnChannelDelete(h func(context.Context, ChannelDeleteEvent)) {
+	d.register(GatewayEventChannelDelete, h)
 }
-
-// OnChannelUpdate registers a handler for 'CHANNEL_UPDATE' events.
-func (d *dispatcher) OnChannelUpdate(h func(ChannelUpdateEvent)) {
-	const key = "CHANNEL_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &channelUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnChannelPinsUpdate registers a handler for 'CHANNEL_PINS_UPDATE' (GatewayEventChannelPinsUpdate) events.
+func (d *dispatcher) OnChannelPinsUpdate(h func(context.Context, ChannelPinsUpdateEvent)) {
+	d.register(GatewayEventChannelPinsUpdate, h)
 }
-
-// OnChannelDelete registers a handler for 'CHANNEL_DELETE' events.
-func (d *dispatcher) OnChannelDelete(h func(ChannelDeleteEvent)) {
-	const key = "CHANNEL_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &channelDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnThreadCreate registers a handler for 'THREAD_CREATE' (GatewayEventThreadCreate) events.
+func (d *dispatcher) OnThreadCreate(h func(context.Context, ThreadCreateEvent)) {
+	d.register(GatewayEventThreadCreate, h)
 }
 
-// OnChannelPinsUpdate registers a handler for 'CHANNEL_PINS_UPDATE' events.
-func (d *dispatcher) OnChannelPinsUpdate(h func(ChannelPinsUpdateEvent)) {
-	const key = "CHANNEL_PINS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &channelPinsUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnThreadUpdate registers a handler for 'THREAD_UPDATE' (GatewayEventThreadUpdate) events.
+func (d *dispatcher) OnThreadUpdate(h func(context.Context, ThreadUpdateEvent)) {
+	d.register(GatewayEventThreadUpdate, h)
 }
 
-// OnThreadCreate registers a handler for 'THREAD_CREATE' events.
-func (d *dispatcher) OnThreadCreate(h func(ThreadCreateEvent)) {
-	const key = "THREAD_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &threadCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnThreadDelete registers a handler for 'THREAD_DELETE' (GatewayEventThreadDelete) events.
+func (d *dispatcher) OnThreadDelete(h func(context.Context, ThreadDeleteEvent)) {
+	d.register(GatewayEventThreadDelete, h)
 }
 
-// OnThreadUpdate registers a handler for 'THREAD_UPDATE' events.
-func (d *dispatcher) OnThreadUpdate(h func(ThreadUpdateEvent)) {
-	const key = "THREAD_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &threadUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnThreadListSync registers a handler for 'THREAD_LIST_SYNC' (GatewayEventThreadListSync) events.
+func (d *dispatcher) OnThreadListSync(h func(context.Context, ThreadListSyncEvent)) {
+	d.register(GatewayEventThreadListSync, h)
 }
 
-// OnThreadDelete registers a handler for 'THREAD_DELETE' events.
-func (d *dispatcher) OnThreadDelete(h func(ThreadDeleteEvent)) {
-	const key = "THREAD_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &threadDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnThreadMemberUpdate registers a handler for 'THREAD_MEMBER_UPDATE' (GatewayEventThreadMemberUpdate) events.
+func (d *dispatcher) OnThreadMemberUpdate(h func(context.Context, ThreadMemberUpdateEvent)) {
+	d.register(GatewayEventThreadMemberUpdate, h)
 }
 
-// OnThreadListSync registers a handler for 'THREAD_LIST_SYNC' events.
-func (d *dispatcher) OnThreadListSync(h func(ThreadListSyncEvent)) {
-	const key = "THREAD_LIST_SYNC"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &threadListSyncHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnThreadMembersUpdate registers a handler for 'THREAD_MEMBERS_UPDATE' (GatewayEventThreadMembersUpdate) events.
+func (d *dispatcher) OnThreadMembersUpdate(h func(context.Context, ThreadMembersUpdateEvent)) {
+	d.register(GatewayEventThreadMembersUpdate, h)
 }
-
-// OnThreadMemberUpdate registers a handler for 'THREAD_MEMBER_UPDATE' events.
-func (d *dispatcher) OnThreadMemberUpdate(h func(ThreadMemberUpdateEvent)) {
-	const key = "THREAD_MEMBER_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &threadMemberUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildMemberAdd registers a handler for 'GUILD_MEMBER_ADD' (GatewayEventGuildMemberAdd) events.
+func (d *dispatcher) OnGuildMemberAdd(h func(context.Context, GuildMemberAddEvent)) {
+	d.register(GatewayEventGuildMemberAdd, h)
 }
-
-// OnThreadMembersUpdate registers a handler for 'THREAD_MEMBERS_UPDATE' events.
-func (d *dispatcher) OnThreadMembersUpdate(h func(ThreadMembersUpdateEvent)) {
-	const key = "THREAD_MEMBERS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &threadMembersUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildMemberUpdate registers a handler for 'GUILD_MEMBER_UPDATE' (GatewayEventGuildMemberUpdate) events.
+func (d *dispatcher) OnGuildMemberUpdate(h func(context.Context, GuildMemberUpdateEvent)) {
+	d.register(GatewayEventGuildMemberUpdate, h)
 }
-
-// OnEntitlementCreate registers a handler for 'ENTITLEMENT_CREATE' events.
-func (d *dispatcher) OnEntitlementCreate(h func(EntitlementCreateEvent)) {
-	const key = "ENTITLEMENT_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &entitlementCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildMemberRemove registers a handler for 'GUILD_MEMBER_REMOVE' (GatewayEventGuildMemberRemove) events.
+func (d *dispatcher) OnGuildMemberRemove(h func(context.Context, GuildMemberRemoveEvent)) {
+	d.register(GatewayEventGuildMemberRemove, h)
 }
-
-// OnEntitlementUpdate registers a handler for 'ENTITLEMENT_UPDATE' events.
-func (d *dispatcher) OnEntitlementUpdate(h func(EntitlementUpdateEvent)) {
-	const key = "ENTITLEMENT_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &entitlementUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildMembersChunk registers a handler for 'GUILD_MEMBERS_CHUNK' (GatewayEventGuildMembersChunk) events.
+func (d *dispatcher) OnGuildMembersChunk(h func(context.Context, GuildMembersChunkEvent)) {
+	d.register(GatewayEventGuildMembersChunk, h)
 }
 
-// OnEntitlementDelete registers a handler for 'ENTITLEMENT_DELETE' events.
-func (d *dispatcher) OnEntitlementDelete(h func(EntitlementDeleteEvent)) {
-	const key = "ENTITLEMENT_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &entitlementDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildRoleCreate registers a handler for 'GUILD_ROLE_CREATE' (GatewayEventGuildRoleCreate) events.
+func (d *dispatcher) OnGuildRoleCreate(h func(context.Context, GuildRoleCreateEvent)) {
+	d.register(GatewayEventGuildRoleCreate, h)
 }
 
-// OnGuildUpdate registers a handler for 'GUILD_UPDATE' events.
-func (d *dispatcher) OnGuildUpdate(h func(GuildUpdateEvent)) {
-	const key = "GUILD_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildRoleUpdate registers a handler for 'GUILD_ROLE_UPDATE' (GatewayEventGuildRoleUpdate) events.
+func (d *dispatcher) OnGuildRoleUpdate(h func(context.Context, GuildRoleUpdateEvent)) {
+	d.register(GatewayEventGuildRoleUpdate, h)
 }
 
-// OnGuildDelete registers a handler for 'GUILD_DELETE' events.
-func (d *dispatcher) OnGuildDelete(h func(GuildDeleteEvent)) {
-	const key = "GUILD_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildRoleDelete registers a handler for 'GUILD_ROLE_DELETE' (GatewayEventGuildRoleDelete) events.
+func (d *dispatcher) OnGuildRoleDelete(h func(context.Context, GuildRoleDeleteEvent)) {
+	d.register(GatewayEventGuildRoleDelete, h)
 }
 
-// OnGuildAuditLogEntryCreate registers a handler for 'GUILD_AUDIT_LOG_ENTRY_CREATE' events.
-func (d *dispatcher) OnGuildAuditLogEntryCreate(h func(GuildAuditLogEntryCreateEvent)) {
-	const key = "GUILD_AUDIT_LOG_ENTRY_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildAuditLogEntryCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildEmojisUpdate registers a handler for 'GUILD_EMOJIS_UPDATE' (GatewayEventGuildEmojisUpdate) events.
+func (d *dispatcher) OnGuildEmojisUpdate(h func(context.Context, GuildEmojisUpdateEvent)) {
+	d.register(GatewayEventGuildEmojisUpdate, h)
 }
 
-// OnGuildBanAdd registers a handler for 'GUILD_BAN_ADD' events.
-func (d *dispatcher) OnGuildBanAdd(h func(GuildBanAddEvent)) {
-	const key = "GUILD_BAN_ADD"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildBanAddHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildStickersUpdate registers a handler for 'GUILD_STICKERS_UPDATE' (GatewayEventGuildStickersUpdate) events.
+func (d *dispatcher) OnGuildStickersUpdate(h func(context.Context, GuildStickersUpdateEvent)) {
+	d.register(GatewayEventGuildStickersUpdate, h)
 }
-
-// OnGuildBanRemove registers a handler for 'GUILD_BAN_REMOVE' events.
-func (d *dispatcher) OnGuildBanRemove(h func(GuildBanRemoveEvent)) {
-	const key = "GUILD_BAN_REMOVE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildBanRemoveHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildIntegrationsUpdate registers a handler for 'GUILD_INTEGRATIONS_UPDATE' (GatewayEventGuildIntegrationsUpdate) events.
+func (d *dispatcher) OnGuildIntegrationsUpdate(h func(context.Context, GuildIntegrationsUpdateEvent)) {
+	d.register(GatewayEventGuildIntegrationsUpdate, h)
 }
-
-// OnGuildEmojisUpdate registers a handler for 'GUILD_EMOJIS_UPDATE' events.
-func (d *dispatcher) OnGuildEmojisUpdate(h func(GuildEmojisUpdateEvent)) {
-	const key = "GUILD_EMOJIS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildEmojisUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildAuditLogEntryCreate registers a handler for 'GUILD_AUDIT_LOG_ENTRY_CREATE' (GatewayEventGuildAuditLogEntryCreate) events.
+func (d *dispatcher) OnGuildAuditLogEntryCreate(h func(context.Context, GuildAuditLogEntryCreateEvent)) {
+	d.register(GatewayEventGuildAuditLogEntryCreate, h)
 }
-
-// OnGuildStickersUpdate registers a handler for 'GUILD_STICKERS_UPDATE' events.
-func (d *dispatcher) OnGuildStickersUpdate(h func(GuildStickersUpdateEvent)) {
-	const key = "GUILD_STICKERS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildStickersUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildBanAdd registers a handler for 'GUILD_BAN_ADD' (GatewayEventGuildBanAdd) events.
+func (d *dispatcher) OnGuildBanAdd(h func(context.Context, GuildBanAddEvent)) {
+	d.register(GatewayEventGuildBanAdd, h)
 }
-
-// OnGuildIntegrationsUpdate registers a handler for 'GUILD_INTEGRATIONS_UPDATE' events.
-func (d *dispatcher) OnGuildIntegrationsUpdate(h func(GuildIntegrationsUpdateEvent)) {
-	const key = "GUILD_INTEGRATIONS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildIntegrationsUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildBanRemove registers a handler for 'GUILD_BAN_REMOVE' (GatewayEventGuildBanRemove) events.
+func (d *dispatcher) OnGuildBanRemove(h func(context.Context, GuildBanRemoveEvent)) {
+	d.register(GatewayEventGuildBanRemove, h)
 }
 
-// OnGuildMemberAdd registers a handler for 'GUILD_MEMBER_ADD' events.
-func (d *dispatcher) OnGuildMemberAdd(h func(GuildMemberAddEvent)) {
-	const key = "GUILD_MEMBER_ADD"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildMemberAddHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildScheduledEventCreate registers a handler for 'GUILD_SCHEDULED_EVENT_CREATE' (GatewayEventGuildScheduledEventCreate) events.
+func (d *dispatcher) OnGuildScheduledEventCreate(h func(context.Context, GuildScheduledEventCreateEvent)) {
+	d.register(GatewayEventGuildScheduledEventCreate, h)
 }
 
-// OnGuildMemberRemove registers a handler for 'GUILD_MEMBER_REMOVE' events.
-func (d *dispatcher) OnGuildMemberRemove(h func(GuildMemberRemoveEvent)) {
-	const key = "GUILD_MEMBER_REMOVE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildMemberRemoveHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildScheduledEventUpdate registers a handler for 'GUILD_SCHEDULED_EVENT_UPDATE' (GatewayEventGuildScheduledEventUpdate) events.
+func (d *dispatcher) OnGuildScheduledEventUpdate(h func(context.Context, GuildScheduledEventUpdateEvent)) {
+	d.register(GatewayEventGuildScheduledEventUpdate, h)
 }
 
-// OnGuildMemberUpdate registers a handler for 'GUILD_MEMBER_UPDATE' events.
-func (d *dispatcher) OnGuildMemberUpdate(h func(GuildMemberUpdateEvent)) {
-	const key = "GUILD_MEMBER_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildMemberUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildScheduledEventDelete registers a handler for 'GUILD_SCHEDULED_EVENT_DELETE' (GatewayEventGuildScheduledEventDelete) events.
+func (d *dispatcher) OnGuildScheduledEventDelete(h func(context.Context, GuildScheduledEventDeleteEvent)) {
+	d.register(GatewayEventGuildScheduledEventDelete, h)
 }
 
-// OnGuildMembersChunk registers a handler for 'GUILD_MEMBERS_CHUNK' events.
-func (d *dispatcher) OnGuildMembersChunk(h func(GuildMembersChunkEvent)) {
-	const key = "GUILD_MEMBERS_CHUNK"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildMembersChunkHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildScheduledEventUserAdd registers a handler for 'GUILD_SCHEDULED_EVENT_USER_ADD' (GatewayEventGuildScheduledEventUserAdd) events.
+func (d *dispatcher) OnGuildScheduledEventUserAdd(h func(context.Context, GuildScheduledEventUserAddEvent)) {
+	d.register(GatewayEventGuildScheduledEventUserAdd, h)
 }
 
-// OnGuildRoleCreate registers a handler for 'GUILD_ROLE_CREATE' events.
-func (d *dispatcher) OnGuildRoleCreate(h func(GuildRoleCreateEvent)) {
-	const key = "GUILD_ROLE_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildRoleCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildScheduledEventUserRemove registers a handler for 'GUILD_SCHEDULED_EVENT_USER_REMOVE' (GatewayEventGuildScheduledEventUserRemove) events.
+func (d *dispatcher) OnGuildScheduledEventUserRemove(h func(context.Context, GuildScheduledEventUserRemoveEvent)) {
+	d.register(GatewayEventGuildScheduledEventUserRemove, h)
 }
-
-// OnGuildRoleUpdate registers a handler for 'GUILD_ROLE_UPDATE' events.
-func (d *dispatcher) OnGuildRoleUpdate(h func(GuildRoleUpdateEvent)) {
-	const key = "GUILD_ROLE_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildRoleUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildSoundboardSoundCreate registers a handler for 'GUILD_SOUNDBOARD_SOUND_CREATE' (GatewayEventGuildSoundboardSoundCreate) events.
+func (d *dispatcher) OnGuildSoundboardSoundCreate(h func(context.Context, GuildSoundboardSoundCreateEvent)) {
+	d.register(GatewayEventGuildSoundboardSoundCreate, h)
 }
-
-// OnGuildRoleDelete registers a handler for 'GUILD_ROLE_DELETE' events.
-func (d *dispatcher) OnGuildRoleDelete(h func(GuildRoleDeleteEvent)) {
-	const key = "GUILD_ROLE_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildRoleDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildSoundboardSoundUpdate registers a handler for 'GUILD_SOUNDBOARD_SOUND_UPDATE' (GatewayEventGuildSoundboardSoundUpdate) events.
+func (d *dispatcher) OnGuildSoundboardSoundUpdate(h func(context.Context, GuildSoundboardSoundUpdateEvent)) {
+	d.register(GatewayEventGuildSoundboardSoundUpdate, h)
 }
-
-// OnGuildScheduledEventCreate registers a handler for 'GUILD_SCHEDULED_EVENT_CREATE' events.
-func (d *dispatcher) OnGuildScheduledEventCreate(h func(GuildScheduledEventCreateEvent)) {
-	const key = "GUILD_SCHEDULED_EVENT_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildScheduledEventCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildSoundboardSoundDelete registers a handler for 'GUILD_SOUNDBOARD_SOUND_DELETE' (GatewayEventGuildSoundboardSoundDelete) events.
+func (d *dispatcher) OnGuildSoundboardSoundDelete(h func(context.Context, GuildSoundboardSoundDeleteEvent)) {
+	d.register(GatewayEventGuildSoundboardSoundDelete, h)
 }
-
-// OnGuildScheduledEventUpdate registers a handler for 'GUILD_SCHEDULED_EVENT_UPDATE' events.
-func (d *dispatcher) OnGuildScheduledEventUpdate(h func(GuildScheduledEventUpdateEvent)) {
-	const key = "GUILD_SCHEDULED_EVENT_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildScheduledEventUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGuildSoundboardSoundsUpdate registers a handler for 'GUILD_SOUNDBOARD_SOUNDS_UPDATE' (GatewayEventGuildSoundboardSoundsUpdate) events.
+func (d *dispatcher) OnGuildSoundboardSoundsUpdate(h func(context.Context, GuildSoundboardSoundsUpdateEvent)) {
+	d.register(GatewayEventGuildSoundboardSoundsUpdate, h)
 }
-
-// OnGuildScheduledEventDelete registers a handler for 'GUILD_SCHEDULED_EVENT_DELETE' events.
-func (d *dispatcher) OnGuildScheduledEventDelete(h func(GuildScheduledEventDeleteEvent)) {
-	const key = "GUILD_SCHEDULED_EVENT_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildScheduledEventDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnSoundboardSounds registers a handler for 'SOUNDBOARD_SOUNDS' (GatewayEventSoundboardSounds) events.
+func (d *dispatcher) OnSoundboardSounds(h func(context.Context, SoundboardSoundsEvent)) {
+	d.register(GatewayEventSoundboardSounds, h)
 }
-
-// OnGuildScheduledEventUserAdd registers a handler for 'GUILD_SCHEDULED_EVENT_USER_ADD' events.
-func (d *dispatcher) OnGuildScheduledEventUserAdd(h func(GuildScheduledEventUserAddEvent)) {
-	const key = "GUILD_SCHEDULED_EVENT_USER_ADD"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildScheduledEventUserAddHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnIntegrationCreate registers a handler for 'INTEGRATION_CREATE' (GatewayEventIntegrationCreate) events.
+func (d *dispatcher) OnIntegrationCreate(h func(context.Context, IntegrationCreateEvent)) {
+	d.register(GatewayEventIntegrationCreate, h)
 }
-
-// OnGuildScheduledEventUserRemove registers a handler for 'GUILD_SCHEDULED_EVENT_USER_REMOVE' events.
-func (d *dispatcher) OnGuildScheduledEventUserRemove(h func(GuildScheduledEventUserRemoveEvent)) {
-	const key = "GUILD_SCHEDULED_EVENT_USER_REMOVE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildScheduledEventUserRemoveHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnIntegrationUpdate registers a handler for 'INTEGRATION_UPDATE' (GatewayEventIntegrationUpdate) events.
+func (d *dispatcher) OnIntegrationUpdate(h func(context.Context, IntegrationUpdateEvent)) {
+	d.register(GatewayEventIntegrationUpdate, h)
 }
-
-// OnGuildSoundboardSoundCreate registers a handler for 'GUILD_SOUNDBOARD_SOUND_CREATE' events.
-func (d *dispatcher) OnGuildSoundboardSoundCreate(h func(GuildSoundboardSoundCreateEvent)) {
-	const key = "GUILD_SOUNDBOARD_SOUND_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildSoundboardSoundCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnIntegrationDelete registers a handler for 'INTEGRATION_DELETE' (GatewayEventIntegrationDelete) events.
+func (d *dispatcher) OnIntegrationDelete(h func(context.Context, IntegrationDeleteEvent)) {
+	d.register(GatewayEventIntegrationDelete, h)
 }
 
-// OnGuildSoundboardSoundUpdate registers a handler for 'GUILD_SOUNDBOARD_SOUND_UPDATE' events.
-func (d *dispatcher) OnGuildSoundboardSoundUpdate(h func(GuildSoundboardSoundUpdateEvent)) {
-	const key = "GUILD_SOUNDBOARD_SOUND_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildSoundboardSoundUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnInteractionCreate registers a handler for 'INTERACTION_CREATE' (GatewayEventInteractionCreate) events.
+func (d *dispatcher) OnInteractionCreate(h func(context.Context, InteractionCreateEvent)) {
+	d.register(GatewayEventInteractionCreate, h)
 }
 
-// OnGuildSoundboardSoundDelete registers a handler for 'GUILD_SOUNDBOARD_SOUND_DELETE' events.
-func (d *dispatcher) OnGuildSoundboardSoundDelete(h func(GuildSoundboardSoundDeleteEvent)) {
-	const key = "GUILD_SOUNDBOARD_SOUND_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildSoundboardSoundDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnInviteCreate registers a handler for 'INVITE_CREATE' (GatewayEventInviteCreate) events.
+func (d *dispatcher) OnInviteCreate(h func(context.Context, InviteCreateEvent)) {
+	d.register(GatewayEventInviteCreate, h)
 }
 
-// OnGuildSoundboardSoundsUpdate registers a handler for 'GUILD_SOUNDBOARD_SOUNDS_UPDATE' events.
-func (d *dispatcher) OnGuildSoundboardSoundsUpdate(h func(GuildSoundboardSoundsUpdateEvent)) {
-	const key = "GUILD_SOUNDBOARD_SOUNDS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &guildSoundboardSoundsUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnInviteDelete registers a handler for 'INVITE_DELETE' (GatewayEventInviteDelete) events.
+func (d *dispatcher) OnInviteDelete(h func(context.Context, InviteDeleteEvent)) {
+	d.register(GatewayEventInviteDelete, h)
 }
 
-// OnSoundboardSounds registers a handler for 'SOUNDBOARD_SOUNDS' events.
-func (d *dispatcher) OnSoundboardSounds(h func(SoundboardSoundsEvent)) {
-	const key = "SOUNDBOARD_SOUNDS"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &soundboardSoundsHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageCreate registers a handler for 'MESSAGE_CREATE' (GatewayEventMessageCreate) events.
+func (d *dispatcher) OnMessageCreate(h func(context.Context, MessageCreateEvent)) {
+	d.register(GatewayEventMessageCreate, h)
 }
 
-// OnIntegrationCreate registers a handler for 'INTEGRATION_CREATE' events.
-func (d *dispatcher) OnIntegrationCreate(h func(IntegrationCreateEvent)) {
-	const key = "INTEGRATION_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
-
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &integrationCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageUpdate registers a handler for 'MESSAGE_UPDATE' (GatewayEventMessageUpdate) events.
+func (d *dispatcher) OnMessageUpdate(h func(context.Context, MessageUpdateEvent)) {
+	d.register(GatewayEventMessageUpdate, h)
 }
-
-// OnIntegrationUpdate registers a handler for 'INTEGRATION_UPDATE' events.
-func (d *dispatcher) OnIntegrationUpdate(h func(IntegrationUpdateEvent)) {
-	const key = "INTEGRATION_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &integrationUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageDelete registers a handler for 'MESSAGE_DELETE' (GatewayEventMessageDelete) events.
+func (d *dispatcher) OnMessageDelete(h func(context.Context, MessageDeleteEvent)) {
+	d.register(GatewayEventMessageDelete, h)
 }
-
-// OnIntegrationDelete registers a handler for 'INTEGRATION_DELETE' events.
-func (d *dispatcher) OnIntegrationDelete(h func(IntegrationDeleteEvent)) {
-	const key = "INTEGRATION_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &integrationDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageDeleteBulk registers a handler for 'MESSAGE_DELETE_BULK' (GatewayEventMessageDeleteBulk) events.
+func (d *dispatcher) OnMessageDeleteBulk(h func(context.Context, MessageDeleteBulkEvent)) {
+	d.register(GatewayEventMessageDeleteBulk, h)
 }
-
-// OnInviteCreate registers a handler for 'INVITE_CREATE' events.
-func (d *dispatcher) OnInviteCreate(h func(InviteCreateEvent)) {
-	const key = "INVITE_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &inviteCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageReactionAdd registers a handler for 'MESSAGE_REACTION_ADD' (GatewayEventMessageReactionAdd) events.
+func (d *dispatcher) OnMessageReactionAdd(h func(context.Context, MessageReactionAddEvent)) {
+	d.register(GatewayEventMessageReactionAdd, h)
 }
-
-// OnInviteDelete registers a handler for 'INVITE_DELETE' events.
-func (d *dispatcher) OnInviteDelete(h func(InviteDeleteEvent)) {
-	const key = "INVITE_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &inviteDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageReactionRemove registers a handler for 'MESSAGE_REACTION_REMOVE' (GatewayEventMessageReactionRemove) events.
+func (d *dispatcher) OnMessageReactionRemove(h func(context.Context, MessageReactionRemoveEvent)) {
+	d.register(GatewayEventMessageReactionRemove, h)
 }
 
-// OnMessageDeleteBulk registers a handler for 'MESSAGE_DELETE_BULK' events.
-func (d *dispatcher) OnMessageDeleteBulk(h func(MessageDeleteBulkEvent)) {
-	const key = "MESSAGE_DELETE_BULK"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnMessageReactionRemoveAll registers a handler for 'MESSAGE_REACTION_REMOVE_ALL' (GatewayEventMessageReactionRemoveAll) events.
+func (d *dispatcher) OnMessageReactionRemoveAll(h func(context.Context, MessageReactionRemoveAllEvent)) {
+	d.register(GatewayEventMessageReactionRemoveAll, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageDeleteBulkHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessageReactionRemoveEmoji registers a handler for 'MESSAGE_REACTION_REMOVE_EMOJI' (GatewayEventMessageReactionRemoveEmoji) events.
+func (d *dispatcher) OnMessageReactionRemoveEmoji(h func(context.Context, MessageReactionRemoveEmojiEvent)) {
+	d.register(GatewayEventMessageReactionRemoveEmoji, h)
 }
 
-// OnMessageReactionAdd registers a handler for 'MESSAGE_REACTION_ADD' events.
-func (d *dispatcher) OnMessageReactionAdd(h func(MessageReactionAddEvent)) {
-	const key = "MESSAGE_REACTION_ADD"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnMessagePollVoteAdd registers a handler for 'MESSAGE_POLL_VOTE_ADD' (GatewayEventMessagePollVoteAdd) events.
+func (d *dispatcher) OnMessagePollVoteAdd(h func(context.Context, MessagePollVoteAddEvent)) {
+	d.register(GatewayEventMessagePollVoteAdd, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageReactionAddHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnMessagePollVoteRemove registers a handler for 'MESSAGE_POLL_VOTE_REMOVE' (GatewayEventMessagePollVoteRemove) events.
+func (d *dispatcher) OnMessagePollVoteRemove(h func(context.Context, MessagePollVoteRemoveEvent)) {
+	d.register(GatewayEventMessagePollVoteRemove, h)
 }
 
-// OnMessageReactionRemove registers a handler for 'MESSAGE_REACTION_REMOVE' events.
-func (d *dispatcher) OnMessageReactionRemove(h func(MessageReactionRemoveEvent)) {
-	const key = "MESSAGE_REACTION_REMOVE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnPresenceUpdate registers a handler for 'PRESENCE_UPDATE' (GatewayEventPresenceUpdate) events.
+func (d *dispatcher) OnPresenceUpdate(h func(context.Context, PresenceUpdateEvent)) {
+	d.register(GatewayEventPresenceUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageReactionRemoveHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnStageInstanceCreate registers a handler for 'STAGE_INSTANCE_CREATE' (GatewayEventStageInstanceCreate) events.
+func (d *dispatcher) OnStageInstanceCreate(h func(context.Context, StageInstanceCreateEvent)) {
+	d.register(GatewayEventStageInstanceCreate, h)
 }
 
-// OnMessageReactionRemoveAll registers a handler for 'MESSAGE_REACTION_REMOVE_ALL' events.
-func (d *dispatcher) OnMessageReactionRemoveAll(h func(MessageReactionRemoveAllEvent)) {
-	const key = "MESSAGE_REACTION_REMOVE_ALL"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnStageInstanceUpdate registers a handler for 'STAGE_INSTANCE_UPDATE' (GatewayEventStageInstanceUpdate) events.
+func (d *dispatcher) OnStageInstanceUpdate(h func(context.Context, StageInstanceUpdateEvent)) {
+	d.register(GatewayEventStageInstanceUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageReactionRemoveAllHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnStageInstanceDelete registers a handler for 'STAGE_INSTANCE_DELETE' (GatewayEventStageInstanceDelete) events.
+func (d *dispatcher) OnStageInstanceDelete(h func(context.Context, StageInstanceDeleteEvent)) {
+	d.register(GatewayEventStageInstanceDelete, h)
 }
 
-// OnMessageReactionRemoveEmoji registers a handler for 'MESSAGE_REACTION_REMOVE_EMOJI' events.
-func (d *dispatcher) OnMessageReactionRemoveEmoji(h func(MessageReactionRemoveEmojiEvent)) {
-	const key = "MESSAGE_REACTION_REMOVE_EMOJI"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnSubscriptionCreate registers a handler for 'SUBSCRIPTION_CREATE' (GatewayEventSubscriptionCreate) events.
+func (d *dispatcher) OnSubscriptionCreate(h func(context.Context, SubscriptionCreateEvent)) {
+	d.register(GatewayEventSubscriptionCreate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messageReactionRemoveEmojiHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnSubscriptionUpdate registers a handler for 'SUBSCRIPTION_UPDATE' (GatewayEventSubscriptionUpdate) events.
+func (d *dispatcher) OnSubscriptionUpdate(h func(context.Context, SubscriptionUpdateEvent)) {
+	d.register(GatewayEventSubscriptionUpdate, h)
 }
 
-// OnPresenceUpdate registers a handler for 'PRESENCE_UPDATE' events.
-func (d *dispatcher) OnPresenceUpdate(h func(PresenceUpdateEvent)) {
-	const key = "PRESENCE_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnSubscriptionDelete registers a handler for 'SUBSCRIPTION_DELETE' (GatewayEventSubscriptionDelete) events.
+func (d *dispatcher) OnSubscriptionDelete(h func(context.Context, SubscriptionDeleteEvent)) {
+	d.register(GatewayEventSubscriptionDelete, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &presenceUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnTypingStart registers a handler for 'TYPING_START' (GatewayEventTypingStart) events.
+func (d *dispatcher) OnTypingStart(h func(context.Context, TypingStartEvent)) {
+	d.register(GatewayEventTypingStart, h)
 }
 
-// OnStageInstanceCreate registers a handler for 'STAGE_INSTANCE_CREATE' events.
-func (d *dispatcher) OnStageInstanceCreate(h func(StageInstanceCreateEvent)) {
-	const key = "STAGE_INSTANCE_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnUserUpdate registers a handler for 'USER_UPDATE' (GatewayEventUserUpdate) events.
+func (d *dispatcher) OnUserUpdate(h func(context.Context, UserUpdateEvent)) {
+	d.register(GatewayEventUserUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &stageInstanceCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnVoiceChannelEffectSend registers a handler for 'VOICE_CHANNEL_EFFECT_SEND' (GatewayEventVoiceChannelEffectSend) events.
+func (d *dispatcher) OnVoiceChannelEffectSend(h func(context.Context, VoiceChannelEffectSendEvent)) {
+	d.register(GatewayEventVoiceChannelEffectSend, h)
 }
 
-// OnStageInstanceUpdate registers a handler for 'STAGE_INSTANCE_UPDATE' events.
-func (d *dispatcher) OnStageInstanceUpdate(h func(StageInstanceUpdateEvent)) {
-	const key = "STAGE_INSTANCE_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnVoiceStateUpdate registers a handler for 'VOICE_STATE_UPDATE' (GatewayEventVoiceStateUpdate) events.
+func (d *dispatcher) OnVoiceStateUpdate(h func(context.Context, VoiceStateUpdateEvent)) {
+	d.register(GatewayEventVoiceStateUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &stageInstanceUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnVoiceServerUpdate registers a handler for 'VOICE_SERVER_UPDATE' (GatewayEventVoiceServerUpdate) events.
+func (d *dispatcher) OnVoiceServerUpdate(h func(context.Context, VoiceServerUpdateEvent)) {
+	d.register(GatewayEventVoiceServerUpdate, h)
 }
 
-// OnStageInstanceDelete registers a handler for 'STAGE_INSTANCE_DELETE' events.
-func (d *dispatcher) OnStageInstanceDelete(h func(StageInstanceDeleteEvent)) {
-	const key = "STAGE_INSTANCE_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnWebhooksUpdate registers a handler for 'WEBHOOKS_UPDATE' (GatewayEventWebhooksUpdate) events.
+func (d *dispatcher) OnWebhooksUpdate(h func(context.Context, WebhooksUpdateEvent)) {
+	d.register(GatewayEventWebhooksUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &stageInstanceDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnApplicationCommandPermissionsUpdate registers a handler for 'APPLICATION_COMMAND_PERMISSIONS_UPDATE' (GatewayEventApplicationCommandPermissionsUpdate) events.
+func (d *dispatcher) OnApplicationCommandPermissionsUpdate(h func(context.Context, ApplicationCommandPermissionsUpdateEvent)) {
+	d.register(GatewayEventApplicationCommandPermissionsUpdate, h)
 }
 
-// OnSubscriptionCreate registers a handler for 'SUBSCRIPTION_CREATE' events.
-func (d *dispatcher) OnSubscriptionCreate(h func(SubscriptionCreateEvent)) {
-	const key = "SUBSCRIPTION_CREATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnAutoModerationRuleCreate registers a handler for 'AUTO_MODERATION_RULE_CREATE' (GatewayEventAutoModerationRuleCreate) events.
+func (d *dispatcher) OnAutoModerationRuleCreate(h func(context.Context, AutoModerationRuleCreateEvent)) {
+	d.register(GatewayEventAutoModerationRuleCreate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &subscriptionCreateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnAutoModerationRuleUpdate registers a handler for 'AUTO_MODERATION_RULE_UPDATE' (GatewayEventAutoModerationRuleUpdate) events.
+func (d *dispatcher) OnAutoModerationRuleUpdate(h func(context.Context, AutoModerationRuleUpdateEvent)) {
+	d.register(GatewayEventAutoModerationRuleUpdate, h)
 }
 
-// OnSubscriptionUpdate registers a handler for 'SUBSCRIPTION_UPDATE' events.
-func (d *dispatcher) OnSubscriptionUpdate(h func(SubscriptionUpdateEvent)) {
-	const key = "SUBSCRIPTION_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnAutoModerationRuleDelete registers a handler for 'AUTO_MODERATION_RULE_DELETE' (GatewayEventAutoModerationRuleDelete) events.
+func (d *dispatcher) OnAutoModerationRuleDelete(h func(context.Context, AutoModerationRuleDeleteEvent)) {
+	d.register(GatewayEventAutoModerationRuleDelete, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &subscriptionUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnAutoModerationActionExecution registers a handler for 'AUTO_MODERATION_ACTION_EXECUTION' (GatewayEventAutoModerationActionExecution) events.
+func (d *dispatcher) OnAutoModerationActionExecution(h func(context.Context, AutoModerationActionExecutionEvent)) {
+	d.register(GatewayEventAutoModerationActionExecution, h)
 }
 
-// OnSubscriptionDelete registers a handler for 'SUBSCRIPTION_DELETE' events.
-func (d *dispatcher) OnSubscriptionDelete(h func(SubscriptionDeleteEvent)) {
-	const key = "SUBSCRIPTION_DELETE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnEntitlementCreate registers a handler for 'ENTITLEMENT_CREATE' (GatewayEventEntitlementCreate) events.
+func (d *dispatcher) OnEntitlementCreate(h func(context.Context, EntitlementCreateEvent)) {
+	d.register(GatewayEventEntitlementCreate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &subscriptionDeleteHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnEntitlementUpdate registers a handler for 'ENTITLEMENT_UPDATE' (GatewayEventEntitlementUpdate) events.
+func (d *dispatcher) OnEntitlementUpdate(h func(context.Context, EntitlementUpdateEvent)) {
+	d.register(GatewayEventEntitlementUpdate, h)
 }
 
-// OnTypingStart registers a handler for 'TYPING_START' events.
-func (d *dispatcher) OnTypingStart(h func(TypingStartEvent)) {
-	const key = "TYPING_START"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnEntitlementDelete registers a handler for 'ENTITLEMENT_DELETE' (GatewayEventEntitlementDelete) events.
+func (d *dispatcher) OnEntitlementDelete(h func(context.Context, EntitlementDeleteEvent)) {
+	d.register(GatewayEventEntitlementDelete, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &typingStartHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnChannelInfo registers a handler for 'CHANNEL_INFO' (GatewayEventChannelInfo) events.
+func (d *dispatcher) OnChannelInfo(h func(context.Context, ChannelInfoEvent)) {
+	d.register(GatewayEventChannelInfo, h)
 }
 
-// OnUserUpdate registers a handler for 'USER_UPDATE' events.
-func (d *dispatcher) OnUserUpdate(h func(UserUpdateEvent)) {
-	const key = "USER_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnVoiceChannelStatusUpdate registers a handler for 'VOICE_CHANNEL_STATUS_UPDATE' (GatewayEventVoiceChannelStatusUpdate) events.
+func (d *dispatcher) OnVoiceChannelStatusUpdate(h func(context.Context, VoiceChannelStatusUpdateEvent)) {
+	d.register(GatewayEventVoiceChannelStatusUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &userUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnVoiceChannelStartTimeUpdate registers a handler for 'VOICE_CHANNEL_START_TIME_UPDATE' (GatewayEventVoiceChannelStartTimeUpdate) events.
+func (d *dispatcher) OnVoiceChannelStartTimeUpdate(h func(context.Context, VoiceChannelStartTimeUpdateEvent)) {
+	d.register(GatewayEventVoiceChannelStartTimeUpdate, h)
 }
 
-// OnVoiceChannelEffectSend registers a handler for 'VOICE_CHANNEL_EFFECT_SEND' events.
-func (d *dispatcher) OnVoiceChannelEffectSend(h func(VoiceChannelEffectSendEvent)) {
-	const key = "VOICE_CHANNEL_EFFECT_SEND"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnApplicationAuthorized registers a handler for 'APPLICATION_AUTHORIZED' (GatewayEventApplicationAuthorized) webhook events.
+func (d *dispatcher) OnApplicationAuthorized(h func(context.Context, ApplicationAuthorizedEvent)) {
+	d.register(GatewayEventApplicationAuthorized, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &voiceChannelEffectSendHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnApplicationDeauthorized registers a handler for 'APPLICATION_DEAUTHORIZED' (GatewayEventApplicationDeauthorized) webhook events.
+func (d *dispatcher) OnApplicationDeauthorized(h func(context.Context, ApplicationDeauthorizedEvent)) {
+	d.register(GatewayEventApplicationDeauthorized, h)
 }
 
-// OnVoiceServerUpdate registers a handler for 'VOICE_SERVER_UPDATE' events.
-func (d *dispatcher) OnVoiceServerUpdate(h func(VoiceServerUpdateEvent)) {
-	const key = "VOICE_SERVER_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnRateLimited registers a handler for 'RATE_LIMITED' (GatewayEventRateLimited) gateway events.
+func (d *dispatcher) OnRateLimited(h func(context.Context, RateLimitedEvent)) {
+	d.register(GatewayEventRateLimited, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &voiceServerUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnQuestUserEnrollment registers a handler for 'QUEST_USER_ENROLLMENT' (GatewayEventQuestUserEnrollment) webhook events.
+func (d *dispatcher) OnQuestUserEnrollment(h func(context.Context, QuestUserEnrollmentEvent)) {
+	d.register(GatewayEventQuestUserEnrollment, h)
 }
 
-// OnWebhooksUpdate registers a handler for 'WEBHOOKS_UPDATE' events.
-func (d *dispatcher) OnWebhooksUpdate(h func(WebhooksUpdateEvent)) {
-	const key = "WEBHOOKS_UPDATE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnLobbyMessageCreate registers a handler for 'LOBBY_MESSAGE_CREATE' (GatewayEventLobbyMessageCreate) webhook events.
+func (d *dispatcher) OnLobbyMessageCreate(h func(context.Context, LobbyMessageCreateEvent)) {
+	d.register(GatewayEventLobbyMessageCreate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &webhooksUpdateHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnLobbyMessageUpdate registers a handler for 'LOBBY_MESSAGE_UPDATE' (GatewayEventLobbyMessageUpdate) webhook events.
+func (d *dispatcher) OnLobbyMessageUpdate(h func(context.Context, LobbyMessageUpdateEvent)) {
+	d.register(GatewayEventLobbyMessageUpdate, h)
 }
 
-// OnMessagePollVoteAdd registers a handler for 'MESSAGE_POLL_VOTE_ADD' events.
-func (d *dispatcher) OnMessagePollVoteAdd(h func(MessagePollVoteAddEvent)) {
-	const key = "MESSAGE_POLL_VOTE_ADD"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnLobbyMessageDelete registers a handler for 'LOBBY_MESSAGE_DELETE' (GatewayEventLobbyMessageDelete) webhook events.
+func (d *dispatcher) OnLobbyMessageDelete(h func(context.Context, LobbyMessageDeleteEvent)) {
+	d.register(GatewayEventLobbyMessageDelete, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messagePollVoteAddHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGameDirectMessageCreate registers a handler for 'GAME_DIRECT_MESSAGE_CREATE' (GatewayEventGameDirectMessageCreate) webhook events.
+func (d *dispatcher) OnGameDirectMessageCreate(h func(context.Context, GameDirectMessageCreateEvent)) {
+	d.register(GatewayEventGameDirectMessageCreate, h)
 }
 
-// OnMessagePollVoteRemove registers a handler for 'MESSAGE_POLL_VOTE_REMOVE' events.
-func (d *dispatcher) OnMessagePollVoteRemove(h func(MessagePollVoteRemoveEvent)) {
-	const key = "MESSAGE_POLL_VOTE_REMOVE"
-	d.logger.WithField("event", key).Debug("handler registered")
+// OnGameDirectMessageUpdate registers a handler for 'GAME_DIRECT_MESSAGE_UPDATE' (GatewayEventGameDirectMessageUpdate) webhook events.
+func (d *dispatcher) OnGameDirectMessageUpdate(h func(context.Context, GameDirectMessageUpdateEvent)) {
+	d.register(GatewayEventGameDirectMessageUpdate, h)
+}
 
-	hm, ok := d.handlersManagers[key]
-	if !ok {
-		hm = &messagePollVoteRemoveHandlers{logger: d.logger}
-		d.handlersManagers[key] = hm
-	}
-	hm.addHandler(h)
+// OnGameDirectMessageDelete registers a handler for 'GAME_DIRECT_MESSAGE_DELETE' (GatewayEventGameDirectMessageDelete) webhook events.
+func (d *dispatcher) OnGameDirectMessageDelete(h func(context.Context, GameDirectMessageDeleteEvent)) {
+	d.register(GatewayEventGameDirectMessageDelete, h)
 }
