@@ -1,4 +1,4 @@
-package dwaz
+package wumpkit
 
 import (
 	"bytes"
@@ -722,6 +722,11 @@ func (a *ApplicationCommandBase) GetContexts() []InteractionContextType {
 	return a.Contexts
 }
 
+// String implements the fmt.Stringer interface.
+func (a *ApplicationCommandBase) String() string {
+	return a.Name
+}
+
 // DescriptionConstraints contains description fields for application commands.
 type DescriptionConstraints struct {
 	// Description is the description of the command.
@@ -856,4 +861,70 @@ func UnmarshalApplicationCommand(buf []byte) (ApplicationCommand, error) {
 	default:
 		return nil, errors.New("unknown application command type")
 	}
+}
+
+// UnmarshalApplicationCommands unmarshals a JSON array of polymorphic application commands.
+func UnmarshalApplicationCommands(buf []byte) ([]ApplicationCommand, error) {
+	var raws []json.RawMessage
+	if err := json.Unmarshal(buf, &raws); err != nil {
+		return nil, err
+	}
+	cmds := make([]ApplicationCommand, 0, len(raws))
+	for _, raw := range raws {
+		cmd, err := UnmarshalApplicationCommand(raw)
+		if err != nil {
+			return nil, err
+		}
+		cmds = append(cmds, cmd)
+	}
+	return cmds, nil
+}
+
+/***********************
+ *   REST API Models   *
+ ***********************/
+
+// ApplicationCommandPermissionType represents the type of entity targeted in command permissions.
+type ApplicationCommandPermissionType int
+
+const (
+	ApplicationCommandPermissionTypeRole    ApplicationCommandPermissionType = 1
+	ApplicationCommandPermissionTypeUser    ApplicationCommandPermissionType = 2
+	ApplicationCommandPermissionTypeChannel ApplicationCommandPermissionType = 3
+)
+
+// Is returns true if this ApplicationCommandPermissionType matches the provided one.
+func (v ApplicationCommandPermissionType) Is(other ApplicationCommandPermissionType) bool {
+	return v == other
+}
+
+// ApplicationCommandPermission represents a permission overwrite for an application command.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-permissions-object-guild-application-command-permissions-structure
+type ApplicationCommandPermission struct {
+	// ID is the ID of the role, user, or channel.
+	ID Snowflake `json:"id"`
+
+	// Type is role (1), user (2), or channel (3).
+	Type ApplicationCommandPermissionType `json:"type"`
+
+	// Permission specifies true to allow, false to disallow.
+	Permission bool `json:"permission"`
+}
+
+// GuildApplicationCommandPermissions represents permissions for an application command in a guild.
+//
+// Reference: https://discord.com/developers/docs/interactions/application-commands#application-command-permissions-object-guild-application-command-permissions-structure
+type GuildApplicationCommandPermissions struct {
+	// ID is the ID of the command or the application ID for all commands.
+	ID Snowflake `json:"id"`
+
+	// ApplicationID is the ID of the application the command belongs to.
+	ApplicationID Snowflake `json:"application_id"`
+
+	// GuildID is the ID of the guild.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Permissions is the permissions for the command in the guild (up to 100).
+	Permissions []ApplicationCommandPermission `json:"permissions"`
 }
