@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,12 +11,10 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"encoding/json"
-
-	"github.com/marouanesouiri/stdx/result"
 )
 
 // GatewayIntent represents Discord Gateway Intents.
@@ -123,6 +121,25 @@ const (
 	GatewayIntentDirectMessagePolls GatewayIntent = 1 << 25
 )
 
+// GatewayCompression defines the transport compression mode for Gateway WebSocket connections.
+type GatewayCompression string
+
+const (
+	// GatewayCompressionNone disables transport compression (uses plaintext JSON frames).
+	GatewayCompressionNone GatewayCompression = "none"
+
+	// GatewayCompressionZlibStream enables shared zlib stream compression (default, recommended).
+	GatewayCompressionZlibStream GatewayCompression = "zlib-stream"
+
+	// GatewayCompressionZstdStream enables zstd stream compression.
+	GatewayCompressionZstdStream GatewayCompression = "zstd-stream"
+)
+
+// Is returns true if this GatewayCompression matches the provided one.
+func (c GatewayCompression) Is(other GatewayCompression) bool {
+	return c == other
+}
+
 // gatewayOpcode represents the operation codes used in Discord Gateway WebSocket frames.
 //
 // Each opcode defines a specific action or message type in the client-server communication.
@@ -200,7 +217,46 @@ const (
 	//	- Client Action: Send.
 	//	- Description: Request information about soundboard sounds in a set of guilds.
 	gatewayOpcodeRequestSoundboardSounds gatewayOpcode = 31
+
+	// RequestChannelInfo
+	//
+	//	- Client Action: Send.
+	//	- Description: Request ephemeral channel data for channels in a guild.
+	gatewayOpcodeRequestChannelInfo gatewayOpcode = 43
 )
+
+// Is returns true if this gatewayOpcode matches the provided one.
+func (v gatewayOpcode) Is(other gatewayOpcode) bool {
+	return v == other
+}
+
+// ChannelInfoField represents an ephemeral channel data field that can be requested via Opcode 43 (Request Channel Info).
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-channel-info-request-channel-info-structure
+type ChannelInfoField string
+
+const (
+	// ChannelInfoFieldStatus requests the status text for voice channels in the guild.
+	ChannelInfoFieldStatus ChannelInfoField = "status"
+
+	// ChannelInfoFieldVoiceStartTime requests the start timestamp of current active voice sessions.
+	ChannelInfoFieldVoiceStartTime ChannelInfoField = "voice_start_time"
+)
+
+// Is returns true if this ChannelInfoField matches the provided one.
+func (f ChannelInfoField) Is(other ChannelInfoField) bool {
+	return f == other
+}
+
+// RequestChannelInfoOptions contains parameters for requesting ephemeral channel data.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-channel-info
+type RequestChannelInfoOptions struct {
+	// GuildID is the guild id to request channel info for.
+	GuildID Snowflake `json:"guild_id"`
+	// Fields is the list of fields to request (e.g. ChannelInfoFieldStatus, ChannelInfoFieldVoiceStartTime).
+	Fields []ChannelInfoField `json:"fields"`
+}
 
 // gatewayPayload represents a single payload exchanged over the Discord Gateway WebSocket.
 //
@@ -305,11 +361,12 @@ const (
 	GatewayCloseEventCodeDisallowedIntents GatewayCloseEventCode = 4014
 )
 
-// gateway holds the Discord Gateway URL.
-type gateway struct {
-	// WSS URL that can be used for connecting to the Gateway
-	URL string `json:"url"`
+// Is returns true if this GatewayCloseEventCode matches the provided one.
+func (v GatewayCloseEventCode) Is(other GatewayCloseEventCode) bool {
+	return v == other
 }
+
+
 
 // GatewayBot is Discord Gateway Bot.
 type GatewayBot struct {
@@ -326,26 +383,72 @@ type GatewayBot struct {
 	} `json:"session_start_limit"`
 }
 
-// FetchGatewayBot retrieves bot gateway information including recommended shard count and session limits.
-func (r *requester) FetchGatewayBot() result.Result[GatewayBot] {
-	res := r.DoRequest(Request{
-		Method: "GET",
-		URL:    "/gateway/bot",
-	})
-	if res.IsErr() {
-		return result.Err[GatewayBot](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
+// GatewayPresenceUpdate contains parameters for updating client presence.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#update-presence
+type GatewayPresenceUpdate struct {
+	// Since is unix time (in milliseconds) of when the client went idle, or nil if not idle.
+	Since *int64 `json:"since"`
 
-	var obj GatewayBot
-	if err := json.NewDecoder(body).Decode(&obj); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/gateway/bot",
-			"error":  err,
-		}).Error("failed parsing response")
-		return result.Err[GatewayBot](err)
-	}
-	return result.Ok(obj)
+	// Activities is the user's activities.
+	Activities []Activity `json:"activities"`
+
+	// Status is the user's new status.
+	Status UserStatus `json:"status"`
+
+	// AFK is whether or not the client is afk.
+	AFK bool `json:"afk"`
+}
+
+// GatewayVoiceStateUpdate contains parameters for updating client voice state (join/move/leave voice).
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#update-voice-state
+type GatewayVoiceStateUpdate struct {
+	// GuildID is the id of the guild.
+	GuildID Snowflake `json:"guild_id"`
+
+	// ChannelID is the id of the voice channel client wants to join (nil if disconnecting).
+	ChannelID *Snowflake `json:"channel_id"`
+
+	// SelfMute is whether the client is muted.
+	SelfMute bool `json:"self_mute"`
+
+	// SelfDeaf is whether the client is deafened.
+	SelfDeaf bool `json:"self_deaf"`
+}
+
+// RequestGuildMembersOptions contains parameters for requesting guild members.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-guild-members
+type RequestGuildMembersOptions struct {
+	// GuildID is the id of the guild to get members for.
+	GuildID Snowflake `json:"guild_id"`
+
+	// Query is string that username starts with, or an empty string to return all members.
+	Query string `json:"query,omitempty"`
+
+	// Limit is maximum number of members to send matching the query (0 to return all members).
+	Limit int `json:"limit"`
+
+	// Presences specifies if we want presences of the matched members.
+	Presences bool `json:"presences,omitempty"`
+
+	// UserIDs specifies which users you wish to fetch.
+	UserIDs []Snowflake `json:"user_ids,omitempty"`
+
+	// Nonce is nonce to identify the Guild Members Chunk response.
+	Nonce string `json:"nonce,omitempty"`
+}
+
+// RequestSoundboardSoundsOptions contains parameters for requesting soundboard sounds for a list of guilds.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-soundboard-sounds
+type RequestSoundboardSoundsOptions struct {
+	// GuildIDs is the list of guild IDs to get soundboard sounds for.
+	GuildIDs []Snowflake `json:"guild_ids"`
+}
+
+// Has returns true if the flags contain all of the provided flags.
+func (f GatewayIntent) Has(flags ...GatewayIntent) bool {
+	return BitFieldHas(f, flags...)
 }
