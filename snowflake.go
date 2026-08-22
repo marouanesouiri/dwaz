@@ -14,9 +14,11 @@
 package wumpkit
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -120,4 +122,38 @@ func ParseSnowflake(id string) (Snowflake, error) {
 		return 0, fmt.Errorf("invalid snowflake: %w", err)
 	}
 	return Snowflake(v), nil
+}
+
+// ParseAppIDFromToken extracts and decodes the application ID snowflake from a Discord token.
+func ParseAppIDFromToken(token string) (Snowflake, error) {
+	token = strings.TrimPrefix(token, "Bot ")
+	token = strings.TrimPrefix(token, "Bearer ")
+	token = strings.TrimSpace(token)
+
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 || parts[0] == "" {
+		return 0, fmt.Errorf("invalid token format")
+	}
+
+	part := parts[0]
+	decoded, err := base64.RawStdEncoding.DecodeString(part)
+	if err != nil {
+		decoded, err = base64.StdEncoding.DecodeString(part)
+	}
+	if err != nil {
+		decoded, err = base64.RawURLEncoding.DecodeString(part)
+	}
+	if err != nil {
+		decoded, err = base64.URLEncoding.DecodeString(part)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to decode token ID component: %w", err)
+	}
+
+	return ParseSnowflake(string(decoded))
+}
+
+// TokenAppID is an alias for ParseAppIDFromToken.
+func TokenAppID(token string) (Snowflake, error) {
+	return ParseAppIDFromToken(token)
 }
