@@ -1,4 +1,4 @@
-package dwaz
+package wumpkit
 
 import (
 	"strconv"
@@ -26,6 +26,11 @@ const (
 	ImageSize4096    ImageSize = 4096
 )
 
+// Is returns true if this ImageSize matches the provided one.
+func (v ImageSize) Is(other ImageSize) bool {
+	return v == other
+}
+
 // ImageFormat defines all possible image formats supported by Discord endpoints.
 type ImageFormat string
 
@@ -38,6 +43,11 @@ const (
 	ImageFormatAVIF    ImageFormat = ".avif"
 	ImageFormatLottie  ImageFormat = ".json"
 )
+
+// Is returns true if this ImageFormat matches the provided one.
+func (v ImageFormat) Is(other ImageFormat) bool {
+	return v == other
+}
 
 // ImageConfig holds configuration for image format and size.
 type ImageConfig struct {
@@ -272,6 +282,6 @@ func AvatarDecorationURL(asset string, size ImageSize) string {
 func TeamIconURL(teamID Snowflake, iconHash string, format ImageFormat, size ImageSize) string {
 	config := ImageConfig{Format: format, Size: size}
 	allowedFormats := [5]ImageFormat{ImageFormatPNG, ImageFormatWebP, ImageFormatJPEG}
-	path := "team-icons/" + teamID.String() + "/" + iconHash 
+	path := "team-icons/" + teamID.String() + "/" + iconHash
 	return buildImageURL(ImageBaseURL, path, iconHash, config, allowedFormats)
 }
