@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,9 +11,10 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -74,8 +75,6 @@ func (f MemberFlags) Has(flags ...MemberFlags) bool {
 //
 // This contains guild-specific information like nickname, roles, and join date.
 type Member struct {
-	Client *Client
-
 	// ID is the user's unique Discord ID.
 	ID Snowflake `json:"id"`
 
@@ -232,46 +231,6 @@ func (m *Member) AvatarDecorationURLWith(size ImageSize) string {
 		AvatarDecorationURL(m.AvatarDecorationData.Asset, size)
 	}
 	return ""
-}
-
-// Permissions returns the member's base permissions in the guild.
-//
-// It calculates permissions by combining all permissions from the member's roles,
-// including the @everyone role permissions.
-//
-// Note:
-//   - This does not include channel-specific permission overwrites.
-//
-// Example usage:
-//
-//	perms := member.Permissions()
-func (m *Member) Permissions() Permissions {
-	if m.Client == nil {
-		return PermissionNone
-	}
-	if memberGuild := m.Client.GetGuild(m.GuildID); memberGuild.IsPresent() && memberGuild.Get().OwnerID == m.ID {
-		return PermissionAdministrator
-	}
-
-	roles := m.Client.GetRoles(m.RoleIDs...)
-	if everyone := m.Client.GetRole(m.GuildID); everyone.IsPresent() {
-		roles[m.GuildID] = everyone.Get()
-	}
-
-	var perms Permissions
-	for _, role := range roles {
-		perms.Add(role.Permissions)
-	}
-	return perms
-}
-
-// PermissionsIn returns the member's permissions in a specific guild channel,
-//
-// Example usage:
-//
-//	perms := member.PermissionsIn(channel)
-func (m *Member) PermissionsIn(channel GuildChannel) Permissions {
-	return channel.PermissionsFor(*m)
 }
 
 // FullMember represents a complete guild member with their associated user information.
@@ -480,3 +439,18 @@ func (m *PartialMember) BannerURLWith(format ImageFormat, size ImageSize) string
 	}
 	return ""
 }
+
+// Mention returns a Discord mention string for the member.
+func (m *FullMember) Mention() string {
+	return m.Member.Mention()
+}
+
+// String implements the fmt.Stringer interface.
+func (m *FullMember) String() string {
+	return m.Mention()
+}
+
+var (
+	_ fmt.Stringer = (*Member)(nil)
+	_ fmt.Stringer = (*FullMember)(nil)
+)
