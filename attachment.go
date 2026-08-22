@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,9 +11,12 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // AttachmentFlags represents bit flags for Discord attachment metadata.
 //
@@ -112,9 +115,14 @@ func (a *Attachment) CreatedAt() time.Time {
 // Returns:
 //   - string: full path to the downloaded file.
 //   - error: non-nil if any operation fails.
-func (a *Attachment) Save(fileName, dir string) (string, error) {
+func (a *Attachment) Save(ctx context.Context, fileName, dir string) (string, error) {
 	if fileName == "" {
 		fileName = a.Filename
 	}
-	return DownloadFile(a.URL, fileName, dir)
+	return DownloadFile(ctx, a.URL, fileName, dir)
+}
+
+// Has returns true if the flags contain all of the provided flags.
+func (f AttachmentFlags) Has(flags ...AttachmentFlags) bool {
+	return BitFieldHas(f, flags...)
 }

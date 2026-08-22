@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import "time"
 
@@ -56,7 +56,7 @@ type VoiceState struct {
 	//
 	// Optional:
 	//  - May be nil if the user has not requested to speak.
-	RequestToSpeakTimestamp *time.Time `json:"request_to_speak_timestamp,omitzero"`
+	RequestToSpeakTimestamp *time.Time `json:"request_to_speak_timestamp,omitempty"`
 }
 
 type GatewayVoiceState struct {
