@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,17 +11,23 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
+	"errors"
+	"fmt"
 	"log"
+	"log/slog"
+	"net/http"
 	"os"
-	"runtime"
-	"strings"
+	"os/signal"
+	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
-
-	"github.com/marouanesouiri/stdx/xlog"
 )
 
 /*****************************
@@ -30,40 +36,50 @@ import (
 
 // Client manages your Discord connection at a high level, grouping multiple shards together.
 //
-// It provides:
-//   - Central configuration for your bot token, intents, and logger.
-//   - REST API access via requester.
+// It encapsulates:
+//   - REST API interactions via requester.
+//   - Caching via CacheManager.
+// Client manages interactions with Discord's API, WebSocket Gateway, and HTTP Webhook Events.
+// It coordinates:
+//   - REST API requests via requester.
+//   - In-memory/Redis entity caching via CacheManager.
 //   - Event dispatching via dispatcher.
 //   - Shard management for scalable Gateway connections.
 //
-// Create a Client using dwaz.New() with desired options, then call Start().
-// Client manages your Discord connection at a high level, grouping multiple shards together.
-//
-// It provides:
-//   - Central configuration for your bot token, intents, and logger.
-//   - REST API access via restApi.
-//   - Event dispatching via dispatcher.
-//   - Shard management for scalable Gateway connections.
-//
-// Create a Client using dwaz.New() with desired options, then call Start().
+// Create a Client using wumpkit.New() with desired options, then call StartGateway(), StartGatewayWithSignals(), StartWebhookEvents(), StartWebhookEventsWithSignals(), or StartBothWithSignals().
 type Client struct {
-	ctx                  context.Context
-	Logger               xlog.Logger               // logger used throughout the client
-	identifyLimiter      ShardsIdentifyRateLimiter // rate limiter controlling Identify payloads per shard
-	token                string                    // bot token (without "Bot " prefix)
-	intents              GatewayIntent             // configured Gateway intents
-	shardManager         *ShardManager             // manages Gateway shard lifecycle
-	shardManagerConfig   ShardManagerConfig        // configuration for shard management
-	useCompression       bool                      // whether to use zlib-stream compression (default: true)
-	*requester                                     // REST API client
-	CacheManager                                   // CacheManager for caching discord entities
-	*dispatcher                                    // event dispatcher
-	requesterConfig      RequesterConfig           // configuration for the HTTP requester
-	handlerExecutionMode HandlerExecutionMode      // mode for executing event handlers
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	shutdownOnce           sync.Once
+	isGatewayRunning       atomic.Bool               // indicates whether Gateway is active on this client
+	isWebhookEventsRunning atomic.Bool               // indicates whether Webhook Events server is active on this client
+	logger                 Logger                    // logger used throughout the client
+	token                  string                    // bot token (without "Bot " prefix)
+	publicKey              string                    // application public key for HTTP interaction verification
+	publicKeyBytes         ed25519.PublicKey         // pre-parsed ed25519 public key
+	httpServer             *http.Server              // dedicated HTTP interactions server
+	shardManager           *ShardManager             // manages Gateway shard lifecycle
+	*requester                                       // REST API client
+	CacheManager                                     // CacheManager for caching discord entities
+	*dispatcher                                      // event dispatcher
 }
 
-// clientOption defines a function used to configure Client during creation.
-type clientOption func(*Client)
+// clientConfig holds temporary configuration used only during Client initialization in New().
+type clientConfig struct {
+	token               string
+	publicKey           string
+	logger              Logger
+	cacheManager        CacheManager
+	shardManager        *ShardManager
+	requesterConfig     RequesterConfig
+	shardManagerConfig  ShardManagerConfig
+	dispatcherConfig    DispatcherConfig
+	cacheConfig         CacheConfig
+	webhookEventsConfig WebhookEventsConfig
+}
+
+// clientOption defines a function used to configure Client initialization during creation.
+type clientOption func(*clientConfig)
 
 /*****************************
  *       Options
@@ -73,7 +89,7 @@ type clientOption func(*Client)
 //
 // Usage:
 //
-//	y := dwaz.New(dwaz.WithToken("your_bot_token"))
+//	y := wumpkit.New(ctx, wumpkit.WithToken("your_bot_token"))
 //
 // Notes:
 //   - Logs fatal and exits if token is empty or obviously invalid (< 50 chars).
@@ -84,14 +100,9 @@ func WithToken(token string) clientOption {
 	if token == "" {
 		log.Fatal("WithToken: token must not be empty")
 	}
-	// Basic length check removed as tokens can vary, but generally good to keep some sanity check.
-	// We'll trust the user more here as requested.
-	if strings.HasPrefix(token, "Bot ") {
-		token = strings.Split(token, " ")[1]
-	}
-	return func(c *Client) {
-		c.token = token
-		c.requesterConfig.Token = token
+	token = cleanGatewayToken(token)
+	return func(cfg *clientConfig) {
+		cfg.token = token
 	}
 }
 
@@ -99,15 +110,14 @@ func WithToken(token string) clientOption {
 //
 // Usage:
 //
-//	y := dwaz.New(dwaz.WithLogger(myLogger))
+//	y := wumpkit.New(ctx, wumpkit.WithLogger(myLogger))
 //
-// Logs fatal and exits if logger is nil.
-func WithLogger(logger xlog.Logger) clientOption {
-	if logger == nil {
-		log.Fatal("WithLogger: logger must not be nil")
-	}
-	return func(c *Client) {
-		c.Logger = logger
+// If nil is provided or option omitted, slog is used by default.
+func WithLogger(logger Logger) clientOption {
+	return func(cfg *clientConfig) {
+		if logger != nil {
+			cfg.logger = logger
+		}
 	}
 }
 
@@ -115,134 +125,70 @@ func WithLogger(logger xlog.Logger) clientOption {
 //
 // Usage:
 //
-//	y := dwaz.New(dwaz.WithCacheManager(myCacheManager))
+//	y := wumpkit.New(wumpkit.WithCacheManager(myCacheManager))
 //
 // Logs fatal and exits if cacheManager is nil.
 func WithCacheManager(cacheManager CacheManager) clientOption {
 	if cacheManager == nil {
 		log.Fatal("WithCacheManager: cacheManager must not be nil")
 	}
-	return func(c *Client) {
-		c.CacheManager = cacheManager
+	return func(cfg *clientConfig) {
+		cfg.cacheManager = cacheManager
+	}
+}
+
+// WithShardManager sets a pre-configured or custom ShardManager instance on the client.
+func WithShardManager(sm *ShardManager) clientOption {
+	if sm == nil {
+		log.Fatal("WithShardManager: shardManager must not be nil")
+	}
+	return func(cfg *clientConfig) {
+		cfg.shardManager = sm
 	}
 }
 
 // WithRequesterConfig sets the configuration for the HTTP requester.
-// Use this to configure a proxy URL or custom HTTP client.
 func WithRequesterConfig(config RequesterConfig) clientOption {
-	return func(c *Client) {
-		// Preserve token if already set via WithToken, unless config has it
-		if config.Token == "" {
-			config.Token = c.token
-		}
-		c.requesterConfig = config
+	return func(cfg *clientConfig) {
+		cfg.requesterConfig = config
 	}
 }
 
-// WithShardCount forces a specific number of shards to be used.
-// If not set (0), the recommended shard count from Discord is used.
-//
-// Deprecated: Use WithShardManagerConfig for more control over sharding.
-func WithShardCount(count int) clientOption {
-	return func(c *Client) {
-		c.shardManagerConfig.TotalShards = count
-	}
+// WithRESTConfig is an alias for WithRequesterConfig.
+func WithRESTConfig(config RequesterConfig) clientOption {
+	return WithRequesterConfig(config)
 }
 
-// WithShardManagerConfig sets the shard manager configuration.
-//
-// For sharding (multiple shards in one process):
-//
-//	dwaz.WithShardManagerConfig(dwaz.ShardManagerConfig{TotalShards: 4})
-//
-// For clustering (specific shards per process):
-//
-//	// Process 1:
-//	dwaz.WithShardManagerConfig(dwaz.ShardManagerConfig{TotalShards: 4, ShardIDs: []int{0, 1}})
-//	// Process 2:
-//	dwaz.WithShardManagerConfig(dwaz.ShardManagerConfig{TotalShards: 4, ShardIDs: []int{2, 3}})
+// WithShardManagerConfig sets the configuration for the ShardManager and Gateway connections.
 func WithShardManagerConfig(config ShardManagerConfig) clientOption {
-	return func(c *Client) {
-		c.shardManagerConfig = config
+	return func(cfg *clientConfig) {
+		cfg.shardManagerConfig = config
 	}
 }
 
-// WithShardsIdentifyRateLimiter sets a custom ShardsIdentifyRateLimiter
-// implementation for your client.
-//
-// Usage:
-//
-//	y := dwaz.New(dwaz.WithShardsIdentifyRateLimiter(myRateLimiter))
-//
-// Logs fatal and exits if the provided rateLimiter is nil.
-func WithShardsIdentifyRateLimiter(rateLimiter ShardsIdentifyRateLimiter) clientOption {
-	if rateLimiter == nil {
-		log.Fatal("ShardsIdentifyRateLimiter: shardsIdentifyRateLimiter must not be nil")
-	}
-	return func(c *Client) {
-		c.identifyLimiter = rateLimiter
+// WithGatewayConfig is an alias for WithShardManagerConfig.
+func WithGatewayConfig(config ShardManagerConfig) clientOption {
+	return WithShardManagerConfig(config)
+}
+
+// WithDispatcherConfig sets the configuration for the event dispatcher.
+func WithDispatcherConfig(config DispatcherConfig) clientOption {
+	return func(cfg *clientConfig) {
+		cfg.dispatcherConfig = config
 	}
 }
 
-// WithIntents sets Gateway intents for the client shards.
-//
-// Usage:
-//
-//	y := dwaz.New(dwaz.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent))
-//
-// Also supports bitwise OR usage:
-//
-//	y := dwaz.New(dwaz.WithIntents(GatewayIntentGuilds | GatewayIntentMessageContent))
-func WithIntents(intents ...GatewayIntent) clientOption {
-	var totalIntents GatewayIntent
-	for _, intent := range intents {
-		totalIntents |= intent
-	}
-	return func(c *Client) {
-		c.intents = totalIntents
+// WithCacheConfig sets the configuration for the cache manager.
+func WithCacheConfig(config CacheConfig) clientOption {
+	return func(cfg *clientConfig) {
+		cfg.cacheConfig = config
 	}
 }
 
-// WithHandlerExecutionMode sets the execution mode for event handlers.
-//
-// Usage:
-//
-//	dwaz.New(..., dwaz.WithHandlerExecutionMode(dwaz.HandlerExecutionAsync))
-//
-// Default is HandlerExecutionSync (sequential).
-func WithHandlerExecutionMode(mode HandlerExecutionMode) clientOption {
-	return func(c *Client) {
-		c.handlerExecutionMode = mode
-	}
-}
-
-// WithCompression enables or disables zlib-stream compression for Gateway connections.
-//
-// When enabled (default), Gateway messages are compressed, reducing bandwidth by 60-80%.
-//
-// Usage:
-//
-//	dwaz.New(..., dwaz.WithCompression(false)) // disable compression
-//
-// Default is true (compression enabled).
-func WithCompression(enabled bool) clientOption {
-	return func(c *Client) {
-		c.useCompression = enabled
-	}
-}
-
-// WithIdentifyProperties sets custom properties for the Identify payload.
-//
-// Usage:
-//
-//	dwaz.New(..., dwaz.WithIdentifyProperties(dwaz.IdentifyProperties{
-//	    OS:      "linux",
-//	    Browser: "my-bot",
-//	    Device:  "my-bot",
-//	}))
-func WithIdentifyProperties(props IdentifyProperties) clientOption {
-	return func(c *Client) {
-		c.shardManagerConfig.Identify = props
+// WithWebhookEventsConfig sets the configuration for the Webhook Events HTTP server.
+func WithWebhookEventsConfig(config WebhookEventsConfig) clientOption {
+	return func(cfg *clientConfig) {
+		cfg.webhookEventsConfig = config
 	}
 }
 
@@ -254,43 +200,90 @@ func WithIdentifyProperties(props IdentifyProperties) clientOption {
 //
 // Example:
 //
-//	y := dwaz.New(
-//	    dwaz.WithToken("my_bot_token"),
-//	    dwaz.WithIntents(GatewayIntentGuilds, GatewayIntentMessageContent),
-//	    dwaz.WithLogger(myLogger),
+//	bot := wumpkit.New(
+//	    ctx,
+//	    wumpkit.WithToken("my_bot_token"),
+//	    wumpkit.WithGatewayConfig(wumpkit.ShardManagerConfig{
+//	        Intents: wumpkit.GatewayIntentGuilds | wumpkit.GatewayIntentGuildMessages,
+//	    }),
+//	    wumpkit.WithLogger(myLogger),
 //	)
 //
 // Defaults:
 //   - Logger: stdout logger at Info level.
-//   - Intents: GatewayIntentGuilds | GatewayIntentGuildMessages | GatewayIntentGuildMembers
-//   - Executor: SpawnExecutor (goroutine per task)
+//   - Gateway: DefaultShardManagerConfig() (Intents: Guilds | GuildMessages | GuildMembers, Compression: zlib-stream)
+//   - Cache: Default InMemoryCacheManager with all flags enabled
+//   - REST: DefaultRequesterConfig() (BaseURL: "https://discord.com/api/v10", MaxRetries: 3)
 func New(ctx context.Context, options ...clientOption) *Client {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	ctx, cancel := context.WithCancel(ctx)
 
-	client := &Client{
-		ctx:    ctx,
-		Logger: xlog.NewTextLogger(os.Stdout, xlog.LogLevelInfoLevel),
-		intents: GatewayIntentGuilds |
-			GatewayIntentGuildMessages |
-			GatewayIntentGuildMembers,
-		useCompression: true,
+	cfg := clientConfig{
+		logger:              slog.Default(),
+		requesterConfig:     DefaultRequesterConfig(),
+		shardManagerConfig:  DefaultShardManagerConfig(),
+		dispatcherConfig:    DefaultDispatcherConfig(),
+		cacheConfig:         DefaultCacheConfig(),
+		webhookEventsConfig: DefaultWebhookEventsConfig(),
 	}
 
 	for _, option := range options {
-		option(client)
+		option(&cfg)
 	}
 
-	if client.requesterConfig.Token == "" {
-		client.requesterConfig.Token = client.token
+	if cfg.logger == nil {
+		cfg.logger = slog.Default()
 	}
 
-	client.requester = newRequester(client.requesterConfig, client.Logger)
-	client.CacheManager = NewInMemoryCacheManager(
-		CacheFlagGuilds | CacheFlagMembers | CacheFlagChannels | CacheFlagRoles | CacheFlagUsers | CacheFlagVoiceStates,
-	)
-	client.dispatcher = newDispatcher(client.Logger, client, client.handlerExecutionMode)
+	cacheManager := cfg.cacheManager
+	if cacheManager == nil {
+		cacheManager = NewInMemoryCacheManager(
+			CacheFlagGuilds|CacheFlagMembers|CacheFlagChannels|CacheFlagRoles|CacheFlagUsers|CacheFlagVoiceStates,
+			cfg.cacheConfig,
+		)
+	}
+
+	disp := newDispatcher(ctx, cacheManager, cfg.logger, cfg.dispatcherConfig.ExecutionMode)
+	req := newRequester(cfg.token, cfg.requesterConfig, cfg.logger)
+
+	var pubKeyBytes ed25519.PublicKey
+	if cfg.publicKey != "" {
+		if b, err := hex.DecodeString(cfg.publicKey); err == nil && len(b) == ed25519.PublicKeySize {
+			pubKeyBytes = ed25519.PublicKey(b)
+		}
+	}
+
+	sm := cfg.shardManager
+	if sm == nil {
+		opts := []ShardManagerOption{
+			applyShardManagerConfig(cfg.shardManagerConfig),
+		}
+		sm = NewShardManager(cfg.token, cfg.logger, disp, opts...)
+	} else {
+		applyShardManagerConfig(cfg.shardManagerConfig)(sm)
+		if sm.dispatcher == nil {
+			sm.dispatcher = disp
+		}
+		if sm.logger == nil {
+			sm.logger = cfg.logger
+		}
+	}
+
+	client := &Client{
+		ctx:            ctx,
+		cancel:         cancel,
+		logger:         cfg.logger,
+		token:          cfg.token,
+		publicKey:      cfg.publicKey,
+		publicKeyBytes: pubKeyBytes,
+		shardManager:   sm,
+		requester:      req,
+		CacheManager:   cacheManager,
+		dispatcher:     disp,
+	}
+
 	return client
 }
 
@@ -298,119 +291,150 @@ func New(ctx context.Context, options ...clientOption) *Client {
  *       Start
  *****************************/
 
-// Start initializes and connects all shards for the client.
-//
-// It performs the following steps:
-//  1. Retrieves Gateway information from Discord.
-//  2. Creates and connects shards with appropriate rate limiting.
-//  3. Starts listening to Gateway events.
-//
-// The lifetime of the client is controlled by the provided context `ctx`:
-//   - If `ctx` is `nil` or `context.Background()`, Start will block forever,
-//     running the client until the program exits or Shutdown is called externally.
-//   - If `ctx` is cancellable (e.g., created via context.WithCancel or context.WithTimeout),
-//     the client will run until the context is cancelled or times out.
-//     When the context is done, the client will shutdown gracefully and Start will return.
-//
-// This design gives you full control over the client's lifecycle.
-// For typical usage where you want the bot to run continuously,
-// simply pass `nil` as the context (recommended for beginners).
-//
-// Example usage:
-//
-//	// Run the client indefinitely (blocks forever)
-//	err := client.Start(nil)
-//
-//	// Run the client with manual cancellation control
-//	ctx, cancel := context.WithCancel(context.Background())
-//	go func() {
-//	    time.Sleep(time.Hour)
-//	    cancel() // stops the client after 1 hour
-//	}()
-//	err := client.Start(ctx)
-//
-// Returns an error if Gateway information retrieval or shard connection fails.
-// Start initializes and connects all shards for the client.
-//
-// It performs the following steps:
-//  1. Retrieves Gateway information from Discord.
-//  2. Creates and connects shards with appropriate rate limiting.
-//  3. Starts listening to Gateway events.
-//
-// The lifetime of the client is controlled by the provided context `ctx`:
-//   - If `ctx` is `nil` or `context.Background()`, Start will block forever,
-//     running the client until the program exits or Shutdown is called externally.
-//   - If `ctx` is cancellable (e.g., created via context.WithCancel or context.WithTimeout),
-//     the client will run until the context is cancelled or times out.
-//     When the context is done, the client will shutdown gracefully and Start will return.
-//
-// This design gives you full control over the client's lifecycle.
-// For typical usage where you want the bot to run continuously,
-// simply pass `nil` as the context (recommended for beginners).
-//
-// Example usage:
-//
-//	// Run the client indefinitely (blocks forever)
-//	err := client.Start(nil)
-//
-//	// Run the client with manual cancellation control
-//	ctx, cancel := context.WithCancel(context.Background())
-//	go func() {
-//	    time.Sleep(time.Hour)
-//	    cancel() // stops the client after 1 hour
-//	}()
-//	err := client.Start(ctx)
-//
-// Returns an error if Gateway information retrieval or shard connection fails.
-func (c *Client) Start() error {
-	res := c.requester.FetchGatewayBot()
-	if res.IsErr() {
-		return res.Err()
-	}
-	gatewayBotData := res.Value()
+// GatewayStartOption configures Gateway parameters when starting a Gateway connection.
+type GatewayStartOption func(*ShardManager)
 
-	if c.identifyLimiter == nil {
-		c.identifyLimiter = NewDefaultShardsRateLimiter(gatewayBotData.SessionStartLimit.MaxConcurrency, 5*time.Second)
+// StartGateway initializes internal components and connects shards to Discord Gateway.
+// Blocks until client context is cancelled or Shutdown() is called.
+func (c *Client) StartGateway(options ...GatewayStartOption) error {
+	for _, opt := range options {
+		opt(c.shardManager)
 	}
 
-	if c.shardManagerConfig.Identify.OS == "" {
-		c.shardManagerConfig.Identify.OS = runtime.GOOS
+	if !c.isGatewayRunning.CompareAndSwap(false, true) {
+		return errors.New("cannot start Gateway client: Gateway is already running on this client")
 	}
-	if c.shardManagerConfig.Identify.Browser == "" {
-		c.shardManagerConfig.Identify.Browser = "dwaz"
-	}
-	if c.shardManagerConfig.Identify.Device == "" {
-		c.shardManagerConfig.Identify.Device = "dwaz"
+	defer c.isGatewayRunning.Store(false)
+
+	// discover Gateway configuration & recommended shard count if not configured
+	totalShards := c.shardManager.totalShards
+	if totalShards <= 0 || c.shardManager.gatewayURL == "" || c.shardManager.identifyLimiter == nil {
+		gatewayBotData, err := c.FetchGatewayBot(c.ctx)
+		if err != nil {
+			return fmt.Errorf("failed fetching gateway bot info: %w", err)
+		}
+
+		if totalShards <= 0 {
+			totalShards = gatewayBotData.Shards
+			c.shardManager.totalShards = totalShards
+		}
+		if c.shardManager.gatewayURL == "" {
+			c.shardManager.gatewayURL = gatewayBotData.URL
+		}
+		if c.shardManager.identifyLimiter == nil {
+			c.shardManager.identifyLimiter = NewDefaultShardsRateLimiter(
+				gatewayBotData.SessionStartLimit.MaxConcurrency,
+				5*time.Second,
+			)
+		}
 	}
 
-	// Determine total shards: use config if set, otherwise use Discord's recommendation
-	totalShards := gatewayBotData.Shards
-	if c.shardManagerConfig.TotalShards > 0 {
-		totalShards = c.shardManagerConfig.TotalShards
-	}
-
-	// Create shard manager
-	c.shardManager = NewShardManager(
-		c.shardManagerConfig,
-		c.token,
-		c.intents,
-		c.useCompression,
-		c.Logger,
-		c.dispatcher,
-		c.identifyLimiter,
-	)
-
-	// Start all configured shards
+	// start all configured shards
 	if err := c.shardManager.Start(c.ctx, totalShards); err != nil {
 		return err
 	}
 
 	<-c.ctx.Done()
-	if err := c.ctx.Err(); err != nil {
-		c.Logger.WithField("err", err).Error("Client shutdown due to context error")
-	}
 	c.Shutdown()
 	return nil
+}
+
+// StartGatewayWithSignals starts the Gateway client and blocks until an interrupt or termination signal
+// (SIGINT, SIGTERM) is received, then performs a graceful shutdown.
+func (c *Client) StartGatewayWithSignals(signals ...os.Signal) error {
+	if len(signals) == 0 {
+		signals = []os.Signal{os.Interrupt, syscall.SIGTERM}
+	}
+	sigCtx, stop := signal.NotifyContext(c.ctx, signals...)
+	defer stop()
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- c.StartGateway()
+	}()
+
+	select {
+	case err := <-errChan:
+		return err
+	case <-sigCtx.Done():
+		if c.logger != nil {
+			c.logger.Info("OS signal received, initiating graceful shutdown")
+		}
+		c.Shutdown()
+		return <-errChan
+	}
+}
+
+// StartBoth starts both the Gateway WebSocket connection and the Webhook Events HTTP server simultaneously on the same client.
+// Blocks until client context is cancelled or Shutdown() is called.
+func (c *Client) StartBoth(addr string, gatewayOpts []GatewayStartOption, webhookOpts ...WebhookEventsStartOption) error {
+	errChan := make(chan error, 2)
+
+	go func() {
+		if err := c.StartGateway(gatewayOpts...); err != nil {
+			errChan <- fmt.Errorf("gateway error: %w", err)
+		}
+	}()
+
+	go func() {
+		if err := c.StartWebhookEvents(addr, webhookOpts...); err != nil {
+			errChan <- fmt.Errorf("webhook events error: %w", err)
+		}
+	}()
+
+	select {
+	case err := <-errChan:
+		c.Shutdown()
+		return err
+	case <-c.ctx.Done():
+		c.Shutdown()
+		return nil
+	}
+}
+
+// StartBothWithSignals starts both Gateway and Webhook Events simultaneously, blocking until an OS signal is received.
+func (c *Client) StartBothWithSignals(addr string, gatewayOpts []GatewayStartOption, webhookOpts ...WebhookEventsStartOption) error {
+	sigCtx, stop := signal.NotifyContext(c.ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- c.StartBoth(addr, gatewayOpts, webhookOpts...)
+	}()
+
+	select {
+	case err := <-errChan:
+		return err
+	case <-sigCtx.Done():
+		if c.logger != nil {
+			c.logger.Info("OS signal received, initiating graceful shutdown")
+		}
+		c.Shutdown()
+		return <-errChan
+	}
+}
+
+// StartCluster initializes and starts the client for a specific cluster (subset of shards).
+func (c *Client) StartCluster(ctx context.Context, totalShards int, shardIDs ...int) error {
+	if ctx != nil {
+		c.ctx = ctx
+	}
+	if c.shardManager != nil {
+		c.shardManager.totalShards = totalShards
+		c.shardManager.shardIDs = shardIDs
+	}
+	return c.StartGateway()
+}
+
+// StartShards initializes and starts specific shards on this client instance.
+func (c *Client) StartShards(ctx context.Context, shardIDs ...int) error {
+	if ctx != nil {
+		c.ctx = ctx
+	}
+	if c.shardManager != nil {
+		c.shardManager.shardIDs = shardIDs
+	}
+	return c.StartGateway()
 }
 
 /*****************************
@@ -420,18 +444,292 @@ func (c *Client) Start() error {
 // Shutdown cleanly shuts down the Client.
 //
 // It:
-//   - Logs shutdown message.
-//   - Shuts down the REST API client (closes idle connections).
-//   - Shuts down all managed shards via ShardManager.
+//   - Cancels the client's internal context so Start() unblocks cleanly.
+//   - Shuts down all managed shards via ShardManager (closing WebSocket connections with StatusNormalClosure).
+//   - Gracefully drains in-flight event handlers via dispatcher.
+//   - Shuts down the REST API requester (closes idle connections).
 func (c *Client) Shutdown() {
-	c.Logger.Info("Client shutting down")
+	c.shutdownOnce.Do(func() {
+		if c.logger != nil {
+			c.logger.Info("Client gracefully shutting down")
+		}
+		if c.cancel != nil {
+			c.cancel()
+		}
+		if c.shardManager != nil {
+			c.shardManager.Shutdown()
+		}
+		if c.dispatcher != nil {
+			c.dispatcher.Shutdown(5 * time.Second)
+		}
+		if c.requester != nil {
+			c.requester.Shutdown()
+		}
+		if c.httpServer != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = c.httpServer.Shutdown(shutdownCtx)
+		}
+	})
+}
+
+// Close is an alias for Shutdown, implementing io.Closer.
+func (c *Client) Close() error {
+	c.Shutdown()
+	return nil
+}
+
+/*****************************
+ *       Helpers
+ *****************************/
+
+// Shards returns the slice of active Gateway shards.
+func (c *Client) Shards() []*Shard {
+	if c.shardManager == nil {
+		return nil
+	}
+	return c.shardManager.Shards()
+}
+
+// ShardByID retrieves a specific shard instance by its ID.
+func (c *Client) ShardByID(shardID int) *Shard {
+	if c.shardManager == nil {
+		return nil
+	}
+	return c.shardManager.ShardByID(shardID)
+}
+
+// ShardCount returns the number of active Gateway shards managed by this instance.
+func (c *Client) ShardCount() int {
+	if c.shardManager == nil {
+		return 0
+	}
+	return c.shardManager.ShardCount()
+}
+
+// Latency returns the average heartbeat latency across all active shards.
+func (c *Client) Latency() time.Duration {
+	if c.shardManager == nil {
+		return 0
+	}
+	return c.shardManager.AverageLatency()
+}
+
+// ShardManager returns the underlying ShardManager instance.
+func (c *Client) ShardManager() *ShardManager {
+	return c.shardManager
+}
+
+// Requester returns the underlying REST API requester.
+func (c *Client) Requester() *requester {
+	return c.requester
+}
+
+// RateLimitStore returns the configured RateLimitStore instance.
+func (c *Client) RateLimitStore() RateLimitStore {
 	if c.requester != nil {
-		c.requester.Shutdown()
-		c.requester = nil
+		return c.requester.rateLimitStore
 	}
-	c.Logger = nil
+	return nil
+}
+
+// Cache returns the active CacheManager instance.
+func (c *Client) Cache() CacheManager {
+	return c.CacheManager
+}
+
+// Dispatcher returns the underlying event dispatcher.
+func (c *Client) Dispatcher() *dispatcher {
+	return c.dispatcher
+}
+
+// Logger returns the Logger configured on the client.
+func (c *Client) Logger() Logger {
+	return c.logger
+}
+
+// Context returns the client root context.
+func (c *Client) Context() context.Context {
+	return c.ctx
+}
+
+// Token returns the bot token configured on the client.
+func (c *Client) Token() string {
+	return c.token
+}
+
+// Intents returns the Gateway intents configured on the client.
+func (c *Client) Intents() GatewayIntent {
 	if c.shardManager != nil {
-		c.shardManager.Shutdown()
-		c.shardManager = nil
+		return c.shardManager.Intents()
 	}
+	return 0
+}
+
+// Compression returns the Gateway compression mode configured on the client.
+func (c *Client) Compression() GatewayCompression {
+	if c.shardManager != nil {
+		return c.shardManager.Compression()
+	}
+	return GatewayCompressionNone
+}
+
+// TotalShards returns the configured total shard count (or 0 if using Discord recommendation).
+func (c *Client) TotalShards() int {
+	if c.shardManager != nil {
+		return c.shardManager.TotalShards()
+	}
+	return 0
+}
+
+// ShardIDs returns the specific shard IDs configured for this client.
+func (c *Client) ShardIDs() []int {
+	if c.shardManager != nil {
+		return c.shardManager.ShardIDs()
+	}
+	return nil
+}
+
+// IdentifyProperties returns the Identify properties configured on the client.
+func (c *Client) IdentifyProperties() IdentifyProperties {
+	if c.shardManager != nil {
+		return c.shardManager.Identify()
+	}
+	return IdentifyProperties{}
+}
+
+// AverageLatency returns the average heartbeat latency across all active shards.
+func (c *Client) AverageLatency() time.Duration {
+	return c.Latency()
+}
+
+// UpdatePresence updates the presence for all managed shards.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#update-presence
+func (c *Client) UpdatePresence(presence GatewayPresenceUpdate) error {
+	if c.shardManager == nil {
+		return errors.New("client: shard manager is not started")
+	}
+	for _, s := range c.shardManager.Shards() {
+		if err := s.UpdatePresence(presence); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateVoiceState joins, moves, or disconnects the client from a voice channel in a guild.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#update-voice-state
+func (c *Client) UpdateVoiceState(guildID Snowflake, channelID *Snowflake, selfMute, selfDeaf bool) error {
+	if c.shardManager == nil {
+		return errors.New("client: shard manager is not started")
+	}
+	totalShards := c.shardManager.ShardCount()
+	shardID := GuildShardID(guildID, totalShards)
+	shard := c.shardManager.ShardByID(shardID)
+	if shard == nil {
+		// fallback to first shard if exact shard not in this cluster
+		shards := c.shardManager.Shards()
+		if len(shards) == 0 {
+			return errors.New("client: no active shards")
+		}
+		shard = shards[0]
+	}
+	return shard.UpdateVoiceState(guildID, channelID, selfMute, selfDeaf)
+}
+
+// RequestGuildMembers requests offline guild members for a guild.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-guild-members
+func (c *Client) RequestGuildMembers(opts RequestGuildMembersOptions) error {
+	if c.shardManager == nil {
+		return errors.New("client: shard manager is not started")
+	}
+	totalShards := c.shardManager.ShardCount()
+	shardID := GuildShardID(opts.GuildID, totalShards)
+	shard := c.shardManager.ShardByID(shardID)
+	if shard == nil {
+		shards := c.shardManager.Shards()
+		if len(shards) == 0 {
+			return errors.New("client: no active shards")
+		}
+		shard = shards[0]
+	}
+	return shard.RequestGuildMembers(opts)
+}
+
+// RequestSoundboardSounds requests soundboard sounds for a list of guilds.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-soundboard-sounds
+func (c *Client) RequestSoundboardSounds(guildIDs []Snowflake) error {
+	if c.shardManager == nil {
+		return errors.New("client: shard manager is not started")
+	}
+	shards := c.shardManager.Shards()
+	if len(shards) == 0 {
+		return errors.New("client: no active shards")
+	}
+	return shards[0].RequestSoundboardSounds(guildIDs)
+}
+
+// RequestChannelInfo requests ephemeral channel data for channels in a guild.
+//
+// Reference: https://discord.com/developers/docs/events/gateway-events#request-channel-info
+func (c *Client) RequestChannelInfo(opts RequestChannelInfoOptions) error {
+	if c.shardManager == nil {
+		return errors.New("client: shard manager is not started")
+	}
+	totalShards := c.shardManager.ShardCount()
+	shardID := GuildShardID(opts.GuildID, totalShards)
+	shard := c.shardManager.ShardByID(shardID)
+	if shard == nil {
+		shards := c.shardManager.Shards()
+		if len(shards) == 0 {
+			return errors.New("client: no active shards")
+		}
+		shard = shards[0]
+	}
+	return shard.RequestChannelInfo(opts)
+}
+
+// ComputeMemberPermissions calculates a member's effective base permissions in a guild using cached roles and @everyone role.
+// If the member is the owner of the guild, it returns PermissionAll.
+func (c *Client) ComputeMemberPermissions(ctx context.Context, member Member) Permissions {
+	if ctx == nil {
+		ctx = c.ctx
+	}
+	guild, ok := c.GetGuild(ctx, member.GuildID)
+	if !ok {
+		return 0
+	}
+	if guild.OwnerID == member.ID {
+		return PermissionAll
+	}
+	roles := c.GetRoles(ctx, member.RoleIDs...)
+	if everyone, ok := c.GetRole(ctx, member.GuildID); ok {
+		roles[member.GuildID] = everyone
+	}
+	var perms Permissions
+	for _, r := range roles {
+		perms.Add(r.Permissions)
+	}
+	return perms
+}
+
+// ComputeChannelPermissions calculates a member's effective permissions in a guild channel,
+// factoring in base permissions and channel-specific permission overwrites.
+func (c *Client) ComputeChannelPermissions(ctx context.Context, member Member, channel GuildChannel) Permissions {
+	basePerms := c.ComputeMemberPermissions(ctx, member)
+	return channel.PermissionsFor(basePerms, member)
+}
+
+// MemberPermissions is an alias for ComputeMemberPermissions.
+func (c *Client) MemberPermissions(ctx context.Context, member Member) Permissions {
+	return c.ComputeMemberPermissions(ctx, member)
+}
+
+// ChannelPermissions is an alias for ComputeChannelPermissions.
+func (c *Client) ChannelPermissions(ctx context.Context, member Member, channel GuildChannel) Permissions {
+	return c.ComputeChannelPermissions(ctx, member, channel)
 }
