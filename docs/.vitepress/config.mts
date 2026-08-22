@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Dwaz',
-  description: 'Discord Wrapper API for Zwafriya for Go.',
+  title: 'Wumpkit',
+  description: 'A Lightweight Go library for Discord API.',
 
   locales: {
     root: {
@@ -12,13 +12,13 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Home', link: '/' },
-          { text: 'Introduction', link: 'introduction/what-is-dwaz' }
+          { text: 'Introduction', link: 'introduction/what-is-wumpkit' }
         ],
         sidebar: [
           {
             text: 'Introduction',
             items: [
-              { text: 'What is Dwaz?', link: 'introduction/what-is-dwaz' },
+              { text: 'What is Wumpkit?', link: 'introduction/what-is-wumpkit' },
               { text: 'Getting Started', link: 'introduction/getting-started' }
             ]
           }
@@ -32,13 +32,13 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Accueil', link: '/fr/' },
-          { text: 'Introduction', link: '/fr/introduction/what-is-dwaz' }
+          { text: 'Introduction', link: '/fr/introduction/what-is-wumpkit' }
         ],
         sidebar: [
           {
             text: 'Introduction',
             items: [
-              { text: 'Qu\'est-ce que Dwaz ?', link: '/fr/introduction/what-is-dwaz' },
+              { text: 'Qu\'est-ce que Wumpkit ?', link: '/fr/introduction/what-is-wumpkit' },
               { text: 'Guide de démarrage', link: '/fr/introduction/getting-started' }
             ]
           }

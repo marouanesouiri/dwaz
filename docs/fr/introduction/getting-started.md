@@ -20,5 +20,5 @@ Avant de commencer, assurez-vous d'avoir :
 Exécutez la commande suivante pour installer Yada :
 
 ```bash
-go get github.com/marouanesouiri/dwaz
+go get github.com/wumpkit-go/wumpkit
 ```

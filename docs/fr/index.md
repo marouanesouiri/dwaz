@@ -3,22 +3,22 @@
 layout: home
 
 hero:
-  name: "Dwaz"
-  text: "Wrapper API Discord pour Zwafriya"
+  name: "Wumpkit"
+  text: "Une bibliothèque Go légère pour l'API Discord"
   tagline: "Rapide, riche en fonctionnalités et facile à utiliser."
   actions:
     - theme: brand
       text: Get Started
       link: /fr/introduction/getting-started
     - theme: alt
-      text: Qu'est-ce que Dwaz ?
-      link: /fr/introduction/what-is-dwaz
+      text: Qu'est-ce que Wumpkit ?
+      link: /fr/introduction/what-is-wumpkit
 
 features:
   - title: Ultra Rapide
-    details: Dwaz est conçu pour la performance, permettant à vos bots de répondre rapidement et efficacement.
+    details: Wumpkit est conçu pour la performance, permettant à vos bots de répondre rapidement et efficacement.
   - title: Extrêmement Riche en Fonctionnalités
-    details: De la gestion simple des messages aux intégrations avancées du gateway et REST, Dwaz fournit tout ce dont vous avez besoin.
+    details: De la gestion simple des messages aux intégrations avancées du gateway et REST, Wumpkit fournit tout ce dont vous avez besoin.
   - title: Facile à Utiliser
     details: API Go claires et intuitives pour créer et développer des bots Discord sans effort.
   - title: Moderne et Maintenue

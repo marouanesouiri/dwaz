@@ -1,6 +1,6 @@
-# Qu'est-ce que Dwaz ?
+# Qu'est-ce que Wumpkit ?
 
-Dwaz est une **Discord API bibliothèque** pour Go, conçue pour être :
+Wumpkit est une **Discord API bibliothèque** pour Go, conçue pour être :
 
 - ⚡ **Rapide** : Optimisée pour la performance afin de gérer sans problème un grand volume d'événements et de bots Discord importants.
 - 🚀 **Riche en fonctionnalités** : Prend en charge l'intégralité de l'API Discord, y compris les événements du gateway, les endpoints REST, les commandes slash, les interactions, et plus encore.
@@ -11,9 +11,9 @@ Dwaz est une **Discord API bibliothèque** pour Go, conçue pour être :
 
 ---
 
-## Pourquoi choisir Dwaz ?
+## Pourquoi choisir Wumpkit ?
 
-Le développement de bots Discord en Go implique souvent de choisir entre des bibliothèques avec divers compromis. Dwaz vise à offrir :
+Le développement de bots Discord en Go implique souvent de choisir entre des bibliothèques avec divers compromis. Wumpkit vise à offrir :
 
 - **Un ensemble complet de fonctionnalités** sans complexité inutile
 - **Performance et scalabilité** pour les bots ou gateways de grande taille
@@ -29,6 +29,6 @@ Le développement de bots Discord en Go implique souvent de choisir entre des bi
 
 ---
 
-Prêt à créer votre prochain bot Discord avec Dwaz ?
+Prêt à créer votre prochain bot Discord avec Wumpkit ?
 
 👉 [Commencer](/fr/introduction/getting-started)
