@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"encoding/json"
@@ -91,6 +91,22 @@ func (s Snowflake) ProcessID() uint64 {
 // Sequence extracts the sequence number (increment part) of the snowflake.
 func (s Snowflake) Sequence() uint64 {
 	return uint64(s) & 0xFFF
+}
+
+// GuildShardID calculates the shard ID for a guild snowflake given the total number of shards.
+//
+// Formula: (guild_id >> 22) % num_shards
+// Reference: https://discord.com/developers/docs/events/gateway#sharding-sharding-formula
+func GuildShardID(guildID Snowflake, totalShards int) int {
+	if totalShards <= 1 {
+		return 0
+	}
+	return int((uint64(guildID) >> 22) % uint64(totalShards))
+}
+
+// GuildShardID returns the shard ID for this guild Snowflake given the total number of shards.
+func (s Snowflake) GuildShardID(totalShards int) int {
+	return GuildShardID(s, totalShards)
 }
 
 /***********************
