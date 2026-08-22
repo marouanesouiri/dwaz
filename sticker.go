@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,9 +11,12 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // StickerType defines whether the sticker is a standard or guild sticker.
 //
@@ -27,6 +30,11 @@ const (
 	// StickerTypeGuild represents a sticker uploaded to a guild.
 	StickerTypeGuild
 )
+
+// Is returns true if this StickerType matches the provided one.
+func (v StickerType) Is(other StickerType) bool {
+	return v == other
+}
 
 // StickerFormatType defines the format of a sticker's image.
 //
@@ -46,6 +54,11 @@ const (
 	// StickerFormatTypeGIF represents a GIF format sticker.
 	StickerFormatTypeGIF
 )
+
+// Is returns true if this StickerFormatType matches the provided one.
+func (v StickerFormatType) Is(other StickerFormatType) bool {
+	return v == other
+}
 
 // Sticker represents a sticker that can be sent in messages.
 //
@@ -150,3 +163,24 @@ func (p *StickerPack) BannerURLWith(format ImageFormat, size ImageSize) string {
 	}
 	return ""
 }
+
+// NitroStickerPacksResponse represents the response containing sticker packs.
+type NitroStickerPacksResponse struct {
+	// StickerPacks is the list of sticker pack objects.
+	StickerPacks []StickerPack `json:"sticker_packs"`
+}
+
+// String implements the fmt.Stringer interface.
+func (s *Sticker) String() string {
+	return s.Name
+}
+
+// String implements the fmt.Stringer interface.
+func (p *StickerPack) String() string {
+	return p.Name
+}
+
+var (
+	_ fmt.Stringer = (*Sticker)(nil)
+	_ fmt.Stringer = (*StickerPack)(nil)
+)
