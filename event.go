@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,50 +11,66 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
-// ReadyCreateEvent Shard is ready
-type ReadyEvent struct {
-	Client  *Client
-	ShardID int // shard that dispatched this event
-	Guilds  []Guild
+// ShardID represents the ID of a Discord Gateway shard, or -1 for Webhook Events.
+type ShardID int
+
+// IsWebhookEventsDispatched returns true if the event was dispatched via Webhook Events (negative shard ID).
+func (s ShardID) IsWebhookEventsDispatched() bool {
+	return s < 0
 }
 
-// GuildCreateEvent Guild was created
+// ReadyEvent is dispatched when a shard has completed the initial handshake.
+type ReadyEvent struct {
+	ShardID          ShardID
+	Version          int                `json:"v"`
+	User             User               `json:"user"`
+	Guilds           []Guild            `json:"guilds"`
+	SessionID        string             `json:"session_id"`
+	ResumeGatewayURL string             `json:"resume_gateway_url"`
+	Shard            *[2]int            `json:"shard,omitempty"`
+	Application      PartialApplication `json:"application"`
+}
+
+// ResumedEvent is dispatched when a shard has resumed a previous session.
+type ResumedEvent struct {
+	ShardID ShardID
+}
+
+// GuildCreateEvent is dispatched when a guild becomes available or user joins a guild.
 type GuildCreateEvent struct {
-	Client  *Client
-	ShardID int // shard that dispatched this event
+	ShardID ShardID
 	Guild   GatewayGuild
 }
 
-// MessageCreateEvent Message was created
+// MessageCreateEvent is dispatched when a message is created.
 type MessageCreateEvent struct {
-	Client  *Client
-	ShardID int // shard that dispatched this event
+	ShardID ShardID
 	Message Message
 }
 
-// MessageCreateEvent Message was created
+// MessageUpdateEvent is dispatched when a message is updated.
 type MessageUpdateEvent struct {
-	Client     *Client
-	ShardID    int // shard that dispatched this event
+	ShardID    ShardID
 	OldMessage Message
 	NewMessage Message
 }
 
-// MessageDeleteEvent Message was deleted
+// MessageDeleteEvent is dispatched when a message is deleted.
 type MessageDeleteEvent struct {
-	Client  *Client
-	ShardID int // shard that dispatched this event
+	ShardID ShardID
 	Message Message
 }
 
-// InteractionCreateEvent Interaction created
+// InteractionCreateEvent is dispatched when an interaction is created.
 type InteractionCreateEvent struct {
-	Client      *Client
-	ShardID     int // shard that dispatched this event
+	ShardID     ShardID
 	Interaction Interaction
 }
 
@@ -69,345 +85,770 @@ func (c *InteractionCreateEvent) UnmarshalJSON(buf []byte) error {
 	return err
 }
 
-// VoiceStateUpdateEvent VoiceState was updated
+// VoiceStateUpdateEvent is dispatched when a voice state is updated.
 type VoiceStateUpdateEvent struct {
-	Client   *Client
-	ShardID  int // shard that dispatched this event
+	ShardID  ShardID
 	OldState GatewayVoiceState
 	NewState GatewayVoiceState
 }
 
-// ApplicationCommandPermissionsUpdateEvent Application command permission was updated
+// ApplicationCommandPermissionsUpdateEvent is dispatched when application command permissions are updated.
 type ApplicationCommandPermissionsUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID                                ShardID
+	OldGuildApplicationCommandPermissions GuildApplicationCommandPermissions `json:"-"`
+	NewGuildApplicationCommandPermissions GuildApplicationCommandPermissions `json:"-"`
 }
 
-// AutoModerationRuleCreateEvent Auto Moderation rule was created
+// AutoModerationRuleCreateEvent is dispatched when an Auto Moderation rule is created.
 type AutoModerationRuleCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	AutoModerationRule
 }
 
-// AutoModerationRuleUpdateEvent Auto Moderation rule was updated
+// AutoModerationRuleUpdateEvent is dispatched when an Auto Moderation rule is updated.
 type AutoModerationRuleUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID               ShardID
+	OldAutoModerationRule AutoModerationRule `json:"-"`
+	NewAutoModerationRule AutoModerationRule `json:"-"`
 }
 
-// AutoModerationRuleDeleteEvent Auto Moderation rule was deleted
+// AutoModerationRuleDeleteEvent is dispatched when an Auto Moderation rule is deleted.
 type AutoModerationRuleDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	AutoModerationRule
 }
 
-// AutoModerationActionExecutionEvent Auto Moderation rule was triggered and an action was executed
+// AutoModerationActionExecutionEvent is dispatched when an Auto Moderation rule executes an action.
 type AutoModerationActionExecutionEvent struct {
-	// TODO: complete this struct
+	ShardID              ShardID
+	GuildID              Snowflake                 `json:"guild_id"`
+	Action               AutoModerationAction      `json:"action"`
+	RuleID               Snowflake                 `json:"rule_id"`
+	RuleTriggerType      AutoModerationTriggerType `json:"rule_trigger_type"`
+	UserID               Snowflake                 `json:"user_id"`
+	ChannelID            Snowflake                 `json:"channel_id,omitempty"`
+	MessageID            Snowflake                 `json:"message_id,omitempty"`
+	AlertSystemMessageID Snowflake                 `json:"alert_system_message_id,omitempty"`
+	Content              string                    `json:"content,omitempty"`
+	MatchedKeyword       string                    `json:"matched_keyword,omitempty"`
+	MatchedContent       string                    `json:"matched_content,omitempty"`
 }
 
-// ChannelCreateEvent New guild channel created
+// ChannelCreateEvent is dispatched when a channel is created.
 type ChannelCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Channel Channel
 }
 
-// ChannelUpdateEvent Channel was updated
+func (e *ChannelCreateEvent) UnmarshalJSON(buf []byte) error {
+	c, err := UnmarshalChannel(buf)
+	if err != nil {
+		return err
+	}
+	e.Channel = c
+	return nil
+}
+
+// ChannelUpdateEvent is dispatched when a channel is updated.
 type ChannelUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID    ShardID
+	OldChannel Channel `json:"-"`
+	NewChannel Channel `json:"-"`
 }
 
-// ChannelDeleteEvent Channel was deleted
+func (e *ChannelUpdateEvent) UnmarshalJSON(buf []byte) error {
+	c, err := UnmarshalChannel(buf)
+	if err != nil {
+		return err
+	}
+	e.NewChannel = c
+	return nil
+}
+
+// ChannelDeleteEvent is dispatched when a channel is deleted.
 type ChannelDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Channel Channel
 }
 
-// ChannelPinsUpdateEvent Message was pinned or unpinned
+func (e *ChannelDeleteEvent) UnmarshalJSON(buf []byte) error {
+	c, err := UnmarshalChannel(buf)
+	if err != nil {
+		return err
+	}
+	e.Channel = c
+	return nil
+}
+
+// ChannelPinsUpdateEvent is dispatched when a message is pinned or unpinned in a channel.
 type ChannelPinsUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID          ShardID
+	GuildID          Snowflake  `json:"guild_id,omitempty"`
+	ChannelID        Snowflake  `json:"channel_id"`
+	LastPinTimestamp *time.Time `json:"last_pin_timestamp,omitempty"`
 }
 
-// ThreadCreateEvent Thread created
+// ThreadCreateEvent is dispatched when a thread is created.
 type ThreadCreateEvent struct {
-	// TODO: complete this struct
+	ShardID      ShardID
+	Thread       *ThreadChannel `json:"thread"`
+	NewlyCreated bool           `json:"newly_created,omitempty"`
 }
 
-// ThreadUpdateEvent Thread was updated
+func (e *ThreadCreateEvent) UnmarshalJSON(buf []byte) error {
+	type threadAlias ThreadChannel
+	var raw struct {
+		threadAlias
+		NewlyCreated bool `json:"newly_created,omitempty"`
+	}
+	if err := json.Unmarshal(buf, &raw); err != nil {
+		return err
+	}
+	tc := ThreadChannel(raw.threadAlias)
+	e.Thread = &tc
+	e.NewlyCreated = raw.NewlyCreated
+	return nil
+}
+
+// ThreadUpdateEvent is dispatched when a thread is updated.
 type ThreadUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	OldThread *ThreadChannel `json:"-"`
+	NewThread *ThreadChannel `json:"-"`
 }
 
-// ThreadDeleteEvent Thread was deleted
+func (e *ThreadUpdateEvent) UnmarshalJSON(buf []byte) error {
+	var tc ThreadChannel
+	if err := json.Unmarshal(buf, &tc); err != nil {
+		return err
+	}
+	e.NewThread = &tc
+	return nil
+}
+
+// ThreadDeleteEvent is dispatched when a thread is deleted.
 type ThreadDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID  ShardID
+	ID       Snowflake   `json:"id"`
+	GuildID  Snowflake   `json:"guild_id"`
+	ParentID Snowflake   `json:"parent_id"`
+	Type     ChannelType `json:"type"`
 }
 
-// ThreadListSyncEvent Sent when gaining access to a channel, contains all active threads
+// ThreadListSyncEvent is dispatched when gaining access to a channel with active threads.
 type ThreadListSyncEvent struct {
-	// TODO: complete this struct
+	ShardID    ShardID
+	GuildID    Snowflake       `json:"guild_id"`
+	ChannelIDs []Snowflake     `json:"channel_ids,omitempty"`
+	Threads    []ThreadChannel `json:"threads"`
+	Members    []ThreadMember  `json:"members"`
 }
 
-// ThreadMemberUpdateEvent Thread member for the current user was updated
+// ThreadMemberUpdateEvent is dispatched when a thread member for the current user is updated.
 type ThreadMemberUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	GuildID   Snowflake    `json:"guild_id"`
+	OldMember ThreadMember `json:"-"`
+	NewMember ThreadMember `json:"-"`
 }
 
-// ThreadMembersUpdateEvent Some user(s) were added to or removed from a thread
+// ThreadMembersUpdateEvent is dispatched when users are added to or removed from a thread.
 type ThreadMembersUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID          ShardID
+	ID               Snowflake      `json:"id"`
+	GuildID          Snowflake      `json:"guild_id"`
+	MemberCount      int            `json:"member_count"`
+	AddedMembers     []ThreadMember `json:"added_members,omitempty"`
+	RemovedMemberIDs []Snowflake    `json:"removed_member_ids,omitempty"`
 }
 
-// EntitlementCreateEvent Entitlement was created
+// EntitlementCreateEvent is dispatched when an entitlement is created.
 type EntitlementCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Entitlement
 }
 
-// EntitlementUpdateEvent Entitlement was updated or renewed
+// EntitlementUpdateEvent is dispatched when an entitlement is updated.
 type EntitlementUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID        ShardID
+	OldEntitlement Entitlement `json:"-"`
+	NewEntitlement Entitlement `json:"-"`
 }
 
-// EntitlementDeleteEvent Entitlement was deleted
+// EntitlementDeleteEvent is dispatched when an entitlement is deleted.
 type EntitlementDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Entitlement
 }
 
-// GuildUpdateEvent Guild was updated
+// GuildUpdateEvent is dispatched when a guild is updated.
 type GuildUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID  ShardID
+	OldGuild Guild `json:"-"`
+	NewGuild Guild `json:"-"`
 }
 
-// GuildDeleteEvent Guild became unavailable, or user left/was removed from a guild
+// GuildDeleteEvent is dispatched when a guild is deleted or becomes unavailable.
 type GuildDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID     ShardID
+	ID          Snowflake `json:"id"`
+	Unavailable bool      `json:"unavailable,omitempty"`
 }
 
-// GuildAuditLogEntryCreateEvent A guild audit log entry was created
+// GuildAuditLogEntryCreateEvent is dispatched when an audit log entry is created.
 type GuildAuditLogEntryCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	AuditLogEntry
+	GuildID Snowflake `json:"guild_id"`
 }
 
-// GuildBanAddEvent User was banned from a guild
+// GuildBanAddEvent is dispatched when a user is banned from a guild.
 type GuildBanAddEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
+	User    User      `json:"user"`
 }
 
-// GuildBanRemoveEvent User was unbanned from a guild
+// GuildBanRemoveEvent is dispatched when a user is unbanned from a guild.
 type GuildBanRemoveEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
+	User    User      `json:"user"`
 }
 
-// GuildEmojisUpdateEvent Guild emojis were updated
+// GuildEmojisUpdateEvent is dispatched when guild emojis are updated.
 type GuildEmojisUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	GuildID   Snowflake `json:"guild_id"`
+	OldEmojis []Emoji   `json:"-"`
+	NewEmojis []Emoji   `json:"emojis"`
 }
 
-// GuildStickersUpdateEvent Guild stickers were updated
+// GuildStickersUpdateEvent is dispatched when guild stickers are updated.
 type GuildStickersUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID     ShardID
+	GuildID     Snowflake `json:"guild_id"`
+	OldStickers []Sticker `json:"-"`
+	NewStickers []Sticker `json:"stickers"`
 }
 
-// GuildIntegrationsUpdateEvent Guild integration was updated
+// GuildIntegrationsUpdateEvent is dispatched when guild integrations are updated.
 type GuildIntegrationsUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
 }
 
-// GuildMemberAddEvent New user joined a guild
+// GuildMemberAddEvent is dispatched when a new member joins a guild.
 type GuildMemberAddEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Member  FullMember `json:"member"`
+	GuildID Snowflake  `json:"guild_id"`
 }
 
-// GuildMemberRemoveEvent User was removed from a guild
+func (e *GuildMemberAddEvent) UnmarshalJSON(buf []byte) error {
+	type localEvent struct {
+		FullMember
+		GuildID Snowflake `json:"guild_id"`
+	}
+	var v localEvent
+	if err := json.Unmarshal(buf, &v); err != nil {
+		return err
+	}
+	e.Member = v.FullMember
+	e.GuildID = v.GuildID
+	e.Member.Member.GuildID = v.GuildID
+	return nil
+}
+
+// GuildMemberRemoveEvent is dispatched when a user is removed from a guild.
 type GuildMemberRemoveEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
+	User    User      `json:"user"`
 }
 
-// GuildMemberUpdateEvent Guild member was updated
+// GuildMemberUpdateEvent is dispatched when a guild member is updated.
 type GuildMemberUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID                    ShardID
+	GuildID                    Snowflake             `json:"guild_id"`
+	Roles                      []Snowflake           `json:"roles"`
+	User                       User                  `json:"user"`
+	Nick                       string                `json:"nick,omitempty"`
+	Avatar                     string                `json:"avatar,omitempty"`
+	JoinedAt                   *time.Time            `json:"joined_at,omitempty"`
+	PremiumSince               *time.Time            `json:"premium_since,omitempty"`
+	Deaf                       bool                  `json:"deaf,omitempty"`
+	Mute                       bool                  `json:"mute,omitempty"`
+	Pending                    bool                  `json:"pending,omitempty"`
+	CommunicationDisabledUntil *time.Time            `json:"communication_disabled_until,omitempty"`
+	Flags                      MemberFlags           `json:"flags,omitempty"`
+	AvatarDecorationData       *AvatarDecorationData `json:"avatar_decoration_data,omitempty"`
+	OldMember                  Member                `json:"-"`
+	NewMember                  Member                `json:"-"`
 }
 
-// GuildMembersChunkEvent Response to Request Guild Members
+// GuildMembersChunkEvent is dispatched in response to RequestGuildMembers.
 type GuildMembersChunkEvent struct {
-	// TODO: complete this struct
+	ShardID    ShardID
+	GuildID    Snowflake         `json:"guild_id"`
+	Members    []FullMember      `json:"members"`
+	ChunkIndex int               `json:"chunk_index"`
+	ChunkCount int               `json:"chunk_count"`
+	NotFound   []Snowflake       `json:"not_found,omitempty"`
+	Presences  []GatewayPresence `json:"presences,omitempty"`
+	Nonce      string            `json:"nonce,omitempty"`
 }
 
-// GuildRoleCreateEvent Guild role was created
+// GuildRoleCreateEvent is dispatched when a guild role is created.
 type GuildRoleCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
+	Role    Role      `json:"role"`
 }
 
-// GuildRoleUpdateEvent Guild role was updated
+// GuildRoleUpdateEvent is dispatched when a guild role is updated.
 type GuildRoleUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
+	OldRole Role      `json:"-"`
+	NewRole Role      `json:"role"`
 }
 
-// GuildRoleDeleteEvent Guild role was deleted
+// GuildRoleDeleteEvent is dispatched when a guild role is deleted.
 type GuildRoleDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildID Snowflake `json:"guild_id"`
+	RoleID  Snowflake `json:"role_id"`
 }
 
-// GuildScheduledEventCreateEvent Guild scheduled event was created
+// GuildScheduledEventCreateEvent is dispatched when a scheduled event is created.
 type GuildScheduledEventCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildScheduledEvent
 }
 
-// GuildScheduledEventUpdateEvent Guild scheduled event was updated
+// GuildScheduledEventUpdateEvent is dispatched when a scheduled event is updated.
 type GuildScheduledEventUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID                ShardID
+	OldGuildScheduledEvent GuildScheduledEvent `json:"-"`
+	NewGuildScheduledEvent GuildScheduledEvent `json:"-"`
 }
 
-// GuildScheduledEventDeleteEvent Guild scheduled event was deleted
+// GuildScheduledEventDeleteEvent is dispatched when a scheduled event is deleted.
 type GuildScheduledEventDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	GuildScheduledEvent
 }
 
-// GuildScheduledEventUserAddEvent User subscribed to a guild scheduled event
+// GuildScheduledEventUserAddEvent is dispatched when a user subscribes to a scheduled event.
 type GuildScheduledEventUserAddEvent struct {
-	// TODO: complete this struct
+	ShardID               ShardID
+	GuildScheduledEventID Snowflake `json:"guild_scheduled_event_id"`
+	UserID                Snowflake `json:"user_id"`
+	GuildID               Snowflake `json:"guild_id"`
 }
 
-// GuildScheduledEventUserRemoveEvent User unsubscribed from a guild scheduled event
+// GuildScheduledEventUserRemoveEvent is dispatched when a user unsubscribes from a scheduled event.
 type GuildScheduledEventUserRemoveEvent struct {
-	// TODO: complete this struct
+	ShardID               ShardID
+	GuildScheduledEventID Snowflake `json:"guild_scheduled_event_id"`
+	UserID                Snowflake `json:"user_id"`
+	GuildID               Snowflake `json:"guild_id"`
 }
 
-// GuildSoundboardSoundCreateEvent Guild soundboard sound was created
+// GuildSoundboardSoundCreateEvent is dispatched when a soundboard sound is created.
 type GuildSoundboardSoundCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	SoundboardSound
 }
 
-// GuildSoundboardSoundUpdateEvent Guild soundboard sound was updated
+// GuildSoundboardSoundUpdateEvent is dispatched when a soundboard sound is updated.
 type GuildSoundboardSoundUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID  ShardID
+	OldSound SoundboardSound `json:"-"`
+	NewSound SoundboardSound `json:"sound"`
 }
 
-// GuildSoundboardSoundDeleteEvent Guild soundboard sound was deleted
+// GuildSoundboardSoundDeleteEvent is dispatched when a soundboard sound is deleted.
 type GuildSoundboardSoundDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	SoundID Snowflake `json:"sound_id"`
+	GuildID Snowflake `json:"guild_id"`
 }
 
-// GuildSoundboardSoundsUpdateEvent Guild soundboard sounds were updated
+// GuildSoundboardSoundsUpdateEvent is dispatched when all soundboard sounds for a guild are updated.
 type GuildSoundboardSoundsUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID             ShardID
+	GuildID             Snowflake         `json:"guild_id"`
+	OldSoundboardSounds []SoundboardSound `json:"-"`
+	NewSoundboardSounds []SoundboardSound `json:"soundboard_sounds"`
 }
 
-// SoundboardSoundsEvent Response to Request Soundboard Sounds
+// SoundboardSoundsEvent is dispatched in response to RequestSoundboardSounds.
 type SoundboardSoundsEvent struct {
-	// TODO: complete this struct
+	ShardID          ShardID
+	SoundboardSounds []SoundboardSound `json:"soundboard_sounds"`
+	GuildID          Snowflake         `json:"guild_id"`
 }
 
-// IntegrationCreateEvent Guild integration was created
+// IntegrationCreateEvent is dispatched when an integration is created.
 type IntegrationCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Integration
+	GuildID Snowflake `json:"guild_id"`
 }
 
-// IntegrationUpdateEvent Guild integration was updated
+// IntegrationUpdateEvent is dispatched when an integration is updated.
 type IntegrationUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID        ShardID
+	GuildID        Snowflake   `json:"guild_id"`
+	OldIntegration Integration `json:"-"`
+	NewIntegration Integration `json:"integration"`
 }
 
-// IntegrationDeleteEvent Guild integration was deleted
+// IntegrationDeleteEvent is dispatched when an integration is deleted.
 type IntegrationDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID       ShardID
+	ID            Snowflake `json:"id"`
+	GuildID       Snowflake `json:"guild_id"`
+	ApplicationID Snowflake `json:"application_id,omitempty"`
 }
 
-// InviteCreateEvent Invite to a channel was created
+// InviteCreateEvent is dispatched when an invite is created.
 type InviteCreateEvent struct {
-	// TODO: complete this struct
+	ShardID           ShardID
+	ChannelID         Snowflake           `json:"channel_id"`
+	Code              string              `json:"code"`
+	CreatedAt         time.Time           `json:"created_at"`
+	GuildID           Snowflake           `json:"guild_id,omitempty"`
+	Inviter           *User               `json:"inviter,omitempty"`
+	MaxAge            int                 `json:"max_age"`
+	MaxUses           int                 `json:"max_uses"`
+	TargetType        *InviteTargetType   `json:"target_type,omitempty"`
+	TargetUser        *User               `json:"target_user,omitempty"`
+	TargetApplication *PartialApplication `json:"target_application,omitempty"`
+	Temporary         bool                `json:"temporary"`
+	Uses              int                 `json:"uses"`
 }
 
-// InviteDeleteEvent Invite to a channel was deleted
+// InviteDeleteEvent is dispatched when an invite is deleted.
 type InviteDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	ChannelID Snowflake `json:"channel_id"`
+	GuildID   Snowflake `json:"guild_id,omitempty"`
+	Code      string    `json:"code"`
 }
 
-// MessageDeleteBulkEvent Multiple messages were deleted at once
+// MessageDeleteBulkEvent is dispatched when multiple messages are deleted in bulk.
 type MessageDeleteBulkEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	IDs       []Snowflake `json:"ids"`
+	ChannelID Snowflake   `json:"channel_id"`
+	GuildID   Snowflake   `json:"guild_id,omitempty"`
 }
 
-// MessageReactionAddEvent User reacted to a message
+// MessageReactionAddEvent is dispatched when a reaction is added to a message.
 type MessageReactionAddEvent struct {
-	// TODO: complete this struct
+	ShardID         ShardID
+	UserID          Snowflake    `json:"user_id"`
+	ChannelID       Snowflake    `json:"channel_id"`
+	MessageID       Snowflake    `json:"message_id"`
+	GuildID         Snowflake    `json:"guild_id,omitempty"`
+	Member          *Member      `json:"member,omitempty"`
+	Emoji           Emoji        `json:"emoji"`
+	MessageAuthorID Snowflake    `json:"message_author_id,omitempty"`
+	Burst           bool         `json:"burst,omitempty"`
+	BurstColors     []string     `json:"burst_colors,omitempty"`
+	Type            ReactionType `json:"type"`
 }
 
-// MessageReactionRemoveEvent User removed a reaction from a message
+// MessageReactionRemoveEvent is dispatched when a reaction is removed from a message.
 type MessageReactionRemoveEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	UserID    Snowflake    `json:"user_id"`
+	ChannelID Snowflake    `json:"channel_id"`
+	MessageID Snowflake    `json:"message_id"`
+	GuildID   Snowflake    `json:"guild_id,omitempty"`
+	Emoji     Emoji        `json:"emoji"`
+	Burst     bool         `json:"burst,omitempty"`
+	Type      ReactionType `json:"type"`
 }
 
-// MessageReactionRemoveAllEvent All reactions were explicitly removed from a message
+// MessageReactionRemoveAllEvent is dispatched when all reactions are removed from a message.
 type MessageReactionRemoveAllEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	ChannelID Snowflake `json:"channel_id"`
+	MessageID Snowflake `json:"message_id"`
+	GuildID   Snowflake `json:"guild_id,omitempty"`
 }
 
-// MessageReactionRemoveEmojiEvent All reactions for a given emoji were explicitly removed from a message
+// MessageReactionRemoveEmojiEvent is dispatched when all reactions of a specific emoji are removed.
 type MessageReactionRemoveEmojiEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	ChannelID Snowflake `json:"channel_id"`
+	GuildID   Snowflake `json:"guild_id,omitempty"`
+	MessageID Snowflake `json:"message_id"`
+	Emoji     Emoji     `json:"emoji"`
 }
 
-// PresenceUpdateEvent User was updated
+// PresenceUpdateEvent is dispatched when a user's presence or status changes.
 type PresenceUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID     ShardID
+	OldPresence *GatewayPresence `json:"-"`
+	NewPresence GatewayPresence  `json:"-"`
+	GatewayPresence
 }
 
-// StageInstanceCreateEvent Stage instance was created
+// StageInstanceCreateEvent is dispatched when a stage instance is created.
 type StageInstanceCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	StageInstance
 }
 
-// StageInstanceUpdateEvent Stage instance was updated
+// StageInstanceUpdateEvent is dispatched when a stage instance is updated.
 type StageInstanceUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID          ShardID
+	OldStageInstance StageInstance `json:"-"`
+	NewStageInstance StageInstance `json:"-"`
 }
 
-// StageInstanceDeleteEvent Stage instance was deleted or closed
+// StageInstanceDeleteEvent is dispatched when a stage instance is deleted or closed.
 type StageInstanceDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	StageInstance
 }
 
-// SubscriptionCreateEvent Premium App Subscription was created
+// SubscriptionCreateEvent is dispatched when an application subscription is created.
 type SubscriptionCreateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Subscription
 }
 
-// SubscriptionUpdateEvent Premium App Subscription was updated
+// SubscriptionUpdateEvent is dispatched when an application subscription is updated.
 type SubscriptionUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID         ShardID
+	OldSubscription Subscription `json:"-"`
+	NewSubscription Subscription `json:"-"`
 }
 
-// SubscriptionDeleteEvent Premium App Subscription was deleted
+// SubscriptionDeleteEvent is dispatched when an application subscription is deleted.
 type SubscriptionDeleteEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	Subscription
 }
 
-// TypingStartEvent User started typing in a channel
+// TypingStartEvent is dispatched when a user starts typing.
 type TypingStartEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	ChannelID Snowflake `json:"channel_id"`
+	GuildID   Snowflake `json:"guild_id,omitempty"`
+	UserID    Snowflake `json:"user_id"`
+	Timestamp int64     `json:"timestamp"`
+	Member    *Member   `json:"member,omitempty"`
 }
 
-// UserUpdateEvent Properties about the user changed
+// UserUpdateEvent is dispatched when the current user's profile is updated.
 type UserUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID ShardID
+	OldUser User `json:"-"`
+	NewUser User `json:"-"`
 }
 
-// VoiceChannelEffectSendEvent Someone sent an effect in a voice channel
+// VoiceChannelEffectAnimationType represents voice channel effect animation types.
+type VoiceChannelEffectAnimationType int
+
+const (
+	VoiceChannelEffectAnimationTypePremium VoiceChannelEffectAnimationType = 0
+	VoiceChannelEffectAnimationTypeBasic   VoiceChannelEffectAnimationType = 1
+)
+
+// Is returns true if this VoiceChannelEffectAnimationType matches the provided one.
+func (v VoiceChannelEffectAnimationType) Is(other VoiceChannelEffectAnimationType) bool {
+	return v == other
+}
+
+// VoiceChannelEffectSendEvent is dispatched when an effect is sent in a voice channel.
 type VoiceChannelEffectSendEvent struct {
-	// TODO: complete this struct
+	ShardID       ShardID
+	ChannelID     Snowflake                       `json:"channel_id"`
+	GuildID       Snowflake                       `json:"guild_id"`
+	UserID        Snowflake                       `json:"user_id"`
+	Emoji         *Emoji                          `json:"emoji,omitempty"`
+	AnimationType VoiceChannelEffectAnimationType `json:"animation_type,omitempty"`
+	AnimationID   int                             `json:"animation_id,omitempty"`
+	SoundID       Snowflake                       `json:"sound_id,omitempty"`
+	SoundVolume   *float64                        `json:"sound_volume,omitempty"`
 }
 
-// VoiceServerUpdateEvent Guild's voice server was updated
+// VoiceServerUpdateEvent is dispatched when a guild's voice server changes.
 type VoiceServerUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID  ShardID
+	Token    string    `json:"token"`
+	GuildID  Snowflake `json:"guild_id"`
+	Endpoint *string   `json:"endpoint"`
 }
 
-// WebhooksUpdateEvent Guild channel webhook was created, update, or deleted
+// WebhooksUpdateEvent is dispatched when a channel's webhooks are modified.
 type WebhooksUpdateEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	GuildID   Snowflake `json:"guild_id"`
+	ChannelID Snowflake `json:"channel_id"`
 }
 
-// MessagePollVoteAddEvent User voted on a poll
+// MessagePollVoteAddEvent is dispatched when a user votes on a poll.
 type MessagePollVoteAddEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	UserID    Snowflake `json:"user_id"`
+	ChannelID Snowflake `json:"channel_id"`
+	MessageID Snowflake `json:"message_id"`
+	GuildID   Snowflake `json:"guild_id,omitempty"`
+	AnswerID  int       `json:"answer_id"`
 }
 
-// MessagePollVoteRemoveEvent User removed a vote on a poll
+// MessagePollVoteRemoveEvent is dispatched when a user removes their vote on a poll.
 type MessagePollVoteRemoveEvent struct {
-	// TODO: complete this struct
+	ShardID   ShardID
+	UserID    Snowflake `json:"user_id"`
+	ChannelID Snowflake `json:"channel_id"`
+	MessageID Snowflake `json:"message_id"`
+	GuildID   Snowflake `json:"guild_id,omitempty"`
+	AnswerID  int       `json:"answer_id"`
+}
+
+// ChannelInfoChannel represents ephemeral data for a single channel in ChannelInfoEvent.
+type ChannelInfoChannel struct {
+	ID             Snowflake `json:"id"`
+	Status         *string   `json:"status,omitempty"`
+	VoiceStartTime *int64    `json:"voice_start_time,omitempty"`
+}
+
+// ChannelInfoEvent is dispatched in response to RequestChannelInfo.
+type ChannelInfoEvent struct {
+	ShardID  ShardID
+	GuildID  Snowflake            `json:"guild_id"`
+	Channels []ChannelInfoChannel `json:"channels"`
+}
+
+// VoiceChannelStatusUpdateEvent is dispatched when a voice channel's status changes.
+type VoiceChannelStatusUpdateEvent struct {
+	ShardID   ShardID
+	ID        Snowflake `json:"id"`
+	GuildID   Snowflake `json:"guild_id"`
+	OldStatus *string   `json:"-"`
+	NewStatus *string   `json:"status,omitempty"`
+}
+
+// VoiceChannelStartTimeUpdateEvent is dispatched when a voice channel's start time changes.
+type VoiceChannelStartTimeUpdateEvent struct {
+	ShardID           ShardID
+	ID                Snowflake  `json:"id"`
+	GuildID           Snowflake  `json:"guild_id"`
+	OldVoiceStartTime *int64     `json:"-"`
+	NewVoiceStartTime *int64     `json:"voice_start_time,omitempty"`
+}
+
+// ApplicationAuthorizedEvent is dispatched when an app was authorized by a user to a server or their account.
+type ApplicationAuthorizedEvent struct {
+	ShardID         ShardID                         `json:"-"`
+	IntegrationType *ApplicationIntegrationType `json:"integration_type,omitempty"`
+	User            User                        `json:"user"`
+	Scopes          []OAuth2Scope               `json:"scopes"`
+	Guild           *Guild                      `json:"guild,omitempty"`
+}
+
+// ApplicationDeauthorizedEvent is dispatched when an app was deauthorized by a user.
+type ApplicationDeauthorizedEvent struct {
+	ShardID ShardID  `json:"-"`
+	User    User `json:"user"`
+}
+
+// RateLimitMeta contains metadata for a rate limited gateway opcode.
+type RateLimitMeta struct {
+	GuildID Snowflake `json:"guild_id,omitempty"`
+	Nonce   *string   `json:"nonce,omitempty"`
+}
+
+// RateLimitedEvent is dispatched when an app encounters a gateway rate limit for an opcode.
+type RateLimitedEvent struct {
+	ShardID    ShardID       `json:"-"`
+	Opcode     gatewayOpcode `json:"opcode"`
+	RetryAfter float64       `json:"retry_after"`
+	Meta       RateLimitMeta `json:"meta"`
+}
+
+// QuestUserEnrollmentEvent is dispatched when a user is added to a Quest on Discord.
+type QuestUserEnrollmentEvent struct {
+	ShardID ShardID   `json:"-"`
+	UserID  Snowflake `json:"user_id"`
+	QuestID Snowflake `json:"quest_id"`
+}
+
+// LobbyMessage represents a message sent in a lobby or linked channel.
+type LobbyMessage struct {
+	ID            Snowflake         `json:"id"`
+	Type          MessageType       `json:"type"`
+	Content       string            `json:"content"`
+	LobbyID       Snowflake         `json:"lobby_id"`
+	ChannelID     Snowflake         `json:"channel_id"`
+	Author        User              `json:"author"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+	Flags         MessageFlags      `json:"flags,omitempty"`
+	ApplicationID *Snowflake        `json:"application_id,omitempty"`
+}
+
+// LobbyMessageCreateEvent is dispatched when a message is created in a lobby.
+type LobbyMessageCreateEvent struct {
+	ShardID ShardID `json:"-"`
+	LobbyMessage
+}
+
+// LobbyMessageUpdateEvent is dispatched when a message is updated in a lobby.
+type LobbyMessageUpdateEvent struct {
+	ShardID         ShardID    `json:"-"`
+	LobbyMessage
+	EditedTimestamp *time.Time `json:"edited_timestamp,omitempty"`
+	Timestamp       *time.Time `json:"timestamp,omitempty"`
+}
+
+// LobbyMessageDeleteEvent is dispatched when a message is deleted from a lobby.
+type LobbyMessageDeleteEvent struct {
+	ShardID ShardID   `json:"-"`
+	ID      Snowflake `json:"id"`
+	LobbyID Snowflake `json:"lobby_id"`
+}
+
+// GameDirectMessageCreateEvent is dispatched when a direct message is created during an active Social SDK session.
+type GameDirectMessageCreateEvent struct {
+	ShardID       ShardID      `json:"-"`
+	ID            Snowflake    `json:"id"`
+	Type          MessageType  `json:"type"`
+	Content       string       `json:"content"`
+	ChannelID     Snowflake    `json:"channel_id"`
+	Author        User         `json:"author"`
+	Timestamp     *time.Time   `json:"timestamp,omitempty"`
+	ApplicationID *Snowflake   `json:"application_id,omitempty"`
+	Attachments   []Attachment `json:"attachments,omitempty"`
+}
+
+// GameDirectMessageUpdateEvent is dispatched when a direct message is updated during an active Social SDK session.
+type GameDirectMessageUpdateEvent struct {
+	ShardID         ShardID    `json:"-"`
+	ID              Snowflake  `json:"id"`
+	ChannelID       Snowflake  `json:"channel_id"`
+	Content         string     `json:"content,omitempty"`
+	Author          User       `json:"author"`
+	RecipientID     Snowflake  `json:"recipient_id,omitempty"`
+	EditedTimestamp *time.Time `json:"edited_timestamp,omitempty"`
+}
+
+// GameDirectMessageDeleteEvent is dispatched when a direct message is deleted during an active Social SDK session.
+type GameDirectMessageDeleteEvent struct {
+	ShardID     ShardID      `json:"-"`
+	ID          Snowflake    `json:"id"`
+	ChannelID   Snowflake    `json:"channel_id"`
+	Author      User         `json:"author"`
+	Timestamp   *time.Time   `json:"timestamp,omitempty"`
+	Flags       MessageFlags `json:"flags,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+	Components  []Component  `json:"components,omitempty"`
 }

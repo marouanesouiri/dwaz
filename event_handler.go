@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,2140 +11,2273 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
+	"context"
 	"encoding/json"
-
-	"github.com/marouanesouiri/stdx/xlog"
 )
+
+// dispatchHandlers executes a slice of event handlers either concurrently (in new goroutines) or sequentially.
+func dispatchHandlers[E any](ctx context.Context, handlers []func(context.Context, E), evt E, concurrent bool) {
+	if len(handlers) == 0 {
+		return
+	}
+	if concurrent {
+		for _, handler := range handlers {
+			go handler(ctx, evt)
+		}
+	} else {
+		for _, handler := range handlers {
+			handler(ctx, evt)
+		}
+	}
+}
 
 /*****************************
  *   READY Handler
  *****************************/
 
-// readyHandlers manages all registered handlers for MESSAGE_CREATE events.
 type readyHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ReadyEvent)
+	logger   Logger
+	handlers []func(context.Context, ReadyEvent)
 }
 
-// handleEvent parses the READY event data and calls each registered handler.
-func (h *readyHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := ReadyEvent{Client: client, ShardID: shardID}
+func (h *readyHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ReadyEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("readyHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "READY", "error", err)
 		return
 	}
 
-	for i := range len(evt.Guilds) {
-		client.PutGuild(evt.Guilds[i])
+	if cache != nil && cache.CacheFlags().Has(CacheFlagGuilds) {
+		for i := range evt.Guilds {
+			cache.AddGuild(ctx, evt.Guilds[i])
+		}
 	}
 
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
-// addHandler registers a new READY handler function.
-//
-// This method is not thread-safe.
 func (h *readyHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ReadyEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, ReadyEvent)))
+}
+
+/*****************************
+ *   RESUMED Handler
+ *****************************/
+
+type resumedHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ResumedEvent)
+}
+
+func (h *resumedHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ResumedEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "RESUMED", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *resumedHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ResumedEvent)))
 }
 
 /*****************************
  *   GUILD_CREATE Handler
  *****************************/
 
-// guildCreateHandlers manages all registered handlers for GUILD_CREATE events.
 type guildCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildCreateEvent)
+	logger   Logger
+	handlers []func(context.Context, GuildCreateEvent)
 }
 
-// handleEvent parses the GUILD_CREATE event data and calls each registered handler.
-func (h *guildCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := GuildCreateEvent{Client: client, ShardID: shardID}
+func (h *guildCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildCreateEvent{ShardID: shardID}
 
 	if err := json.Unmarshal(data, &evt.Guild); err != nil {
-		h.logger.Error("guildCreateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "GUILD_CREATE", "error", err)
 		return
 	}
 
-	flags := client.Flags()
+	if cache != nil {
+		flags := cache.CacheFlags()
+		if flags.Has(CacheFlagGuilds) {
+			cache.AddGuild(ctx, evt.Guild.Guild)
+		}
+		if flags.Has(CacheFlagChannels) {
+			for i := range len(evt.Guild.Channels) {
+				cache.AddChannel(ctx, evt.Guild.Channels[i])
+			}
+		}
+		if flags.Has(CacheFlagRoles) {
+			for i := range len(evt.Guild.Roles) {
+				cache.AddRole(ctx, evt.Guild.Roles[i])
+			}
+		}
+		if flags.Has(CacheFlagVoiceStates) {
+			for i := range len(evt.Guild.VoiceStates) {
+				cache.AddVoiceState(ctx, evt.Guild.VoiceStates[i])
+			}
+		}
+		if flags.Has(CacheFlagMembers) {
+			for i := range len(evt.Guild.Members) {
+				cache.AddMember(ctx, evt.Guild.Members[i].Member)
+			}
+		}
+		if flags.Has(CacheFlagUsers) {
+			for i := range len(evt.Guild.Members) {
+				cache.AddUser(ctx, evt.Guild.Members[i].User)
+			}
+		}
+		if flags.Has(CacheFlagChannels) {
+			for i := range len(evt.Guild.Threads) {
+				cache.AddChannel(ctx, &evt.Guild.Threads[i])
+			}
+		}
+		if flags.Has(CacheFlagStageInstances) {
+			for i := range len(evt.Guild.StageInstances) {
+				cache.AddStageInstance(ctx, evt.Guild.StageInstances[i])
+			}
+		}
+		if flags.Has(CacheFlagEmojis) {
+			for i := range len(evt.Guild.Emojis) {
+				evt.Guild.Emojis[i].GuildID = evt.Guild.ID
+				cache.AddEmoji(ctx, evt.Guild.Emojis[i])
+			}
+		}
+		if flags.Has(CacheFlagStickers) {
+			for i := range len(evt.Guild.Stickers) {
+				evt.Guild.Stickers[i].GuildID = evt.Guild.ID
+				cache.AddSticker(ctx, evt.Guild.Stickers[i])
+			}
+		}
+	}
 
-	if flags.Has(CacheFlagGuilds) {
-		client.PutGuild(evt.Guild.Guild)
-	}
-	if flags.Has(CacheFlagChannels) {
-		for i := range len(evt.Guild.Channels) {
-			client.PutChannel(evt.Guild.Channels[i])
-		}
-	}
-	if flags.Has(CacheFlagRoles) {
-		for i := range len(evt.Guild.Roles) {
-			client.PutRole(evt.Guild.Roles[i])
-		}
-	}
-	if flags.Has(CacheFlagVoiceStates) {
-		for i := range len(evt.Guild.VoiceStates) {
-			client.PutVoiceState(evt.Guild.VoiceStates[i])
-		}
-	}
-	if flags.Has(CacheFlagMembers) {
-		for i := range len(evt.Guild.Members) {
-			client.PutMember(evt.Guild.Members[i].Member)
-		}
-	}
-	if flags.Has(CacheFlagUsers) {
-		for i := range len(evt.Guild.Members) {
-			client.PutUser(evt.Guild.Members[i].User)
-		}
-	}
-
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
-// addHandler registers a new GUILD_CREATE handler function.
-//
-// This method is not thread-safe.
 func (h *guildCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildCreateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildCreateEvent)))
+}
+
+/*****************************
+ *   GUILD_UPDATE Handler
+ *****************************/
+
+type guildUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildUpdateEvent)
+}
+
+func (h *guildUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt.NewGuild); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if oldGuild, ok := cache.GetGuild(ctx, evt.NewGuild.ID); ok {
+			evt.OldGuild = oldGuild
+		}
+		if cache.CacheFlags().Has(CacheFlagGuilds) {
+			cache.AddGuild(ctx, evt.NewGuild)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_DELETE Handler
+ *****************************/
+
+type guildDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildDeleteEvent)
+}
+
+func (h *guildDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_DELETE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagGuilds) {
+		cache.DelGuild(ctx, evt.ID)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildDeleteEvent)))
+}
+
+/*****************************
+ *   CHANNEL_CREATE Handler
+ *****************************/
+
+type channelCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ChannelCreateEvent)
+}
+
+func (h *channelCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ChannelCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "CHANNEL_CREATE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagChannels) {
+		cache.AddChannel(ctx, evt.Channel)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *channelCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ChannelCreateEvent)))
+}
+
+/*****************************
+ *   CHANNEL_UPDATE Handler
+ *****************************/
+
+type channelUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ChannelUpdateEvent)
+}
+
+func (h *channelUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ChannelUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "CHANNEL_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if ch, ok := evt.NewChannel.(GuildChannel); ok {
+			if oldCh, ok := cache.GetChannel(ctx, ch.GetID()); ok {
+				evt.OldChannel = oldCh
+			}
+		}
+		if cache.CacheFlags().Has(CacheFlagChannels) {
+			cache.AddChannel(ctx, evt.NewChannel)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *channelUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ChannelUpdateEvent)))
+}
+
+/*****************************
+ *   CHANNEL_DELETE Handler
+ *****************************/
+
+type channelDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ChannelDeleteEvent)
+}
+
+func (h *channelDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ChannelDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "CHANNEL_DELETE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagChannels) {
+		cache.DelChannel(ctx, evt.Channel.GetID())
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *channelDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ChannelDeleteEvent)))
+}
+
+/*****************************
+ *   CHANNEL_PINS_UPDATE Handler
+ *****************************/
+
+type channelPinsUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ChannelPinsUpdateEvent)
+}
+
+func (h *channelPinsUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ChannelPinsUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "CHANNEL_PINS_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *channelPinsUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ChannelPinsUpdateEvent)))
+}
+
+/*****************************
+ *   THREAD_CREATE Handler
+ *****************************/
+
+type threadCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ThreadCreateEvent)
+}
+
+func (h *threadCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ThreadCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "THREAD_CREATE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagChannels) && evt.Thread != nil {
+		cache.AddChannel(ctx, evt.Thread)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *threadCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ThreadCreateEvent)))
+}
+
+/*****************************
+ *   THREAD_UPDATE Handler
+ *****************************/
+
+type threadUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ThreadUpdateEvent)
+}
+
+func (h *threadUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ThreadUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "THREAD_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if evt.NewThread != nil {
+			if oldCh, ok := cache.GetChannel(ctx, evt.NewThread.ID); ok {
+				if tc, ok := oldCh.(*ThreadChannel); ok {
+					evt.OldThread = tc
+				}
+			}
+		}
+		if cache.CacheFlags().Has(CacheFlagChannels) && evt.NewThread != nil {
+			cache.AddChannel(ctx, evt.NewThread)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *threadUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ThreadUpdateEvent)))
+}
+
+/*****************************
+ *   THREAD_DELETE Handler
+ *****************************/
+
+type threadDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ThreadDeleteEvent)
+}
+
+func (h *threadDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ThreadDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "THREAD_DELETE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagChannels) {
+		cache.DelChannel(ctx, evt.ID)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *threadDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ThreadDeleteEvent)))
+}
+
+/*****************************
+ *   THREAD_LIST_SYNC Handler
+ *****************************/
+
+type threadListSyncHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ThreadListSyncEvent)
+}
+
+func (h *threadListSyncHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ThreadListSyncEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "THREAD_LIST_SYNC", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *threadListSyncHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ThreadListSyncEvent)))
+}
+
+/*****************************
+ *   THREAD_MEMBER_UPDATE Handler
+ *****************************/
+
+type threadMemberUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ThreadMemberUpdateEvent)
+}
+
+func (h *threadMemberUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ThreadMemberUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "THREAD_MEMBER_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *threadMemberUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ThreadMemberUpdateEvent)))
+}
+
+/*****************************
+ *   THREAD_MEMBERS_UPDATE Handler
+ *****************************/
+
+type threadMembersUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ThreadMembersUpdateEvent)
+}
+
+func (h *threadMembersUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ThreadMembersUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "THREAD_MEMBERS_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *threadMembersUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ThreadMembersUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_MEMBER_ADD Handler
+ *****************************/
+
+type guildMemberAddHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildMemberAddEvent)
+}
+
+func (h *guildMemberAddHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildMemberAddEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_MEMBER_ADD", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if cache.CacheFlags().Has(CacheFlagMembers) {
+			cache.AddMember(ctx, evt.Member.Member)
+		}
+		if cache.CacheFlags().Has(CacheFlagUsers) {
+			cache.AddUser(ctx, evt.Member.User)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildMemberAddHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildMemberAddEvent)))
+}
+
+/*****************************
+ *   GUILD_MEMBER_UPDATE Handler
+ *****************************/
+
+type guildMemberUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildMemberUpdateEvent)
+}
+
+func (h *guildMemberUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildMemberUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_MEMBER_UPDATE", "error", err)
+		return
+	}
+
+	evt.NewMember = Member{
+		ID:                         evt.User.ID,
+		GuildID:                    evt.GuildID,
+		Nickname:                   evt.Nick,
+		Avatar:                     evt.Avatar,
+		RoleIDs:                    evt.Roles,
+		JoinedAt:                   evt.JoinedAt,
+		PremiumSince:               evt.PremiumSince,
+		Deaf:                       evt.Deaf,
+		Mute:                       evt.Mute,
+		Pending:                    evt.Pending,
+		CommunicationDisabledUntil: evt.CommunicationDisabledUntil,
+		Flags:                      evt.Flags,
+		AvatarDecorationData:       evt.AvatarDecorationData,
+	}
+
+	if cache != nil {
+		if oldMember, ok := cache.GetMember(ctx, evt.GuildID, evt.User.ID); ok {
+			evt.OldMember = oldMember
+		}
+		if cache.CacheFlags().Has(CacheFlagMembers) {
+			cache.AddMember(ctx, evt.NewMember)
+		}
+		if cache.CacheFlags().Has(CacheFlagUsers) {
+			cache.AddUser(ctx, evt.User)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildMemberUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildMemberUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_MEMBER_REMOVE Handler
+ *****************************/
+
+type guildMemberRemoveHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildMemberRemoveEvent)
+}
+
+func (h *guildMemberRemoveHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildMemberRemoveEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_MEMBER_REMOVE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagMembers) {
+		cache.DelMember(ctx, evt.GuildID, evt.User.ID)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildMemberRemoveHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildMemberRemoveEvent)))
+}
+
+/*****************************
+ *   GUILD_MEMBERS_CHUNK Handler
+ *****************************/
+
+type guildMembersChunkHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildMembersChunkEvent)
+}
+
+func (h *guildMembersChunkHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildMembersChunkEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_MEMBERS_CHUNK", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if cache.CacheFlags().Has(CacheFlagMembers) {
+			for i := range len(evt.Members) {
+				cache.AddMember(ctx, evt.Members[i].Member)
+			}
+		}
+		if cache.CacheFlags().Has(CacheFlagUsers) {
+			for i := range len(evt.Members) {
+				cache.AddUser(ctx, evt.Members[i].User)
+			}
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildMembersChunkHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildMembersChunkEvent)))
+}
+
+/*****************************
+ *   GUILD_ROLE_CREATE Handler
+ *****************************/
+
+type guildRoleCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildRoleCreateEvent)
+}
+
+func (h *guildRoleCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildRoleCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_ROLE_CREATE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagRoles) {
+		cache.AddRole(ctx, evt.Role)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildRoleCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildRoleCreateEvent)))
+}
+
+/*****************************
+ *   GUILD_ROLE_UPDATE Handler
+ *****************************/
+
+type guildRoleUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildRoleUpdateEvent)
+}
+
+func (h *guildRoleUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildRoleUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_ROLE_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if oldRole, ok := cache.GetRole(ctx, evt.NewRole.ID); ok {
+			evt.OldRole = oldRole
+		}
+		if cache.CacheFlags().Has(CacheFlagRoles) {
+			cache.AddRole(ctx, evt.NewRole)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildRoleUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildRoleUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_ROLE_DELETE Handler
+ *****************************/
+
+type guildRoleDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildRoleDeleteEvent)
+}
+
+func (h *guildRoleDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildRoleDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_ROLE_DELETE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagRoles) {
+		cache.DelRole(ctx, evt.GuildID, evt.RoleID)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildRoleDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildRoleDeleteEvent)))
+}
+
+/*****************************
+ *   GUILD_EMOJIS_UPDATE Handler
+ *****************************/
+
+type guildEmojisUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildEmojisUpdateEvent)
+}
+
+func (h *guildEmojisUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildEmojisUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_EMOJIS_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagEmojis) {
+		for i := range len(evt.NewEmojis) {
+			evt.NewEmojis[i].GuildID = evt.GuildID
+			cache.AddEmoji(ctx, evt.NewEmojis[i])
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildEmojisUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildEmojisUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_STICKERS_UPDATE Handler
+ *****************************/
+
+type guildStickersUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildStickersUpdateEvent)
+}
+
+func (h *guildStickersUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildStickersUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_STICKERS_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagStickers) {
+		for i := range len(evt.NewStickers) {
+			evt.NewStickers[i].GuildID = evt.GuildID
+			cache.AddSticker(ctx, evt.NewStickers[i])
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildStickersUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildStickersUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_INTEGRATIONS_UPDATE Handler
+ *****************************/
+
+type guildIntegrationsUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildIntegrationsUpdateEvent)
+}
+
+func (h *guildIntegrationsUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildIntegrationsUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_INTEGRATIONS_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildIntegrationsUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildIntegrationsUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_AUDIT_LOG_ENTRY_CREATE Handler
+ *****************************/
+
+type guildAuditLogEntryCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildAuditLogEntryCreateEvent)
+}
+
+func (h *guildAuditLogEntryCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildAuditLogEntryCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_AUDIT_LOG_ENTRY_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildAuditLogEntryCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildAuditLogEntryCreateEvent)))
+}
+
+/*****************************
+ *   GUILD_BAN_ADD Handler
+ *****************************/
+
+type guildBanAddHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildBanAddEvent)
+}
+
+func (h *guildBanAddHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildBanAddEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_BAN_ADD", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildBanAddHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildBanAddEvent)))
+}
+
+/*****************************
+ *   GUILD_BAN_REMOVE Handler
+ *****************************/
+
+type guildBanRemoveHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildBanRemoveEvent)
+}
+
+func (h *guildBanRemoveHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildBanRemoveEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_BAN_REMOVE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildBanRemoveHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildBanRemoveEvent)))
+}
+
+/*****************************
+ *   GUILD_SCHEDULED_EVENT_CREATE Handler
+ *****************************/
+
+type guildScheduledEventCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildScheduledEventCreateEvent)
+}
+
+func (h *guildScheduledEventCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildScheduledEventCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SCHEDULED_EVENT_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildScheduledEventCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildScheduledEventCreateEvent)))
+}
+
+/*****************************
+ *   GUILD_SCHEDULED_EVENT_UPDATE Handler
+ *****************************/
+
+type guildScheduledEventUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildScheduledEventUpdateEvent)
+}
+
+func (h *guildScheduledEventUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildScheduledEventUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SCHEDULED_EVENT_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildScheduledEventUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildScheduledEventUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_SCHEDULED_EVENT_DELETE Handler
+ *****************************/
+
+type guildScheduledEventDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildScheduledEventDeleteEvent)
+}
+
+func (h *guildScheduledEventDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildScheduledEventDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SCHEDULED_EVENT_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildScheduledEventDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildScheduledEventDeleteEvent)))
+}
+
+/*****************************
+ *   GUILD_SCHEDULED_EVENT_USER_ADD Handler
+ *****************************/
+
+type guildScheduledEventUserAddHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildScheduledEventUserAddEvent)
+}
+
+func (h *guildScheduledEventUserAddHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildScheduledEventUserAddEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SCHEDULED_EVENT_USER_ADD", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildScheduledEventUserAddHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildScheduledEventUserAddEvent)))
+}
+
+/*****************************
+ *   GUILD_SCHEDULED_EVENT_USER_REMOVE Handler
+ *****************************/
+
+type guildScheduledEventUserRemoveHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildScheduledEventUserRemoveEvent)
+}
+
+func (h *guildScheduledEventUserRemoveHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildScheduledEventUserRemoveEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SCHEDULED_EVENT_USER_REMOVE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildScheduledEventUserRemoveHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildScheduledEventUserRemoveEvent)))
+}
+
+/*****************************
+ *   GUILD_SOUNDBOARD_SOUND_CREATE Handler
+ *****************************/
+
+type guildSoundboardSoundCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildSoundboardSoundCreateEvent)
+}
+
+func (h *guildSoundboardSoundCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildSoundboardSoundCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SOUNDBOARD_SOUND_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildSoundboardSoundCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildSoundboardSoundCreateEvent)))
+}
+
+/*****************************
+ *   GUILD_SOUNDBOARD_SOUND_UPDATE Handler
+ *****************************/
+
+type guildSoundboardSoundUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildSoundboardSoundUpdateEvent)
+}
+
+func (h *guildSoundboardSoundUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildSoundboardSoundUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SOUNDBOARD_SOUND_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildSoundboardSoundUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildSoundboardSoundUpdateEvent)))
+}
+
+/*****************************
+ *   GUILD_SOUNDBOARD_SOUND_DELETE Handler
+ *****************************/
+
+type guildSoundboardSoundDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildSoundboardSoundDeleteEvent)
+}
+
+func (h *guildSoundboardSoundDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildSoundboardSoundDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SOUNDBOARD_SOUND_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildSoundboardSoundDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildSoundboardSoundDeleteEvent)))
+}
+
+/*****************************
+ *   GUILD_SOUNDBOARD_SOUNDS_UPDATE Handler
+ *****************************/
+
+type guildSoundboardSoundsUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GuildSoundboardSoundsUpdateEvent)
+}
+
+func (h *guildSoundboardSoundsUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GuildSoundboardSoundsUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GUILD_SOUNDBOARD_SOUNDS_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *guildSoundboardSoundsUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GuildSoundboardSoundsUpdateEvent)))
+}
+
+/*****************************
+ *   SOUNDBOARD_SOUNDS Handler
+ *****************************/
+
+type soundboardSoundsHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, SoundboardSoundsEvent)
+}
+
+func (h *soundboardSoundsHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := SoundboardSoundsEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "SOUNDBOARD_SOUNDS", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *soundboardSoundsHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, SoundboardSoundsEvent)))
+}
+
+/*****************************
+ *   INTEGRATION_CREATE Handler
+ *****************************/
+
+type integrationCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, IntegrationCreateEvent)
+}
+
+func (h *integrationCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := IntegrationCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "INTEGRATION_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *integrationCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, IntegrationCreateEvent)))
+}
+
+/*****************************
+ *   INTEGRATION_UPDATE Handler
+ *****************************/
+
+type integrationUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, IntegrationUpdateEvent)
+}
+
+func (h *integrationUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := IntegrationUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "INTEGRATION_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *integrationUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, IntegrationUpdateEvent)))
+}
+
+/*****************************
+ *   INTEGRATION_DELETE Handler
+ *****************************/
+
+type integrationDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, IntegrationDeleteEvent)
+}
+
+func (h *integrationDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := IntegrationDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "INTEGRATION_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *integrationDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, IntegrationDeleteEvent)))
+}
+
+/*****************************
+ *   INTERACTION_CREATE Handler
+ *****************************/
+
+type interactionCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, InteractionCreateEvent)
+}
+
+func (h *interactionCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := InteractionCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "INTERACTION_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *interactionCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, InteractionCreateEvent)))
+}
+
+/*****************************
+ *   INVITE_CREATE Handler
+ *****************************/
+
+type inviteCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, InviteCreateEvent)
+}
+
+func (h *inviteCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := InviteCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "INVITE_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *inviteCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, InviteCreateEvent)))
+}
+
+/*****************************
+ *   INVITE_DELETE Handler
+ *****************************/
+
+type inviteDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, InviteDeleteEvent)
+}
+
+func (h *inviteDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := InviteDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "INVITE_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *inviteDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, InviteDeleteEvent)))
 }
 
 /*****************************
  *   MESSAGE_CREATE Handler
  *****************************/
 
-// messageCreateHandlers manages all registered handlers for MESSAGE_CREATE events.
 type messageCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageCreateEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageCreateEvent)
 }
 
-// handleEvent parses the MESSAGE_CREATE event data and calls each registered handler.
-func (h *messageCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := MessageCreateEvent{Client: client, ShardID: shardID}
-
+func (h *messageCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageCreateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt.Message); err != nil {
-		h.logger.Error("messageCreateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_CREATE", "error", err)
 		return
 	}
 
-	if client.Flags().Has(CacheFlagMessages) {
-		client.PutMessage(evt.Message)
+	if cache != nil && cache.CacheFlags().Has(CacheFlagMessages) {
+		cache.AddMessage(ctx, evt.Message)
 	}
 
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
-// addHandler registers a new MESSAGE_CREATE handler function.
-//
-// This method is not thread-safe.
 func (h *messageCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageCreateEvent)))
-}
-
-/*****************************
- *   MESSAGE_DELETE Handler
- *****************************/
-
-// messageDeleteHandlers manages all registered handlers for MESSAGE_DELETE events.
-type messageDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageDeleteEvent)
-}
-
-// handleEvent parses the MESSAGE_DELETE event data and calls each registered handler.
-func (h *messageDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := MessageDeleteEvent{Client: client, ShardID: shardID}
-	if err := json.Unmarshal(data, &evt.Message); err != nil {
-		h.logger.Error("messageDeleteHandlers: Failed parsing event data")
-		return
-	}
-
-	if msgOpt := client.GetMessage(evt.Message.ID); msgOpt.IsPresent() {
-		evt.Message = msgOpt.Get()
-	}
-	client.DelMessage(evt.Message.ID)
-
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-// addHandler registers a new MESSAGE_DELETE handler function.
-//
-// This method is not thread-safe.
-func (h *messageDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageDeleteEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageCreateEvent)))
 }
 
 /*****************************
  *   MESSAGE_UPDATE Handler
  *****************************/
 
-// messageUpdateHandlers manages all registered handlers for MESSAGE_UPDATE events.
 type messageUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageUpdateEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageUpdateEvent)
 }
 
-// handleEvent parses the MESSAGE_UPDATE event data and calls each registered handler.
-func (h *messageUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := MessageUpdateEvent{Client: client, ShardID: shardID}
+func (h *messageUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt.NewMessage); err != nil {
-		h.logger.Error("messageUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_UPDATE", "error", err)
 		return
 	}
 
-	if oldMsgOpt := client.GetMessage(evt.NewMessage.ID); oldMsgOpt.IsPresent() {
-		evt.OldMessage = oldMsgOpt.Get()
-	} else {
-		evt.OldMessage.ID = evt.NewMessage.ID
-		evt.OldMessage.ChannelID = evt.NewMessage.ChannelID
-		evt.OldMessage.GuildID = evt.NewMessage.GuildID
-		evt.OldMessage.Author = evt.NewMessage.Author
-		evt.OldMessage.Timestamp = evt.NewMessage.Timestamp
-		evt.OldMessage.ApplicationID = evt.NewMessage.ApplicationID
-	}
-
-	if client.Flags().Has(CacheFlagMessages) {
-		client.PutMessage(evt.NewMessage)
-	}
-
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
+	if cache != nil {
+		if oldMsg, ok := cache.GetMessage(ctx, evt.NewMessage.ID); ok {
+			evt.OldMessage = oldMsg
 		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
+		if cache.CacheFlags().Has(CacheFlagMessages) {
+			cache.AddMessage(ctx, evt.NewMessage)
 		}
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
-// addHandler registers a new MESSAGE_UPDATE handler function.
-//
-// This method is not thread-safe.
 func (h *messageUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageUpdateEvent)))
 }
 
 /*****************************
- * INTERACTION_CREATE Handler
+ *   MESSAGE_DELETE Handler
  *****************************/
 
-// interactionCreateHandlers manages all registered handlers for INTERACTION_CREATE events.
-type interactionCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(InteractionCreateEvent)
+type messageDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, MessageDeleteEvent)
 }
 
-// handleEvent parses the INTERACTION_CREATE event data and calls each registered handler.
-func (h *interactionCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := InteractionCreateEvent{Client: client, ShardID: shardID}
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("interactionCreateHandlers: Failed parsing event data")
+func (h *messageDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt.Message); err != nil {
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_DELETE", "error", err)
 		return
 	}
 
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
+	if cache != nil {
+		if msg, ok := cache.GetMessage(ctx, evt.Message.ID); ok {
+			evt.Message = msg
 		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
+		cache.DelMessage(ctx, evt.Message.ID)
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
-// addHandler registers a new INTERACTION_CREATE handler function.
-//
-// This method is not thread-safe.
-func (h *interactionCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(InteractionCreateEvent)))
+func (h *messageDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageDeleteEvent)))
 }
 
 /*****************************
- * VOICE_STATE_UPDATE Handler
+ *   MESSAGE_DELETE_BULK Handler
  *****************************/
-
-// voiceStateUpdateHandlers manages all registered handlers for VOICE_STATE_UPDATE events.
-type voiceStateUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(VoiceStateUpdateEvent)
-}
-
-// handleEvent parses the VOICE_STATE_UPDATE event data and calls each registered handler.
-func (h *voiceStateUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	evt := VoiceStateUpdateEvent{Client: client, ShardID: shardID}
-	if err := json.Unmarshal(data, &evt.NewState); err != nil {
-		h.logger.Error("voiceStateCreateHandlers: Failed parsing event data")
-		return
-	}
-
-	if oldVoiceStateOpt := client.GetVoiceState(evt.NewState.GuildID, evt.NewState.UserID); oldVoiceStateOpt.IsPresent() {
-		evt.OldState.VoiceState = oldVoiceStateOpt.Get()
-	} else {
-		evt.OldState = evt.NewState
-		evt.OldState.ChannelID = 0
-	}
-
-	evt.OldState.Member = evt.NewState.Member
-
-	if client.Flags().Has(CacheFlagVoiceStates) {
-		client.PutVoiceState(evt.NewState.VoiceState)
-	}
-
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-// addHandler registers a new VOICE_STATE_UPDATE handler function.
-//
-// This method is not thread-safe.
-func (h *voiceStateUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(VoiceStateUpdateEvent)))
-}
-
-/*********************************
- *   ApplicationCommandPermissionsUpdate Handler
- *********************************/
-
-type applicationCommandPermissionsUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ApplicationCommandPermissionsUpdateEvent)
-}
-
-func (h *applicationCommandPermissionsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ApplicationCommandPermissionsUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("applicationCommandPermissionsUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *applicationCommandPermissionsUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ApplicationCommandPermissionsUpdateEvent)))
-}
-
-/*********************************
- *   AutoModeration Handlers
- *********************************/
-
-type autoModerationRuleCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(AutoModerationRuleCreateEvent)
-}
-
-func (h *autoModerationRuleCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt AutoModerationRuleCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("autoModerationRuleCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *autoModerationRuleCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(AutoModerationRuleCreateEvent)))
-}
-
-type autoModerationRuleUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(AutoModerationRuleUpdateEvent)
-}
-
-func (h *autoModerationRuleUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt AutoModerationRuleUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("autoModerationRuleUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *autoModerationRuleUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(AutoModerationRuleUpdateEvent)))
-}
-
-type autoModerationRuleDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(AutoModerationRuleDeleteEvent)
-}
-
-func (h *autoModerationRuleDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt AutoModerationRuleDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("autoModerationRuleDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *autoModerationRuleDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(AutoModerationRuleDeleteEvent)))
-}
-
-type autoModerationActionExecutionHandlers struct {
-	logger   xlog.Logger
-	handlers []func(AutoModerationActionExecutionEvent)
-}
-
-func (h *autoModerationActionExecutionHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt AutoModerationActionExecutionEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("autoModerationActionExecutionHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *autoModerationActionExecutionHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(AutoModerationActionExecutionEvent)))
-}
-
-/*********************************
- *   Channel Handlers
- *********************************/
-
-type channelCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ChannelCreateEvent)
-}
-
-func (h *channelCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ChannelCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("channelCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *channelCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ChannelCreateEvent)))
-}
-
-type channelUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ChannelUpdateEvent)
-}
-
-func (h *channelUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ChannelUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("channelUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *channelUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ChannelUpdateEvent)))
-}
-
-type channelDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ChannelDeleteEvent)
-}
-
-func (h *channelDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ChannelDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("channelDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *channelDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ChannelDeleteEvent)))
-}
-
-type channelPinsUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ChannelPinsUpdateEvent)
-}
-
-func (h *channelPinsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ChannelPinsUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("channelPinsUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *channelPinsUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ChannelPinsUpdateEvent)))
-}
-
-/*********************************
- *   Thread Handlers
- *********************************/
-
-type threadCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ThreadCreateEvent)
-}
-
-func (h *threadCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ThreadCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("threadCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *threadCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ThreadCreateEvent)))
-}
-
-type threadUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ThreadUpdateEvent)
-}
-
-func (h *threadUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ThreadUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("threadUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *threadUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ThreadUpdateEvent)))
-}
-
-type threadDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ThreadDeleteEvent)
-}
-
-func (h *threadDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ThreadDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("threadDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *threadDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ThreadDeleteEvent)))
-}
-
-type threadListSyncHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ThreadListSyncEvent)
-}
-
-func (h *threadListSyncHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ThreadListSyncEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("threadListSyncHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *threadListSyncHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ThreadListSyncEvent)))
-}
-
-type threadMemberUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ThreadMemberUpdateEvent)
-}
-
-func (h *threadMemberUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ThreadMemberUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("threadMemberUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *threadMemberUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ThreadMemberUpdateEvent)))
-}
-
-type threadMembersUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(ThreadMembersUpdateEvent)
-}
-
-func (h *threadMembersUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt ThreadMembersUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("threadMembersUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *threadMembersUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(ThreadMembersUpdateEvent)))
-}
-
-/*********************************
- *   Entitlement Handlers
- *********************************/
-
-type entitlementCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(EntitlementCreateEvent)
-}
-
-func (h *entitlementCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt EntitlementCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("entitlementCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *entitlementCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(EntitlementCreateEvent)))
-}
-
-type entitlementUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(EntitlementUpdateEvent)
-}
-
-func (h *entitlementUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt EntitlementUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("entitlementUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *entitlementUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(EntitlementUpdateEvent)))
-}
-
-type entitlementDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(EntitlementDeleteEvent)
-}
-
-func (h *entitlementDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt EntitlementDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("entitlementDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *entitlementDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(EntitlementDeleteEvent)))
-}
-
-/*********************************
- *   Guild Handlers
- *********************************/
-
-type guildUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildUpdateEvent)
-}
-
-func (h *guildUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildUpdateEvent)))
-}
-
-type guildDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildDeleteEvent)
-}
-
-func (h *guildDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildDeleteEvent)))
-}
-
-type guildAuditLogEntryCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildAuditLogEntryCreateEvent)
-}
-
-func (h *guildAuditLogEntryCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildAuditLogEntryCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildAuditLogEntryCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildAuditLogEntryCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildAuditLogEntryCreateEvent)))
-}
-
-type guildBanAddHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildBanAddEvent)
-}
-
-func (h *guildBanAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildBanAddEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildBanAddHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildBanAddHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildBanAddEvent)))
-}
-
-type guildBanRemoveHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildBanRemoveEvent)
-}
-
-func (h *guildBanRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildBanRemoveEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildBanRemoveHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildBanRemoveHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildBanRemoveEvent)))
-}
-
-type guildEmojisUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildEmojisUpdateEvent)
-}
-
-func (h *guildEmojisUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildEmojisUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildEmojisUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildEmojisUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildEmojisUpdateEvent)))
-}
-
-type guildStickersUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildStickersUpdateEvent)
-}
-
-func (h *guildStickersUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildStickersUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildStickersUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildStickersUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildStickersUpdateEvent)))
-}
-
-type guildIntegrationsUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildIntegrationsUpdateEvent)
-}
-
-func (h *guildIntegrationsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildIntegrationsUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildIntegrationsUpdateHandlers: Failed parsing event data")
-		return
-	}
-	for _, handler := range h.handlers {
-		if runAsync {
-			go handler(evt)
-		} else {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildIntegrationsUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildIntegrationsUpdateEvent)))
-}
-
-type guildMemberAddHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildMemberAddEvent)
-}
-
-func (h *guildMemberAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildMemberAddEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildMemberAddHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildMemberAddHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildMemberAddEvent)))
-}
-
-type guildMemberRemoveHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildMemberRemoveEvent)
-}
-
-func (h *guildMemberRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildMemberRemoveEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildMemberRemoveHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildMemberRemoveHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildMemberRemoveEvent)))
-}
-
-type guildMemberUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildMemberUpdateEvent)
-}
-
-func (h *guildMemberUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildMemberUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildMemberUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildMemberUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildMemberUpdateEvent)))
-}
-
-type guildMembersChunkHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildMembersChunkEvent)
-}
-
-func (h *guildMembersChunkHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildMembersChunkEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildMembersChunkHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildMembersChunkHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildMembersChunkEvent)))
-}
-
-type guildRoleCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildRoleCreateEvent)
-}
-
-func (h *guildRoleCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildRoleCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildRoleCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildRoleCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildRoleCreateEvent)))
-}
-
-type guildRoleUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildRoleUpdateEvent)
-}
-
-func (h *guildRoleUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildRoleUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildRoleUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildRoleUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildRoleUpdateEvent)))
-}
-
-type guildRoleDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildRoleDeleteEvent)
-}
-
-func (h *guildRoleDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildRoleDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildRoleDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildRoleDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildRoleDeleteEvent)))
-}
-
-type guildScheduledEventCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildScheduledEventCreateEvent)
-}
-
-func (h *guildScheduledEventCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildScheduledEventCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildScheduledEventCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildScheduledEventCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildScheduledEventCreateEvent)))
-}
-
-type guildScheduledEventUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildScheduledEventUpdateEvent)
-}
-
-func (h *guildScheduledEventUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildScheduledEventUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildScheduledEventUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildScheduledEventUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildScheduledEventUpdateEvent)))
-}
-
-type guildScheduledEventDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildScheduledEventDeleteEvent)
-}
-
-func (h *guildScheduledEventDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildScheduledEventDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildScheduledEventDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildScheduledEventDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildScheduledEventDeleteEvent)))
-}
-
-type guildScheduledEventUserAddHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildScheduledEventUserAddEvent)
-}
-
-func (h *guildScheduledEventUserAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildScheduledEventUserAddEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildScheduledEventUserAddHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildScheduledEventUserAddHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildScheduledEventUserAddEvent)))
-}
-
-type guildScheduledEventUserRemoveHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildScheduledEventUserRemoveEvent)
-}
-
-func (h *guildScheduledEventUserRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildScheduledEventUserRemoveEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildScheduledEventUserRemoveHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildScheduledEventUserRemoveHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildScheduledEventUserRemoveEvent)))
-}
-
-type guildSoundboardSoundCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildSoundboardSoundCreateEvent)
-}
-
-func (h *guildSoundboardSoundCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildSoundboardSoundCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildSoundboardSoundCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildSoundboardSoundCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildSoundboardSoundCreateEvent)))
-}
-
-type guildSoundboardSoundUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildSoundboardSoundUpdateEvent)
-}
-
-func (h *guildSoundboardSoundUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildSoundboardSoundUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildSoundboardSoundUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildSoundboardSoundUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildSoundboardSoundUpdateEvent)))
-}
-
-type guildSoundboardSoundDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildSoundboardSoundDeleteEvent)
-}
-
-func (h *guildSoundboardSoundDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildSoundboardSoundDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildSoundboardSoundDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildSoundboardSoundDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildSoundboardSoundDeleteEvent)))
-}
-
-type guildSoundboardSoundsUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(GuildSoundboardSoundsUpdateEvent)
-}
-
-func (h *guildSoundboardSoundsUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt GuildSoundboardSoundsUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("guildSoundboardSoundsUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *guildSoundboardSoundsUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(GuildSoundboardSoundsUpdateEvent)))
-}
-
-type soundboardSoundsHandlers struct {
-	logger   xlog.Logger
-	handlers []func(SoundboardSoundsEvent)
-}
-
-func (h *soundboardSoundsHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt SoundboardSoundsEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("soundboardSoundsHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *soundboardSoundsHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(SoundboardSoundsEvent)))
-}
-
-/*********************************
- *   Integration Handlers
- *********************************/
-
-type integrationCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(IntegrationCreateEvent)
-}
-
-func (h *integrationCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt IntegrationCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("integrationCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *integrationCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(IntegrationCreateEvent)))
-}
-
-type integrationUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(IntegrationUpdateEvent)
-}
-
-func (h *integrationUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt IntegrationUpdateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("integrationUpdateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *integrationUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(IntegrationUpdateEvent)))
-}
-
-type integrationDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(IntegrationDeleteEvent)
-}
-
-func (h *integrationDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt IntegrationDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("integrationDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *integrationDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(IntegrationDeleteEvent)))
-}
-
-/*********************************
- *   Invite Handlers
- *********************************/
-
-type inviteCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(InviteCreateEvent)
-}
-
-func (h *inviteCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt InviteCreateEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("inviteCreateHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *inviteCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(InviteCreateEvent)))
-}
-
-type inviteDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(InviteDeleteEvent)
-}
-
-func (h *inviteDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt InviteDeleteEvent
-	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("inviteDeleteHandlers: Failed parsing event data")
-		return
-	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
-}
-
-func (h *inviteDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(InviteDeleteEvent)))
-}
-
-/*********************************
- *   Message Misc Handlers
- *********************************/
 
 type messageDeleteBulkHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageDeleteBulkEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageDeleteBulkEvent)
 }
 
-func (h *messageDeleteBulkHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessageDeleteBulkEvent
+func (h *messageDeleteBulkHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageDeleteBulkEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messageDeleteBulkHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_DELETE_BULK", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagMessages) {
+		for _, id := range evt.IDs {
+			cache.DelMessage(ctx, id)
 		}
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messageDeleteBulkHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageDeleteBulkEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageDeleteBulkEvent)))
 }
+
+/*****************************
+ *   MESSAGE_REACTION_ADD Handler
+ *****************************/
 
 type messageReactionAddHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageReactionAddEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageReactionAddEvent)
 }
 
-func (h *messageReactionAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessageReactionAddEvent
+func (h *messageReactionAddHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageReactionAddEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messageReactionAddHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_REACTION_ADD", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messageReactionAddHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageReactionAddEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageReactionAddEvent)))
 }
+
+/*****************************
+ *   MESSAGE_REACTION_REMOVE Handler
+ *****************************/
 
 type messageReactionRemoveHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageReactionRemoveEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageReactionRemoveEvent)
 }
 
-func (h *messageReactionRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessageReactionRemoveEvent
+func (h *messageReactionRemoveHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageReactionRemoveEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messageReactionRemoveHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_REACTION_REMOVE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messageReactionRemoveHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageReactionRemoveEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageReactionRemoveEvent)))
 }
+
+/*****************************
+ *   MESSAGE_REACTION_REMOVE_ALL Handler
+ *****************************/
 
 type messageReactionRemoveAllHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageReactionRemoveAllEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageReactionRemoveAllEvent)
 }
 
-func (h *messageReactionRemoveAllHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessageReactionRemoveAllEvent
+func (h *messageReactionRemoveAllHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageReactionRemoveAllEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messageReactionRemoveAllHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_REACTION_REMOVE_ALL", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messageReactionRemoveAllHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageReactionRemoveAllEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageReactionRemoveAllEvent)))
 }
+
+/*****************************
+ *   MESSAGE_REACTION_REMOVE_EMOJI Handler
+ *****************************/
 
 type messageReactionRemoveEmojiHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessageReactionRemoveEmojiEvent)
+	logger   Logger
+	handlers []func(context.Context, MessageReactionRemoveEmojiEvent)
 }
 
-func (h *messageReactionRemoveEmojiHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessageReactionRemoveEmojiEvent
+func (h *messageReactionRemoveEmojiHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessageReactionRemoveEmojiEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messageReactionRemoveEmojiHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_REACTION_REMOVE_EMOJI", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messageReactionRemoveEmojiHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessageReactionRemoveEmojiEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessageReactionRemoveEmojiEvent)))
 }
+
+/*****************************
+ *   MESSAGE_POLL_VOTE_ADD Handler
+ *****************************/
 
 type messagePollVoteAddHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessagePollVoteAddEvent)
+	logger   Logger
+	handlers []func(context.Context, MessagePollVoteAddEvent)
 }
 
-func (h *messagePollVoteAddHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessagePollVoteAddEvent
+func (h *messagePollVoteAddHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessagePollVoteAddEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messagePollVoteAddHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_POLL_VOTE_ADD", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messagePollVoteAddHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessagePollVoteAddEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessagePollVoteAddEvent)))
 }
+
+/*****************************
+ *   MESSAGE_POLL_VOTE_REMOVE Handler
+ *****************************/
 
 type messagePollVoteRemoveHandlers struct {
-	logger   xlog.Logger
-	handlers []func(MessagePollVoteRemoveEvent)
+	logger   Logger
+	handlers []func(context.Context, MessagePollVoteRemoveEvent)
 }
 
-func (h *messagePollVoteRemoveHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt MessagePollVoteRemoveEvent
+func (h *messagePollVoteRemoveHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := MessagePollVoteRemoveEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("messagePollVoteRemoveHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "MESSAGE_POLL_VOTE_REMOVE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *messagePollVoteRemoveHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(MessagePollVoteRemoveEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, MessagePollVoteRemoveEvent)))
 }
 
-/*********************************
- *   Presence Handlers
- *********************************/
+/*****************************
+ *   PRESENCE_UPDATE Handler
+ *****************************/
 
 type presenceUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(PresenceUpdateEvent)
+	logger   Logger
+	handlers []func(context.Context, PresenceUpdateEvent)
 }
 
-func (h *presenceUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt PresenceUpdateEvent
+func (h *presenceUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := PresenceUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("presenceUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "PRESENCE_UPDATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *presenceUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(PresenceUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, PresenceUpdateEvent)))
 }
 
-/*********************************
- *   Stage Instance Handlers
- *********************************/
+/*****************************
+ *   STAGE_INSTANCE_CREATE Handler
+ *****************************/
 
 type stageInstanceCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(StageInstanceCreateEvent)
+	logger   Logger
+	handlers []func(context.Context, StageInstanceCreateEvent)
 }
 
-func (h *stageInstanceCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt StageInstanceCreateEvent
+func (h *stageInstanceCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := StageInstanceCreateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("stageInstanceCreateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "STAGE_INSTANCE_CREATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagStageInstances) {
+		cache.AddStageInstance(ctx, evt.StageInstance)
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *stageInstanceCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(StageInstanceCreateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, StageInstanceCreateEvent)))
 }
+
+/*****************************
+ *   STAGE_INSTANCE_UPDATE Handler
+ *****************************/
 
 type stageInstanceUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(StageInstanceUpdateEvent)
+	logger   Logger
+	handlers []func(context.Context, StageInstanceUpdateEvent)
 }
 
-func (h *stageInstanceUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt StageInstanceUpdateEvent
+func (h *stageInstanceUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := StageInstanceUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("stageInstanceUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "STAGE_INSTANCE_UPDATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
+
+	if cache != nil {
+		if oldStage, ok := cache.GetStageInstance(ctx, evt.NewStageInstance.ChannelID); ok {
+			evt.OldStageInstance = oldStage
 		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
+		if cache.CacheFlags().Has(CacheFlagStageInstances) {
+			cache.AddStageInstance(ctx, evt.NewStageInstance)
 		}
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *stageInstanceUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(StageInstanceUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, StageInstanceUpdateEvent)))
 }
+
+/*****************************
+ *   STAGE_INSTANCE_DELETE Handler
+ *****************************/
 
 type stageInstanceDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(StageInstanceDeleteEvent)
+	logger   Logger
+	handlers []func(context.Context, StageInstanceDeleteEvent)
 }
 
-func (h *stageInstanceDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt StageInstanceDeleteEvent
+func (h *stageInstanceDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := StageInstanceDeleteEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("stageInstanceDeleteHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "STAGE_INSTANCE_DELETE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagStageInstances) {
+		cache.DelStageInstance(ctx, evt.ChannelID)
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *stageInstanceDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(StageInstanceDeleteEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, StageInstanceDeleteEvent)))
 }
 
-/*********************************
- *   Subscription Handlers
- *********************************/
+/*****************************
+ *   SUBSCRIPTION_CREATE Handler
+ *****************************/
 
 type subscriptionCreateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(SubscriptionCreateEvent)
+	logger   Logger
+	handlers []func(context.Context, SubscriptionCreateEvent)
 }
 
-func (h *subscriptionCreateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt SubscriptionCreateEvent
+func (h *subscriptionCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := SubscriptionCreateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("subscriptionCreateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "SUBSCRIPTION_CREATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *subscriptionCreateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(SubscriptionCreateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, SubscriptionCreateEvent)))
 }
+
+/*****************************
+ *   SUBSCRIPTION_UPDATE Handler
+ *****************************/
 
 type subscriptionUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(SubscriptionUpdateEvent)
+	logger   Logger
+	handlers []func(context.Context, SubscriptionUpdateEvent)
 }
 
-func (h *subscriptionUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt SubscriptionUpdateEvent
+func (h *subscriptionUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := SubscriptionUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("subscriptionUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "SUBSCRIPTION_UPDATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *subscriptionUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(SubscriptionUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, SubscriptionUpdateEvent)))
 }
+
+/*****************************
+ *   SUBSCRIPTION_DELETE Handler
+ *****************************/
 
 type subscriptionDeleteHandlers struct {
-	logger   xlog.Logger
-	handlers []func(SubscriptionDeleteEvent)
+	logger   Logger
+	handlers []func(context.Context, SubscriptionDeleteEvent)
 }
 
-func (h *subscriptionDeleteHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt SubscriptionDeleteEvent
+func (h *subscriptionDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := SubscriptionDeleteEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("subscriptionDeleteHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "SUBSCRIPTION_DELETE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *subscriptionDeleteHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(SubscriptionDeleteEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, SubscriptionDeleteEvent)))
 }
 
-/*********************************
- *   Typing Handlers
- *********************************/
+/*****************************
+ *   TYPING_START Handler
+ *****************************/
 
 type typingStartHandlers struct {
-	logger   xlog.Logger
-	handlers []func(TypingStartEvent)
+	logger   Logger
+	handlers []func(context.Context, TypingStartEvent)
 }
 
-func (h *typingStartHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt TypingStartEvent
+func (h *typingStartHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := TypingStartEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("typingStartHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "TYPING_START", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *typingStartHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(TypingStartEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, TypingStartEvent)))
 }
 
-/*********************************
- *   User Handlers
- *********************************/
+/*****************************
+ *   USER_UPDATE Handler
+ *****************************/
 
 type userUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(UserUpdateEvent)
+	logger   Logger
+	handlers []func(context.Context, UserUpdateEvent)
 }
 
-func (h *userUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt UserUpdateEvent
+func (h *userUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := UserUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("userUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "USER_UPDATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
+
+	if cache != nil {
+		if oldUser, ok := cache.GetUser(ctx, evt.NewUser.ID); ok {
+			evt.OldUser = oldUser
 		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
+		if cache.CacheFlags().Has(CacheFlagUsers) {
+			cache.AddUser(ctx, evt.NewUser)
 		}
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *userUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(UserUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, UserUpdateEvent)))
 }
 
-/*********************************
- *   Voice Handlers
- *********************************/
+/*****************************
+ *   VOICE_CHANNEL_EFFECT_SEND Handler
+ *****************************/
 
 type voiceChannelEffectSendHandlers struct {
-	logger   xlog.Logger
-	handlers []func(VoiceChannelEffectSendEvent)
+	logger   Logger
+	handlers []func(context.Context, VoiceChannelEffectSendEvent)
 }
 
-func (h *voiceChannelEffectSendHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt VoiceChannelEffectSendEvent
+func (h *voiceChannelEffectSendHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := VoiceChannelEffectSendEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("voiceChannelEffectSendHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "VOICE_CHANNEL_EFFECT_SEND", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *voiceChannelEffectSendHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(VoiceChannelEffectSendEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, VoiceChannelEffectSendEvent)))
 }
 
-type voiceServerUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(VoiceServerUpdateEvent)
+/*****************************
+ *   VOICE_STATE_UPDATE Handler
+ *****************************/
+
+type voiceStateUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, VoiceStateUpdateEvent)
 }
 
-func (h *voiceServerUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt VoiceServerUpdateEvent
+func (h *voiceStateUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := VoiceStateUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("voiceServerUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "VOICE_STATE_UPDATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
+
+	if cache != nil {
+		if oldState, ok := cache.GetVoiceState(ctx, evt.NewState.GuildID, evt.NewState.UserID); ok {
+			evt.OldState = GatewayVoiceState{VoiceState: oldState}
 		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
+		if cache.CacheFlags().Has(CacheFlagVoiceStates) {
+			if evt.NewState.ChannelID == 0 {
+				cache.DelVoiceState(ctx, evt.NewState.GuildID, evt.NewState.UserID)
+			} else {
+				cache.AddVoiceState(ctx, evt.NewState.VoiceState)
+			}
 		}
 	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *voiceStateUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, VoiceStateUpdateEvent)))
+}
+
+/*****************************
+ *   VOICE_SERVER_UPDATE Handler
+ *****************************/
+
+type voiceServerUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, VoiceServerUpdateEvent)
+}
+
+func (h *voiceServerUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := VoiceServerUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "VOICE_SERVER_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *voiceServerUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(VoiceServerUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, VoiceServerUpdateEvent)))
 }
 
-/*********************************
- *   Webhooks Handlers
- *********************************/
+/*****************************
+ *   WEBHOOKS_UPDATE Handler
+ *****************************/
 
 type webhooksUpdateHandlers struct {
-	logger   xlog.Logger
-	handlers []func(WebhooksUpdateEvent)
+	logger   Logger
+	handlers []func(context.Context, WebhooksUpdateEvent)
 }
 
-func (h *webhooksUpdateHandlers) handleEvent(client *Client, runAsync bool, shardID int, data []byte) {
-	var evt WebhooksUpdateEvent
+func (h *webhooksUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := WebhooksUpdateEvent{ShardID: shardID}
 	if err := json.Unmarshal(data, &evt); err != nil {
-		h.logger.Error("webhooksUpdateHandlers: Failed parsing event data")
+		h.logger.Error("failed parsing event data", "event", "WEBHOOKS_UPDATE", "error", err)
 		return
 	}
-	if runAsync {
-		for _, handler := range h.handlers {
-			go handler(evt)
-		}
-	} else {
-		for _, handler := range h.handlers {
-			handler(evt)
-		}
-	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
 }
 
 func (h *webhooksUpdateHandlers) addHandler(handler any) {
-	h.handlers = append(h.handlers, handler.(func(WebhooksUpdateEvent)))
+	h.handlers = append(h.handlers, handler.(func(context.Context, WebhooksUpdateEvent)))
+}
+
+/*****************************
+ *   APPLICATION_COMMAND_PERMISSIONS_UPDATE Handler
+ *****************************/
+
+type applicationCommandPermissionsUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ApplicationCommandPermissionsUpdateEvent)
+}
+
+func (h *applicationCommandPermissionsUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ApplicationCommandPermissionsUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "APPLICATION_COMMAND_PERMISSIONS_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *applicationCommandPermissionsUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ApplicationCommandPermissionsUpdateEvent)))
+}
+
+/*****************************
+ *   AUTO_MODERATION_RULE_CREATE Handler
+ *****************************/
+
+type autoModerationRuleCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, AutoModerationRuleCreateEvent)
+}
+
+func (h *autoModerationRuleCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := AutoModerationRuleCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "AUTO_MODERATION_RULE_CREATE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagAutoModerationRules) {
+		cache.AddAutoModerationRule(ctx, evt.AutoModerationRule)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *autoModerationRuleCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, AutoModerationRuleCreateEvent)))
+}
+
+/*****************************
+ *   AUTO_MODERATION_RULE_UPDATE Handler
+ *****************************/
+
+type autoModerationRuleUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, AutoModerationRuleUpdateEvent)
+}
+
+func (h *autoModerationRuleUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := AutoModerationRuleUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "AUTO_MODERATION_RULE_UPDATE", "error", err)
+		return
+	}
+
+	if cache != nil {
+		if oldRule, ok := cache.GetAutoModerationRule(ctx, evt.NewAutoModerationRule.ID); ok {
+			evt.OldAutoModerationRule = oldRule
+		}
+		if cache.CacheFlags().Has(CacheFlagAutoModerationRules) {
+			cache.AddAutoModerationRule(ctx, evt.NewAutoModerationRule)
+		}
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *autoModerationRuleUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, AutoModerationRuleUpdateEvent)))
+}
+
+/*****************************
+ *   AUTO_MODERATION_RULE_DELETE Handler
+ *****************************/
+
+type autoModerationRuleDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, AutoModerationRuleDeleteEvent)
+}
+
+func (h *autoModerationRuleDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := AutoModerationRuleDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "AUTO_MODERATION_RULE_DELETE", "error", err)
+		return
+	}
+
+	if cache != nil && cache.CacheFlags().Has(CacheFlagAutoModerationRules) {
+		cache.DelAutoModerationRule(ctx, evt.GuildID, evt.ID)
+	}
+
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *autoModerationRuleDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, AutoModerationRuleDeleteEvent)))
+}
+
+/*****************************
+ *   AUTO_MODERATION_ACTION_EXECUTION Handler
+ *****************************/
+
+type autoModerationActionExecutionHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, AutoModerationActionExecutionEvent)
+}
+
+func (h *autoModerationActionExecutionHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := AutoModerationActionExecutionEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "AUTO_MODERATION_ACTION_EXECUTION", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *autoModerationActionExecutionHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, AutoModerationActionExecutionEvent)))
+}
+
+/*****************************
+ *   ENTITLEMENT_CREATE Handler
+ *****************************/
+
+type entitlementCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, EntitlementCreateEvent)
+}
+
+func (h *entitlementCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := EntitlementCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "ENTITLEMENT_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *entitlementCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, EntitlementCreateEvent)))
+}
+
+/*****************************
+ *   ENTITLEMENT_UPDATE Handler
+ *****************************/
+
+type entitlementUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, EntitlementUpdateEvent)
+}
+
+func (h *entitlementUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := EntitlementUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "ENTITLEMENT_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *entitlementUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, EntitlementUpdateEvent)))
+}
+
+/*****************************
+ *   ENTITLEMENT_DELETE Handler
+ *****************************/
+
+type entitlementDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, EntitlementDeleteEvent)
+}
+
+func (h *entitlementDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := EntitlementDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "ENTITLEMENT_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *entitlementDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, EntitlementDeleteEvent)))
+}
+
+/*****************************
+ *   CHANNEL_INFO Handler
+ *****************************/
+
+type channelInfoHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ChannelInfoEvent)
+}
+
+func (h *channelInfoHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ChannelInfoEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "CHANNEL_INFO", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *channelInfoHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ChannelInfoEvent)))
+}
+
+/*****************************
+ *   VOICE_CHANNEL_STATUS_UPDATE Handler
+ *****************************/
+
+type voiceChannelStatusUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, VoiceChannelStatusUpdateEvent)
+}
+
+func (h *voiceChannelStatusUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := VoiceChannelStatusUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "VOICE_CHANNEL_STATUS_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *voiceChannelStatusUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, VoiceChannelStatusUpdateEvent)))
+}
+
+/*****************************
+ *   VOICE_CHANNEL_START_TIME_UPDATE Handler
+ *****************************/
+
+type voiceChannelStartTimeUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, VoiceChannelStartTimeUpdateEvent)
+}
+
+func (h *voiceChannelStartTimeUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := VoiceChannelStartTimeUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "VOICE_CHANNEL_START_TIME_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *voiceChannelStartTimeUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, VoiceChannelStartTimeUpdateEvent)))
+}
+
+/*****************************
+ *   APPLICATION_AUTHORIZED Handler
+ *****************************/
+
+type applicationAuthorizedHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ApplicationAuthorizedEvent)
+}
+
+func (h *applicationAuthorizedHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ApplicationAuthorizedEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "APPLICATION_AUTHORIZED", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *applicationAuthorizedHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ApplicationAuthorizedEvent)))
+}
+
+/*****************************
+ *   APPLICATION_DEAUTHORIZED Handler
+ *****************************/
+
+type applicationDeauthorizedHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, ApplicationDeauthorizedEvent)
+}
+
+func (h *applicationDeauthorizedHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := ApplicationDeauthorizedEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "APPLICATION_DEAUTHORIZED", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *applicationDeauthorizedHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, ApplicationDeauthorizedEvent)))
+}
+
+/*****************************
+ *   RATE_LIMITED Handler
+ *****************************/
+
+type rateLimitedHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, RateLimitedEvent)
+}
+
+func (h *rateLimitedHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := RateLimitedEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "RATE_LIMITED", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *rateLimitedHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, RateLimitedEvent)))
+}
+
+/*****************************
+ *   QUEST_USER_ENROLLMENT Handler
+ *****************************/
+
+type questUserEnrollmentHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, QuestUserEnrollmentEvent)
+}
+
+func (h *questUserEnrollmentHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := QuestUserEnrollmentEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "QUEST_USER_ENROLLMENT", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *questUserEnrollmentHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, QuestUserEnrollmentEvent)))
+}
+
+/*****************************
+ *   LOBBY_MESSAGE_CREATE Handler
+ *****************************/
+
+type lobbyMessageCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, LobbyMessageCreateEvent)
+}
+
+func (h *lobbyMessageCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := LobbyMessageCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "LOBBY_MESSAGE_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *lobbyMessageCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, LobbyMessageCreateEvent)))
+}
+
+/*****************************
+ *   LOBBY_MESSAGE_UPDATE Handler
+ *****************************/
+
+type lobbyMessageUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, LobbyMessageUpdateEvent)
+}
+
+func (h *lobbyMessageUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := LobbyMessageUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "LOBBY_MESSAGE_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *lobbyMessageUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, LobbyMessageUpdateEvent)))
+}
+
+/*****************************
+ *   LOBBY_MESSAGE_DELETE Handler
+ *****************************/
+
+type lobbyMessageDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, LobbyMessageDeleteEvent)
+}
+
+func (h *lobbyMessageDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := LobbyMessageDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "LOBBY_MESSAGE_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *lobbyMessageDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, LobbyMessageDeleteEvent)))
+}
+
+/*****************************
+ *   GAME_DIRECT_MESSAGE_CREATE Handler
+ *****************************/
+
+type gameDirectMessageCreateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GameDirectMessageCreateEvent)
+}
+
+func (h *gameDirectMessageCreateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GameDirectMessageCreateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GAME_DIRECT_MESSAGE_CREATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *gameDirectMessageCreateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GameDirectMessageCreateEvent)))
+}
+
+/*****************************
+ *   GAME_DIRECT_MESSAGE_UPDATE Handler
+ *****************************/
+
+type gameDirectMessageUpdateHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GameDirectMessageUpdateEvent)
+}
+
+func (h *gameDirectMessageUpdateHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GameDirectMessageUpdateEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GAME_DIRECT_MESSAGE_UPDATE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *gameDirectMessageUpdateHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GameDirectMessageUpdateEvent)))
+}
+
+/*****************************
+ *   GAME_DIRECT_MESSAGE_DELETE Handler
+ *****************************/
+
+type gameDirectMessageDeleteHandlers struct {
+	logger   Logger
+	handlers []func(context.Context, GameDirectMessageDeleteEvent)
+}
+
+func (h *gameDirectMessageDeleteHandlers) handleEvent(ctx context.Context, cache CacheManager, concurrent bool, shardID ShardID, data []byte) {
+	evt := GameDirectMessageDeleteEvent{ShardID: shardID}
+	if err := json.Unmarshal(data, &evt); err != nil {
+		h.logger.Error("failed parsing event data", "event", "GAME_DIRECT_MESSAGE_DELETE", "error", err)
+		return
+	}
+	dispatchHandlers(ctx, h.handlers, evt, concurrent)
+}
+
+func (h *gameDirectMessageDeleteHandlers) addHandler(handler any) {
+	h.handlers = append(h.handlers, handler.(func(context.Context, GameDirectMessageDeleteEvent)))
 }
