@@ -1,62 +1,122 @@
-# Dwaz - Discord Wrapper API for Zwafriya
-> Dwaz 5alina men lmar9a kat3reb tsaybe bot b dwaz?
+# wumpkit
 
-## Overview
+[![Go Reference](https://pkg.go.dev/badge/github.com/wumpkit-go/wumpkit.svg)](https://pkg.go.dev/github.com/wumpkit-go/wumpkit)
+[![Go Report Card](https://goreportcard.com/badge/github.com/wumpkit-go/wumpkit)](https://goreportcard.com/report/github.com/wumpkit-go/wumpkit)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
-Dwaz is a lightweight and modern Discord API wrapper written in Go, designed for developers building Discord bots or integrations. With a focus on simplicity and performance, Dwaz provides an intuitive interface to interact with Discord's API, leveraging Go's concurrency features for efficient bot development. The name "Zwafriya," inspired by Moroccan Arabic.
+A lightweight and idiomatic Discord API wrapper for Go.
+
+---
+
+## Features
+
+- **Context-First**: Built entirely around Go's standard `context.Context` package.
+- **Pluggable Components**: First-class support for swapping core components (like caching, rate limit stores, logging) with custom implementations.
+- **Automatic Sharding**: Full support for automatic and manual sharding in an easy way.
+
+---
 
 ## Installation
 
-To use Dwaz in your Go project, install it via:
-
 ```bash
-go get github.com/marouanesouiri/dwaz
+go get github.com/wumpkit-go/wumpkit
 ```
 
-Ensure you have Go 1.22 or later installed, as specified in the project’s `go.mod`.
+> Requires **Go 1.22+**.
 
-## Usage
+---
 
-Here’s a basic Ping Pong example to get started with Dwaz:
+## Quick Start
 
 ```go
 package main
 
 import (
-    "github.com/marouanesouiri/dwaz"
-    "context"
-    "fmt"
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+
+	"github.com/wumpkit-go/wumpkit"
 )
 
 func main() {
-    // Initialize a new Dwaz client
-    client := dwaz.New(
-        context.TODO(),
-		dwaz.WithToken("YOUR_BOT_TOKEN"),
-		dwaz.WithIntents(dwaz.GatewayIntentGuildMessages, dwaz.GatewayIntentMessageContent),
-    )
+	token := os.Getenv("DISCORD_TOKEN")
+	if token == "" {
+		slog.Error("DISCORD_TOKEN is required")
+		os.Exit(1)
+	}
 
-    // Add message create even handlers
-    client.OnMessageCreate(func(event dwaz.MessageCreateEvent) {
-        if event.Message.Content == "!ping" {
-            fmt.Println("Pong!")
-        }
-    })
+	bot := wumpkit.New(
+		context.Background(),
+		wumpkit.WithToken(token),
+		wumpkit.WithGatewayConfig(wumpkit.ShardManagerConfig{
+			Intents: wumpkit.GatewayIntentGuilds |
+				wumpkit.GatewayIntentGuildMessages |
+				wumpkit.GatewayIntentMessageContent,
+		}),
+	)
 
-    // Start the bot
-    client.Start()
+	bot.OnReady(func(ctx context.Context, event wumpkit.ReadyEvent) {
+		slog.Info("Connected", "user", event.User.Username, "guilds", len(event.Guilds))
+	})
+
+	bot.OnMessageCreate(func(ctx context.Context, event wumpkit.MessageCreateEvent) {
+		if event.Message.Author.Bot || event.Message.Content != "!ping" {
+			return
+		}
+
+		latency := bot.ShardManager().AverageLatency()
+		_, _ = bot.CreateMessage(ctx, event.Message.ChannelID, wumpkit.CreateMessageOptions{
+			Content: fmt.Sprintf("Pong! Heartbeat latency: %v", latency),
+		})
+	})
+
+	if err := bot.StartGatewayWithSignals(); err != nil {
+		slog.Error("bot stopped", "error", err)
+	}
 }
 ```
 
-Replace `YOUR_BOT_TOKEN` with your Discord bot token. Check the [documentation](https://pkg.go.dev/github.com/marouanesouiri/dwaz) for more examples and API details.
+---
 
-## Badges
+## Distributed Setup (Redis)
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/marouanesouiri/dwaz.svg)](https://pkg.go.dev/github.com/marouanesouiri/dwaz)
-[![Go Report](https://goreportcard.com/badge/github.com/marouanesouiri/dwaz)](https://goreportcard.com/report/github.com/marouanesouiri/dwaz)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/marouanesouiri/dwaz)](https://golang.org/doc/devel/release.html)
-[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/marouanesouiri/dwaz/blob/master/LICENSE)
-[![Yada Version](https://img.shields.io/github/v/tag/marouanesouiri/dwaz?label=release)](https://github.com/marouanesouiri/dwaz/releases/latest)
-[![Issues](https://img.shields.io/github/issues/marouanesouiri/dwaz)](https://github.com/marouanesouiri/dwaz/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/marouanesouiri/dwaz)](https://github.com/marouanesouiri/dwaz/commits/main)
-[![Lines of Code](https://tokei.rs/b1/github/marouanesouiri/dwaz)](https://github.com/marouanesouiri/dwaz)
+For clustered bots sharing rate limits and cache across multiple nodes:
+
+```go
+import (
+	"github.com/wumpkit-go/wumpkit"
+	"github.com/wumpkit-go/wumpkit/extra/redis"
+	goredis "github.com/redis/go-redis/v9"
+)
+
+rdb := goredis.NewClient(&goredis.Options{Addr: "localhost:6379"})
+
+bot := wumpkit.New(
+	ctx,
+	wumpkit.WithToken(token),
+	wumpkit.WithCacheManager(redis.NewRedisCacheManager(rdb, wumpkit.CacheFlagsAll)),
+	wumpkit.WithRateLimitStore(redis.NewRedisRateLimitStore(rdb)),
+)
+```
+
+---
+
+## Examples
+
+Runnable examples are in the [`_examples`](_examples/) directory:
+
+- [`pingpong`](_examples/pingpong/) - Basic ping pong bot
+- [`slash_commands`](_examples/slash_commands/) - Application slash commands
+- [`components`](_examples/components/) - Buttons and select menus
+- [`jointocreate`](_examples/jointocreate/) - Dynamic voice channel creator
+- [`sharded_bot`](_examples/sharded_bot/) - Multi-sharded bot setup
+- [`redis_cache`](_examples/redis_cache/) - Distributed Redis cache and rate limiting
+- [`oauth2_server`](_examples/oauth2_server/) - Standalone OAuth2 web server
+
+---
+
+## License
+
+BSD 3-Clause License. See [LICENSE](LICENSE) for details.
