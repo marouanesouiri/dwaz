@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,12 +11,11 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
+	"fmt"
 	"time"
-
-	"github.com/marouanesouiri/stdx/optional"
 )
 
 // MembershipState represent a team member MembershipState.
@@ -167,12 +166,12 @@ const (
 	ApplicationFlagGatewayPresenceLimited
 
 	// Intent required for bots in 100 or more servers to receive member-related
-	// events like guild_member_add. See the list of member-related events under dwaz.GatewayIntentGuildMembers
+	// events like guild_member_add. See the list of member-related events under wumpkit.GatewayIntentGuildMembers
 	ApplicationFlagGatewayGuildMembers
 
 	// Intent required for bots in under 100 servers to receive member-related
 	// events like guild_member_add, found on the Bot page in your app's settings.
-	// See the list of member-related events under dwaz.GatewayIntentGuildMembers
+	// See the list of member-related events under wumpkit.GatewayIntentGuildMembers
 	ApplicationFlagGatewayGuildMemberLimited
 
 	// Indicates unusual growth of an app that prevents verification.
@@ -308,6 +307,8 @@ const (
 	OAuth2ScopeGuildsMembersRead OAuth2Scope = "guilds.members.read"
 	// OAuth2ScopeIdentify allows /users/@me without email.
 	OAuth2ScopeIdentify OAuth2Scope = "identify"
+	// OAuth2ScopeIdentifyPremium allows your app to read a user's Nitro subscription type as defined by premium_type.
+	OAuth2ScopeIdentifyPremium OAuth2Scope = "identify.premium"
 	// OAuth2ScopeMessagesRead for local rpc server api access, this allows you to read messages
 	// from all client channels (otherwise restricted to channels/guilds your app creates).
 	OAuth2ScopeMessagesRead OAuth2Scope = "messages.read"
@@ -339,6 +340,11 @@ const (
 	OAuth2ScopeWebhookIncoming OAuth2Scope = "webhook.incoming"
 )
 
+// Is returns true if this OAuth2Scope matches the provided one.
+func (v OAuth2Scope) Is(other OAuth2Scope) bool {
+	return v == other
+}
+
 // ApplicationInstallParams represent a Discord application install params object.
 //
 // Reference: https://discord.com/developers/docs/resources/application#install-params-object
@@ -363,6 +369,11 @@ const (
 	// ApplicationIntegrationTypeUserInstall if app is installable to users.
 	ApplicationIntegrationTypeUserInstall
 )
+
+// Is returns true if this ApplicationIntegrationType matches the provided one.
+func (v ApplicationIntegrationType) Is(other ApplicationIntegrationType) bool {
+	return v == other
+}
 
 type ApplicationIntegrationTypesConfig map[ApplicationIntegrationType]ApplicationIntegrationTypeConfiguration
 
@@ -463,14 +474,14 @@ type Application struct {
 	Flags ApplicationFlags `json:"flags"`
 
 	// ApproximateGuildCount is the approximate count of guilds the app has been added to.
-	ApproximateGuildCount optional.Option[int] `json:"approximate_guild_count"`
+	ApproximateGuildCount *int `json:"approximate_guild_count,omitempty"`
 
 	// ApproximateUserInstallCount is the Approximate count of users that have installed
 	// the app (authorized with application.commands as a scope).
-	ApproximateUserInstallCount optional.Option[int] `json:"approximate_user_install_count"`
+	ApproximateUserInstallCount *int `json:"approximate_user_install_count,omitempty"`
 
 	// ApproximateUserAuthorizationCount is the approximate count of users that have OAuth2 authorizations for the app.
-	ApproximateUserAuthorizationCount optional.Option[int] `json:"approximate_user_authorization_count"`
+	ApproximateUserAuthorizationCount *int `json:"approximate_user_authorization_count,omitempty"`
 
 	// RedirectURIs is an array of redirect URIs for the app.
 	RedirectURIs []string `json:"redirect_uris"`
@@ -563,7 +574,6 @@ func (a *Application) CoverImageURL() string {
 	return ""
 }
 
-
 // CoverImageURLWith returns the URL to the app's cover image,
 // allowing explicit specification of image format and size.
 //
@@ -580,6 +590,10 @@ func (a *Application) CoverImageURLWith(format ImageFormat, size ImageSize) stri
 	return ""
 }
 
+// String implements the fmt.Stringer interface.
+func (a *Application) String() string {
+	return a.Name
+}
 
 // PartialApplication represent a Discord partial application object.
 //
@@ -616,3 +630,121 @@ func (a *PartialApplication) IconURL() string {
 	return ""
 }
 
+// String implements the fmt.Stringer interface.
+func (a *PartialApplication) String() string {
+	return a.Name
+}
+
+var (
+	_ fmt.Stringer = (*Application)(nil)
+	_ fmt.Stringer = (*PartialApplication)(nil)
+)
+
+// ActivityLocationKind represents the kind of location an activity instance is running in.
+type ActivityLocationKind string
+
+const (
+	ActivityLocationKindGuildChannel   ActivityLocationKind = "gc"
+	ActivityLocationKindPrivateChannel ActivityLocationKind = "pc"
+)
+
+// Is returns true if this ActivityLocationKind matches the provided one.
+func (v ActivityLocationKind) Is(other ActivityLocationKind) bool {
+	return v == other
+}
+
+// ActivityLocation represents the location where an activity instance is running.
+//
+// Reference: https://discord.com/developers/docs/resources/application#get-application-activity-instance-activity-location-object
+type ActivityLocation struct {
+	// ID is the unique identifier for the location.
+	ID string `json:"id"`
+
+	// Kind describes the kind of location.
+	Kind ActivityLocationKind `json:"kind"`
+
+	// ChannelID is the ID of the channel.
+	ChannelID Snowflake `json:"channel_id"`
+
+	// GuildID is the ID of the guild, if applicable.
+	GuildID *Snowflake `json:"guild_id,omitempty"`
+}
+
+// ApplicationActivityInstance represents a serialized activity instance.
+//
+// Reference: https://discord.com/developers/docs/resources/application#get-application-activity-instance-activity-instance-object
+type ApplicationActivityInstance struct {
+	// ApplicationID is the application ID.
+	ApplicationID Snowflake `json:"application_id"`
+
+	// InstanceID is the activity instance ID.
+	InstanceID string `json:"instance_id"`
+
+	// LaunchID is the unique identifier for the launch.
+	LaunchID Snowflake `json:"launch_id"`
+
+	// Location is the location the instance is running in.
+	Location ActivityLocation `json:"location"`
+
+	// Users is the IDs of the users currently connected to the instance.
+	Users []Snowflake `json:"users"`
+}
+
+// ApplicationRoleConnectionMetadataType represents the type of metadata value.
+//
+// Reference: https://discord.com/developers/docs/resources/application-role-connection-metadata#application-role-connection-metadata-object-application-role-connection-metadata-type
+type ApplicationRoleConnectionMetadataType int
+
+const (
+	// ApplicationRoleConnectionMetadataTypeIntegerLessThanOrEqual metadata value is less than or equal to configured value.
+	ApplicationRoleConnectionMetadataTypeIntegerLessThanOrEqual ApplicationRoleConnectionMetadataType = 1
+
+	// ApplicationRoleConnectionMetadataTypeIntegerGreaterThanOrEqual metadata value is greater than or equal to configured value.
+	ApplicationRoleConnectionMetadataTypeIntegerGreaterThanOrEqual ApplicationRoleConnectionMetadataType = 2
+
+	// ApplicationRoleConnectionMetadataTypeIntegerEqual metadata value is equal to configured value.
+	ApplicationRoleConnectionMetadataTypeIntegerEqual ApplicationRoleConnectionMetadataType = 3
+
+	// ApplicationRoleConnectionMetadataTypeIntegerNotEqual metadata value is not equal to configured value.
+	ApplicationRoleConnectionMetadataTypeIntegerNotEqual ApplicationRoleConnectionMetadataType = 4
+
+	// ApplicationRoleConnectionMetadataTypeDatetimeLessThanOrEqual metadata value is less than or equal to configured value.
+	ApplicationRoleConnectionMetadataTypeDatetimeLessThanOrEqual ApplicationRoleConnectionMetadataType = 5
+
+	// ApplicationRoleConnectionMetadataTypeDatetimeGreaterThanOrEqual metadata value is greater than or equal to configured value.
+	ApplicationRoleConnectionMetadataTypeDatetimeGreaterThanOrEqual ApplicationRoleConnectionMetadataType = 6
+
+	// ApplicationRoleConnectionMetadataTypeBooleanEqual metadata value is equal to configured value.
+	ApplicationRoleConnectionMetadataTypeBooleanEqual ApplicationRoleConnectionMetadataType = 7
+
+	// ApplicationRoleConnectionMetadataTypeBooleanNotEqual metadata value is not equal to configured value.
+	ApplicationRoleConnectionMetadataTypeBooleanNotEqual ApplicationRoleConnectionMetadataType = 8
+)
+
+// Is returns true if this ApplicationRoleConnectionMetadataType matches the provided one.
+func (v ApplicationRoleConnectionMetadataType) Is(other ApplicationRoleConnectionMetadataType) bool {
+	return v == other
+}
+
+// ApplicationRoleConnectionMetadata represents role connection metadata for an application.
+//
+// Reference: https://discord.com/developers/docs/resources/application-role-connection-metadata#application-role-connection-metadata-object
+type ApplicationRoleConnectionMetadata struct {
+	// Type is the type of metadata value.
+	Type ApplicationRoleConnectionMetadataType `json:"type"`
+
+	// Key is the dictionary key for the metadata field (1-50 characters).
+	Key string `json:"key"`
+
+	// Name is the name of the metadata field (1-100 characters).
+	Name string `json:"name"`
+
+	// NameLocalizations is translations of the name.
+	NameLocalizations map[Locale]string `json:"name_localizations,omitempty"`
+
+	// Description is the description of the metadata field (1-200 characters).
+	Description string `json:"description"`
+
+	// DescriptionLocalizations is translations of the description.
+	DescriptionLocalizations map[Locale]string `json:"description_localizations,omitempty"`
+}
