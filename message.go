@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,16 +11,15 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"time"
-
-	"github.com/marouanesouiri/stdx/optional"
 )
 
 // Embed field limits as defined by Discord's API.
@@ -382,6 +381,11 @@ const (
 	MessageReferenceTypeForward
 )
 
+// Is returns true if this MessageReferenceType matches the provided one.
+func (v MessageReferenceType) Is(other MessageReferenceType) bool {
+	return v == other
+}
+
 // MessageReference represents a reference to another message, such as for replies or crossposts.
 //
 // Reference: https://discord.com/developers/docs/resources/message#message-reference-structure
@@ -614,6 +618,11 @@ const (
 	EmbedTypeLink       EmbedType = "link"
 	EmbedTypePollResult EmbedType = "poll_result"
 )
+
+// Is returns true if this EmbedType matches the provided one.
+func (v EmbedType) Is(other EmbedType) bool {
+	return v == other
+}
 
 // Embed represents a Discord embed object.
 //
@@ -889,8 +898,8 @@ type Message struct {
 	// EditedTimestamp is when the message was last edited.
 	//
 	// Optional:
-	//   - Will be None if the message has never been edited.
-	EditedTimestamp optional.Option[time.Time] `json:"edited_timestamp,omitzero"`
+	//   - Will be nil if the message has never been edited.
+	EditedTimestamp *time.Time `json:"edited_timestamp,omitempty"`
 
 	// TTS indicates whether the message is a text-to-speech message.
 	TTS bool `json:"tts"`
@@ -1012,7 +1021,7 @@ type Message struct {
 	//
 	// Optional:
 	//   - Will be nil if the message is not in a thread.
-	Position optional.Option[int] `json:"position"`
+	Position *int `json:"position,omitempty"`
 
 	// GuildID is the ID of the guild where the message was sent.
 	//
@@ -1225,3 +1234,18 @@ func (b *EmbedBuilder) Reset() {
 func (b *EmbedBuilder) Build() Embed {
 	return b.embed
 }
+
+// String implements the fmt.Stringer interface.
+func (m *Message) String() string {
+	return m.Content
+}
+
+// String implements the fmt.Stringer interface.
+func (m *PartialMessage) String() string {
+	return m.Content
+}
+
+var (
+	_ fmt.Stringer = (*Message)(nil)
+	_ fmt.Stringer = (*PartialMessage)(nil)
+)
