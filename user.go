@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,9 +11,10 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -284,6 +285,13 @@ func (u *User) Mention() string {
 	return "<@" + u.ID.String() + ">"
 }
 
+// String implements the fmt.Stringer interface.
+func (u *User) String() string {
+	return u.Mention()
+}
+
+var _ fmt.Stringer = (*User)(nil)
+
 // CreatedAt returns the time when this user account is created.
 func (u *User) CreatedAt() time.Time {
 	return u.ID.Timestamp()
@@ -442,24 +450,69 @@ func (u *User) GuildTagBadgeURL() string {
 	return ""
 }
 
-// UpdateSelfUserOptions defines the parameters to update the current user account.
+// ConnectionVisibilityType represents the visibility of a user connection.
 //
-// All fields are optional:
-//   - If a field is not set (left empty), it will remain unchanged.
-type UpdateSelfUserOptions struct {
-	Username string `json:"username,omitempty"`
-	// Use:
-	//
-	//  avatar, err := dwaz.NewImageFile("path/to/your/image.png")
-	//  if err != nil {
-	// 		// handler err
-	//  }
-	Avatar Base64Image `json:"avatar,omitempty"`
-	// Use:
-	//
-	//  banner, err := dwaz.NewImageFile("path/to/your/banner.png")
-	//  if err != nil {
-	// 		// handler err
-	//  }
-	Banner Base64Image `json:"banner,omitempty"`
+// Reference: https://discord.com/developers/docs/resources/user#connection-object-visibility-types
+type ConnectionVisibilityType int
+
+const (
+	// Invisible to everyone except the user themselves.
+	ConnectionVisibilityNone ConnectionVisibilityType = 0
+
+	// Visible to everyone.
+	ConnectionVisibilityEveryone ConnectionVisibilityType = 1
+)
+
+// Is returns true if this ConnectionVisibilityType matches the provided one.
+func (v ConnectionVisibilityType) Is(other ConnectionVisibilityType) bool {
+	return v == other
+}
+
+// Connection represents a connection to a third-party service.
+//
+// Reference: https://discord.com/developers/docs/resources/user#connection-object
+type Connection struct {
+	// ID is the id of the connection account.
+	ID string `json:"id"`
+
+	// Name is the username of the connection account.
+	Name string `json:"name"`
+
+	// Type is the service of this connection.
+	Type string `json:"type"`
+
+	// Revoked is whether the connection is revoked.
+	Revoked *bool `json:"revoked,omitempty"`
+
+	// Integrations is an array of partial server integrations.
+	Integrations []Integration `json:"integrations,omitempty"`
+
+	// Verified is whether the connection is verified.
+	Verified bool `json:"verified"`
+
+	// FriendSync is whether friend sync is enabled for this connection.
+	FriendSync bool `json:"friend_sync"`
+
+	// ShowActivity is whether activities related to this connection will be shown in presence updates.
+	ShowActivity bool `json:"show_activity"`
+
+	// TwoWayLink is whether this connection has a corresponding third party OAuth2 token.
+	TwoWayLink bool `json:"two_way_link"`
+
+	// Visibility is the visibility of this connection.
+	Visibility ConnectionVisibilityType `json:"visibility"`
+}
+
+// ApplicationRoleConnection represents the role connection object that an application has attached to a user.
+//
+// Reference: https://discord.com/developers/docs/resources/user#application-role-connection-object
+type ApplicationRoleConnection struct {
+	// PlatformName is the vanity name of the platform a bot has connected (max 50 characters).
+	PlatformName *string `json:"platform_name,omitempty"`
+
+	// PlatformUsername is the username on the platform a bot has connected (max 100 characters).
+	PlatformUsername *string `json:"platform_username,omitempty"`
+
+	// Metadata is object mapping application role connection metadata keys to their string-ified values (max 100 characters).
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
