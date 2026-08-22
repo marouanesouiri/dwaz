@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,15 +11,10 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
-	"encoding/json"
-	"strconv"
 	"time"
-
-	"github.com/marouanesouiri/stdx/optional"
-	"github.com/marouanesouiri/stdx/result"
 )
 
 // InviteType represents invite types.
@@ -79,37 +74,37 @@ type Invite struct {
 	Code string `json:"code"`
 
 	// Guild is the guild this invite is for.
-	Guild *PartialGuild `json:"guild"`
+	Guild *PartialGuild `json:"guild,omitempty"`
 
 	// Channel is the channel this invite is for.
-	Channel *PartialChannel `json:"channel"`
+	Channel *PartialChannel `json:"channel,omitempty"`
 
 	// Inviter is the user who created the invite.
-	Inviter *User `json:"inviter"`
+	Inviter *User `json:"inviter,omitempty"`
 
 	// TargetType is the type of target for this voice channel invite.
-	TargetType optional.Option[InviteTargetType] `json:"target_type"`
+	TargetType *InviteTargetType `json:"target_type,omitempty"`
 
 	// TargetUser is the user whose stream to display for this voice channel stream invite.
-	TargetUser *User `json:"target_user"`
+	TargetUser *User `json:"target_user,omitempty"`
 
 	// TargetApplication is the embedded application to open for this voice channel embedded application invite.
-	TargetApplication *PartialApplication `json:"target_application"`
+	TargetApplication *PartialApplication `json:"target_application,omitempty"`
 
 	// ApproximatePresenceCount is the approximate count of online members.
-	ApproximatePresenceCount optional.Option[int] `json:"approximate_presence_count"`
+	ApproximatePresenceCount *int `json:"approximate_presence_count,omitempty"`
 
 	// ApproximateMemberCount is the approximate count of total members.
-	ApproximateMemberCount optional.Option[int] `json:"approximate_member_count"`
+	ApproximateMemberCount *int `json:"approximate_member_count,omitempty"`
 
 	// ExpiresAt is the expiration date of this invite.
-	ExpiresAt optional.Option[time.Time] `json:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
-	// GuildScheduledSvent guild scheduled event data, only included if GuildScheduledEventID contains a valid guild scheduled event id.
-	GuildScheduledSvent *GuildScheduledEvent `json:"guild_scheduled_event"`
+	// GuildScheduledEvent guild scheduled event data, only included if GuildScheduledEventID contains a valid guild scheduled event id.
+	GuildScheduledEvent *GuildScheduledEvent `json:"guild_scheduled_event,omitempty"`
 
 	// Flags is the guild invite flags for guild invites.
-	Flags optional.Option[GuildInviteFlags] `json:"flags"`
+	Flags *GuildInviteFlags `json:"flags,omitempty"`
 }
 
 // InviteMetadata represents extra information about an invite, will extend the invite object.
@@ -135,74 +130,4 @@ type InviteMetadata struct {
 type FullInvite struct {
 	Invite
 	InviteMetadata
-}
-
-// FetchInviteOptions contains parameters for fetching a invite.
-type FetchInviteOptions struct {
-	// WithCounts is whether the invite should contain approximate member counts.
-	WithCounts bool `json:"with_counts"`
-
-	// GuildScheduledEventID is the guild scheduled event to include with the invite.
-	GuildScheduledEventID Snowflake `json:"guild_scheduled_event_id,omitempty"`
-}
-
-// FetchInvite retrieves a invite by its code.
-func (r *requester) FetchInvite(code string, opts FetchInviteOptions) result.Result[Invite] {
-	endpoint := "/invites/" + code + "?with_counts=" + strconv.FormatBool(opts.WithCounts)
-	if opts.GuildScheduledEventID > 0 {
-		endpoint += "&guild_scheduled_event_id=" + opts.GuildScheduledEventID.String()
-	}
-	res := r.DoRequest(Request{
-		Method: "GET",
-		URL:    endpoint,
-	})
-	if res.IsErr() {
-		return result.Err[Invite](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var invite Invite
-	if err := json.NewDecoder(body).Decode(&invite); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "GET",
-			"url":    "/invites/{code}",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[Invite](err)
-	}
-	return result.Ok(invite)
-}
-
-// DeleteInviteOptions contains parameters for deleting invite.
-type DeleteInviteOptions struct {
-	// Reason is the reason shown in the audit log for this action.
-	Reason string `json:"-"`
-}
-
-// DeleteInvite deletes an invite.
-//
-// Requires the PermissionManageChannels permission on the channel this invite belongs to, or PermissionManageGuild to remove any invite across the guild.
-func (r *requester) DeleteInvite(code string, opts DeleteInviteOptions) result.Result[Invite] {
-	res := r.DoRequest(Request{
-		Method: "DELETE",
-		URL:    "/invites/" + code,
-		Reason: opts.Reason,
-	})
-	if res.IsErr() {
-		return result.Err[Invite](res.Err())
-	}
-	body := res.Value()
-	defer body.Close()
-
-	var invite Invite
-	if err := json.NewDecoder(body).Decode(&invite); err != nil {
-		r.logger.WithFields(map[string]any{
-			"method": "DELETE",
-			"url":    "/invites/{code}",
-			"error":  err.Error(),
-		}).Error("failed parsing response")
-		return result.Err[Invite](err)
-	}
-	return result.Ok(invite)
 }
