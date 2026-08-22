@@ -1,0 +1,37 @@
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      - path: (_test|_mock)\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - blank
+        - dot
+      custom-order: true
+      no-inline-comments: true
+      no-prefix-comments: true
+      no-lex-order: true
+    gofmt:
+      rewrite-rules:
+        - pattern: "interface{}"
+          replacement: "any"
+    golines:
+      max-len: 100
+      tab-len: 4
