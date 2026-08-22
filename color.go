@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,7 +11,7 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
 import (
 	"fmt"
@@ -32,6 +32,11 @@ type Color int64
 //	fmt.Println(c.String()) // prints: "#1ABC9C"
 func (c Color) String() string {
 	return fmt.Sprintf("#%06X", int64(c))
+}
+
+// Is returns true if this Color matches the provided one.
+func (c Color) Is(other Color) bool {
+	return c == other
 }
 
 // ParseColor parses a hex color string "#RRGGBB" (or without "#") and returns it as Color.
