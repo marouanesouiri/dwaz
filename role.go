@@ -1,6 +1,6 @@
 /************************************************************************************
  *
- * dwaz (Discord Wrapper API for Zwafriya), A Lightweight Go library for Discord API
+ * wumpkit, A Lightweight Go library for Discord API
  *
  * SPDX-License-Identifier: BSD-3-Clause
  *
@@ -11,9 +11,9 @@
  *
  ************************************************************************************/
 
-package dwaz
+package wumpkit
 
-import "github.com/marouanesouiri/stdx/optional"
+import "fmt"
 
 // RoleFlags represents flags on a Discord guild role.
 //
@@ -78,10 +78,10 @@ type RoleColors struct {
 	PrimaryColor Color `json:"primary_color"`
 
 	// SecondaryColor is the secondary color for the role.
-	SecondaryColor optional.Option[Color] `json:"secondary_color"`
+	SecondaryColor *Color `json:"secondary_color,omitempty"`
 
 	// TertiaryColor is the tertiary color for the role.
-	TertiaryColor optional.Option[Color] `json:"tertiary_color"`
+	TertiaryColor *Color `json:"tertiary_color,omitempty"`
 }
 
 // Role represents a Discord role.
@@ -151,6 +151,8 @@ func (r *Role) Mention() string {
 func (r *Role) String() string {
 	return r.Mention()
 }
+
+var _ fmt.Stringer = (*Role)(nil)
 
 // IconURL returns the URL to the role's icon image in PNG format.
 //
