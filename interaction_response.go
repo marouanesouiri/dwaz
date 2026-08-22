@@ -152,3 +152,16 @@ func (c *Client) UpdateComponentMessage(ctx context.Context, interaction Interac
 	})
 	return err
 }
+
+// RespondAutocomplete responds to an autocomplete interaction with suggested choices.
+func (c *Client) RespondAutocomplete(ctx context.Context, interaction Interaction, choices []ApplicationCommandOptionChoice) error {
+	_, err := c.CreateInteractionResponse(ctx, interaction.GetID(), interaction.GetToken(), CreateInteractionResponseOptions{
+		Response: InteractionResponse{
+			Type: InteractionCallbackTypeApplicationCommandAutocompleteResult,
+			Data: InteractionCallbackDataAutocomplete{
+				Choices: choices,
+			},
+		},
+	})
+	return err
+}

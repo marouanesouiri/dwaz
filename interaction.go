@@ -128,7 +128,13 @@ type ChatInputInteractionCommandOption struct {
 	// expected option type, so you must be sure of the type or check the
 	// Type field before calling. For example, if Type is
 	// ApplicationCommandOptionTypeString, calling String() is safe.
-	Value json.RawMessage `json:"value"`
+	Value json.RawMessage `json:"value,omitempty"`
+
+	// Options is present for subcommands and subcommand groups.
+	Options []ChatInputInteractionCommandOption `json:"options,omitempty"`
+
+	// Focused indicates whether this option is the currently focused option for autocomplete.
+	Focused bool `json:"focused,omitempty"`
 }
 
 // String returns the option's value as a string.
