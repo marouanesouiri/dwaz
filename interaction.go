@@ -89,24 +89,27 @@ type ApplicationCommandInteractionDataFields struct {
 
 // ChatInputCommandResolvedInteractionData represents the resolved data inside
 // Interaction.Data.Resolved for chat input command interactions. This includes
-// users, members, roles, channels, and attachments referenced by the command.
+// users, members, roles, channels, messages, and attachments referenced by the command.
 //
 // Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object-resolved-data-structure
 type ChatInputCommandResolvedInteractionData struct {
 	// Users is a map of user IDs to User objects referenced by the command.
-	Users map[Snowflake]User `json:"users"`
+	Users map[Snowflake]User `json:"users,omitempty"`
 
 	// Members is a map of user IDs to partial Member objects for the guild.
-	Members map[Snowflake]ResolvedMember `json:"members"`
+	Members map[Snowflake]PartialMember `json:"members,omitempty"`
 
 	// Roles is a map of role IDs to Role objects referenced by the command.
-	Roles map[Snowflake]Role `json:"roles"`
+	Roles map[Snowflake]Role `json:"roles,omitempty"`
 
 	// Channels is a map of channel IDs to partial Channel objects referenced by the command.
-	Channels map[Snowflake]ResolvedChannel `json:"channels"`
+	Channels map[Snowflake]ResolvedChannel `json:"channels,omitempty"`
+
+	// Messages is a map of message IDs to partial Message objects referenced by the command.
+	Messages map[Snowflake]Message `json:"messages,omitempty"`
 
 	// Attachments is a map of attachment IDs to Attachment objects referenced by the command.
-	Attachments map[Snowflake]Attachment `json:"attachments"`
+	Attachments map[Snowflake]Attachment `json:"attachments,omitempty"`
 }
 
 // ChatInputInteractionCommandOption represents a single option provided
@@ -211,6 +214,144 @@ type ChatInputCommandInteractionData struct {
 	Options []ChatInputInteractionCommandOption `json:"options"`
 }
 
+// Option returns the command option with the given name.
+// It searches top-level options as well as nested subcommand options.
+func (d *ChatInputCommandInteractionData) Option(name string) *ChatInputInteractionCommandOption {
+	return findChatInputInteractionCommandOption(d.Options, name)
+}
+
+// SubcommandGroup returns the name of the active subcommand group if present.
+func (d *ChatInputCommandInteractionData) SubcommandGroup() (string, bool) {
+	for _, opt := range d.Options {
+		if opt.Type == ApplicationCommandOptionTypeSubCommandGroup {
+			return opt.Name, true
+		}
+	}
+	return "", false
+}
+
+// Subcommand returns the name of the active subcommand if present.
+func (d *ChatInputCommandInteractionData) Subcommand() (string, bool) {
+	for _, opt := range d.Options {
+		if opt.Type == ApplicationCommandOptionTypeSubCommand {
+			return opt.Name, true
+		}
+		if opt.Type == ApplicationCommandOptionTypeSubCommandGroup {
+			for _, subOpt := range opt.Options {
+				if subOpt.Type == ApplicationCommandOptionTypeSubCommand {
+					return subOpt.Name, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+func findChatInputInteractionCommandOption(options []ChatInputInteractionCommandOption, name string) *ChatInputInteractionCommandOption {
+	for i := range options {
+		if options[i].Name == name {
+			return &options[i]
+		}
+		if len(options[i].Options) > 0 {
+			if opt := findChatInputInteractionCommandOption(options[i].Options, name); opt != nil {
+				return opt
+			}
+		}
+	}
+	return nil
+}
+
+// User returns the resolved User for the option with the given name.
+func (d *ChatInputCommandInteractionData) User(optionName string) (User, bool) {
+	opt := d.Option(optionName)
+	if opt == nil {
+		return User{}, false
+	}
+	id := opt.Snowflake()
+	u, ok := d.Resolved.Users[id]
+	return u, ok
+}
+
+// Member returns the resolved PartialMember for the option with the given name.
+func (d *ChatInputCommandInteractionData) Member(optionName string) (PartialMember, bool) {
+	opt := d.Option(optionName)
+	if opt == nil {
+		return PartialMember{}, false
+	}
+	id := opt.Snowflake()
+	m, ok := d.Resolved.Members[id]
+	return m, ok
+}
+
+// Role returns the resolved Role for the option with the given name.
+func (d *ChatInputCommandInteractionData) Role(optionName string) (Role, bool) {
+	opt := d.Option(optionName)
+	if opt == nil {
+		return Role{}, false
+	}
+	id := opt.Snowflake()
+	r, ok := d.Resolved.Roles[id]
+	return r, ok
+}
+
+// Channel returns the resolved Channel for the option with the given name.
+func (d *ChatInputCommandInteractionData) Channel(optionName string) (ResolvedChannel, bool) {
+	opt := d.Option(optionName)
+	if opt == nil {
+		return ResolvedChannel{}, false
+	}
+	id := opt.Snowflake()
+	ch, ok := d.Resolved.Channels[id]
+	return ch, ok
+}
+
+// Attachment returns the resolved Attachment for the option with the given name.
+func (d *ChatInputCommandInteractionData) Attachment(optionName string) (Attachment, bool) {
+	opt := d.Option(optionName)
+	if opt == nil {
+		return Attachment{}, false
+	}
+	id := opt.Snowflake()
+	att, ok := d.Resolved.Attachments[id]
+	return att, ok
+}
+
+// String returns the string value for the option with the given name.
+func (d *ChatInputCommandInteractionData) String(optionName string) (string, bool) {
+	opt := d.Option(optionName)
+	if opt == nil || opt.Type != ApplicationCommandOptionTypeString {
+		return "", false
+	}
+	return opt.String(), true
+}
+
+// Int returns the int value for the option with the given name.
+func (d *ChatInputCommandInteractionData) Int(optionName string) (int, bool) {
+	opt := d.Option(optionName)
+	if opt == nil || opt.Type != ApplicationCommandOptionTypeInteger {
+		return 0, false
+	}
+	return opt.Int(), true
+}
+
+// Float returns the float64 value for the option with the given name.
+func (d *ChatInputCommandInteractionData) Float(optionName string) (float64, bool) {
+	opt := d.Option(optionName)
+	if opt == nil || opt.Type != ApplicationCommandOptionTypeFloat {
+		return 0, false
+	}
+	return opt.Float(), true
+}
+
+// Bool returns the boolean value for the option with the given name.
+func (d *ChatInputCommandInteractionData) Bool(optionName string) (bool, bool) {
+	opt := d.Option(optionName)
+	if opt == nil || opt.Type != ApplicationCommandOptionTypeBool {
+		return false, false
+	}
+	return opt.Bool(), true
+}
+
 // MessageCommandInteractionDataResolved represents the resolved data for a
 // message command interaction.
 //
@@ -218,7 +359,13 @@ type ChatInputCommandInteractionData struct {
 type MessageCommandInteractionDataResolved struct {
 	// Messages is a map of message IDs to partial Message objects
 	// referenced by the command.
-	Messages map[Snowflake]Message `json:"messages"`
+	Messages map[Snowflake]Message `json:"messages,omitempty"`
+
+	// Users is a map of user IDs to User objects referenced by the command.
+	Users map[Snowflake]User `json:"users,omitempty"`
+
+	// Members is a map of user IDs to partial Member objects for the guild.
+	Members map[Snowflake]PartialMember `json:"members,omitempty"`
 }
 
 // MessageCommandInteractionData represents the data for a message command interaction.
@@ -237,10 +384,10 @@ type MessageCommandInteractionData struct {
 // Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object-application-command-data-structure
 type UserCommandInteractionDataResolved struct {
 	// Users is a map of user IDs to User objects referenced by the command.
-	Users map[Snowflake]User `json:"users"`
+	Users map[Snowflake]User `json:"users,omitempty"`
 
 	// Members is a map of user IDs to partial Member objects for the guild.
-	Members map[Snowflake]ResolvedMember `json:"members"`
+	Members map[Snowflake]PartialMember `json:"members,omitempty"`
 }
 
 // UserCommandInteractionData represents the data for a user command interaction.
@@ -269,6 +416,9 @@ type InteractionFields struct {
 
 	// Token is a token used to respond to the interaction.
 	Token string `json:"token"`
+
+	// Version is the read-only version property, always 1.
+	Version int `json:"version"`
 }
 
 func (i *InteractionFields) GetID() Snowflake {
@@ -287,51 +437,64 @@ func (i *InteractionFields) GetToken() string {
 	return i.Token
 }
 
-// ApplicationCommandInteractionFields holds fields common to all application command interactions.
+// ApplicationCommandInteractionFields holds fields common to all application command interactions
+// (chat input slash commands, user commands, message commands, and autocomplete).
 //
-// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object
 type ApplicationCommandInteractionFields struct {
 	InteractionFields
+
+	// GuildID is the ID of the guild the interaction happened in.
+	//
+	// Optional:
+	//   - Will be 0 if the interaction occurred in a DM.
+	GuildID Snowflake `json:"guild_id,omitempty"`
 
 	// Guild is the guild the interaction happened in.
 	//
 	// Optional:
 	//   - Will be nil if the interaction occurred in a DM.
-	Guild *PartialGuild `json:"guild"`
+	Guild *PartialGuild `json:"guild,omitempty"`
+
+	// ChannelID is the ID of the channel the interaction happened in.
+	ChannelID Snowflake `json:"channel_id,omitempty"`
 
 	// Channel is the channel the interaction happened in.
-	Channel ResolvedMessageChannel `json:"channel"`
-
-	// Locale is the selected language of the invoking user.
-	Locale Locale `json:"locale"`
+	Channel ResolvedChannel `json:"channel,omitzero"`
 
 	// Member is the guild member data for the invoking user.
 	//
 	// Optional:
 	//   - Present when the interaction is invoked in a guild.
-	Member *ResolvedMember `json:"member"`
+	Member *InteractionMember `json:"member,omitempty"`
 
 	// User is the user object for the invoking user, if invoked in a DM.
 	//
 	// Optional:
 	//   - Present only when the interaction is invoked in a DM.
-	User *User `json:"user"`
+	User *User `json:"user,omitempty"`
+
+	// Locale is the selected language of the invoking user.
+	Locale Locale `json:"locale,omitempty"`
+
+	// GuildLocale is the guild's preferred locale, if invoked in a guild.
+	GuildLocale Locale `json:"guild_locale,omitempty"`
 
 	// AppPermissions is a bitwise set of permissions the app has in the source location of the interaction.
-	AppPermissions Permissions `json:"app_permissions"`
+	AppPermissions Permissions `json:"app_permissions,omitempty"`
 
 	// Entitlements is a list of entitlements for the invoking user.
-	Entitlements []Entitlement `json:"entitlement"`
+	Entitlements []Entitlement `json:"entitlements,omitempty"`
 
 	// AuthorizingIntegrationOwners maps installation contexts that the interaction was authorized for
 	// to related user or guild IDs.
-	AuthorizingIntegrationOwners map[ApplicationIntegrationType]Snowflake `json:"authorizing_integration_owners"`
+	AuthorizingIntegrationOwners map[ApplicationIntegrationType]Snowflake `json:"authorizing_integration_owners,omitempty"`
 
 	// Context indicates where the interaction was triggered from.
-	Context InteractionContextType `json:"context"`
+	Context InteractionContextType `json:"context,omitempty"`
 
 	// AttachmentSizeLimit is the maximum size of attachments in bytes for this interaction.
-	AttachmentSizeLimit int `json:"attachment_size_limit"`
+	AttachmentSizeLimit int `json:"attachment_size_limit,omitempty"`
 }
 
 // Author returns the user who triggered the interaction.
@@ -381,18 +544,32 @@ type MessageCommandInteraction struct {
 	Data MessageCommandInteractionData `json:"data"`
 }
 
+// ComponentInteractionFields holds fields common to message component interactions.
+//
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object
+type ComponentInteractionFields struct {
+	ApplicationCommandInteractionFields
+
+	// Message is the message the component was attached to.
+	Message Message `json:"message"`
+}
+
 // ComponentInteractionData represents the data payload for message component interactions (buttons, select menus).
 type ComponentInteractionData struct {
-	CustomID      string        `json:"custom_id"`
-	ComponentType ComponentType `json:"component_type"`
-	Values        []string      `json:"values,omitempty"`
+	CustomID      string                                  `json:"custom_id"`
+	ComponentType ComponentType                           `json:"component_type"`
+	Values        []string                                `json:"values,omitempty"`
+	Resolved      ChatInputCommandResolvedInteractionData `json:"resolved,omitzero"`
 }
 
 // ComponentInteraction represents an interaction triggered by a message component (button, select menu).
+//
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object
 type ComponentInteraction struct {
-	ApplicationCommandInteractionFields
-	Data    ComponentInteractionData `json:"data"`
-	Message Message                  `json:"message"`
+	ComponentInteractionFields
+
+	// Data contains the component interaction payload (custom_id, component_type, values, resolved).
+	Data ComponentInteractionData `json:"data"`
 }
 
 // AutoCompleteInteractionData represents the data payload for autocomplete interactions.
@@ -409,14 +586,18 @@ type AutoCompleteInteraction struct {
 
 // ModalSubmitInteractionData represents the data payload for modal submit interactions.
 type ModalSubmitInteractionData struct {
-	CustomID   string      `json:"custom_id"`
-	Components []Component `json:"components"`
+	CustomID   string                                  `json:"custom_id"`
+	Components []Component                             `json:"components"`
+	Resolved   ChatInputCommandResolvedInteractionData `json:"resolved,omitzero"`
 }
 
 // ModalSubmitInteraction represents an interaction triggered by a modal submission.
+//
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object
 type ModalSubmitInteraction struct {
 	ApplicationCommandInteractionFields
-	Data ModalSubmitInteractionData `json:"data"`
+	Data    ModalSubmitInteractionData `json:"data"`
+	Message *Message                   `json:"message,omitempty"`
 }
 
 // Interaction is the interface representing a Discord interaction.
@@ -488,7 +669,7 @@ func UnmarshalInteraction(buf []byte) (Interaction, error) {
 		return &i, json.Unmarshal(buf, &i)
 	case InteractionTypeApplicationCommand:
 		switch meta.Data.Type {
-		case ApplicationCommandTypeChatInput:
+		case 0, ApplicationCommandTypeChatInput:
 			var i ChatInputCommandInteraction
 			return &i, json.Unmarshal(buf, &i)
 		case ApplicationCommandTypeUser:
@@ -498,7 +679,7 @@ func UnmarshalInteraction(buf []byte) (Interaction, error) {
 			var i MessageCommandInteraction
 			return &i, json.Unmarshal(buf, &i)
 		default:
-			return nil, errors.New("unknown application interacton type")
+			return nil, errors.New("unknown application command interaction type")
 		}
 	case InteractionTypeComponent:
 		var i ComponentInteraction

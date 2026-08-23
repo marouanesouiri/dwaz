@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,7 @@ func TestInteractionResponse_Helpers(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 1. RespondMessage
+	// 1. respondMessage
 	err := client.RespondMessage(ctx, interaction, "Hello World", RespondMessageOptions{
 		Ephemeral: true,
 	})
@@ -69,22 +70,22 @@ func TestInteractionResponse_Helpers(t *testing.T) {
 	assert.Equal(t, "Hello World", data["content"])
 	assert.Equal(t, float64(MessageFlagEphemeral), data["flags"])
 
-	// 2. DeferResponse
+	// 2. deferResponse
 	err = client.DeferResponse(ctx, interaction, false)
 	require.NoError(t, err)
 	assert.Equal(t, float64(5), receivedBody["type"])
 
-	// 3. DeferComponentUpdate
+	// 3. deferComponentUpdate
 	err = client.DeferComponentUpdate(ctx, interaction)
 	require.NoError(t, err)
 	assert.Equal(t, float64(6), receivedBody["type"])
 }
 
 func TestInteraction_Author(t *testing.T) {
-	// 1. Guild interaction (Member populated)
+	// 1. guild interaction (Member populated)
 	guildInteraction := &ChatInputCommandInteraction{
 		ApplicationCommandInteractionFields: ApplicationCommandInteractionFields{
-			Member: &ResolvedMember{
+			Member: &InteractionMember{
 				FullMember: FullMember{
 					Member: Member{
 						ID:       123456789,
@@ -136,7 +137,254 @@ func TestInteraction_Author(t *testing.T) {
 	assert.False(t, dmAuthor.Bot)
 	assert.Equal(t, "<@555666777>", dmAuthor.Mention())
 
-	// 3. Empty interaction (Neither populated)
+	// 3. empty interaction (Neither populated)
 	emptyInteraction := &ChatInputCommandInteraction{}
 	assert.Nil(t, emptyInteraction.Author())
+}
+
+func TestChatInputCommandInteractionData_Accessors(t *testing.T) {
+	data := ChatInputCommandInteractionData{
+		Options: []ChatInputInteractionCommandOption{
+			{
+				Name:  "target",
+				Type:  ApplicationCommandOptionTypeUser,
+				Value: []byte(`"111222"`),
+			},
+			{
+				Name:  "role",
+				Type:  ApplicationCommandOptionTypeRole,
+				Value: []byte(`"333444"`),
+			},
+			{
+				Name:  "channel",
+				Type:  ApplicationCommandOptionTypeChannel,
+				Value: []byte(`"555666"`),
+			},
+			{
+				Name:  "doc",
+				Type:  ApplicationCommandOptionTypeAttachment,
+				Value: []byte(`"777888"`),
+			},
+			{
+				Name:  "title",
+				Type:  ApplicationCommandOptionTypeString,
+				Value: []byte(`"MyTitle"`),
+			},
+			{
+				Name:  "count",
+				Type:  ApplicationCommandOptionTypeInteger,
+				Value: []byte(`42`),
+			},
+			{
+				Name:  "rating",
+				Type:  ApplicationCommandOptionTypeFloat,
+				Value: []byte(`4.5`),
+			},
+			{
+				Name:  "active",
+				Type:  ApplicationCommandOptionTypeBool,
+				Value: []byte(`true`),
+			},
+		},
+		Resolved: ChatInputCommandResolvedInteractionData{
+			Users: map[Snowflake]User{
+				111222: {ID: 111222, Username: "Alice"},
+			},
+			Members: map[Snowflake]PartialMember{
+				111222: {Nickname: "Ali"},
+			},
+			Roles: map[Snowflake]Role{
+				333444: {ID: 333444, Name: "Admin"},
+			},
+			Channels: map[Snowflake]ResolvedChannel{
+				555666: {
+					ChannelFields: ChannelFields{ID: 555666, Type: ChannelTypeGuildText},
+					Name:          "general",
+				},
+			},
+			Attachments: map[Snowflake]Attachment{
+				777888: {ID: 777888, Filename: "test.pdf"},
+			},
+		},
+	}
+
+	u, ok := data.User("target")
+	require.True(t, ok)
+	assert.Equal(t, "Alice", u.Username)
+
+	m, ok := data.Member("target")
+	require.True(t, ok)
+	assert.Equal(t, "Ali", m.Nickname)
+
+	r, ok := data.Role("role")
+	require.True(t, ok)
+	assert.Equal(t, "Admin", r.Name)
+
+	ch, ok := data.Channel("channel")
+	require.True(t, ok)
+	assert.Equal(t, "general", ch.Name)
+
+	att, ok := data.Attachment("doc")
+	require.True(t, ok)
+	assert.Equal(t, "test.pdf", att.Filename)
+
+	str, ok := data.String("title")
+	require.True(t, ok)
+	assert.Equal(t, "MyTitle", str)
+
+	cnt, ok := data.Int("count")
+	require.True(t, ok)
+	assert.Equal(t, 42, cnt)
+
+	rating, ok := data.Float("rating")
+	require.True(t, ok)
+	assert.Equal(t, 4.5, rating)
+
+	b, ok := data.Bool("active")
+	require.True(t, ok)
+	assert.True(t, b)
+
+	// non-existent option
+	_, ok = data.User("unknown")
+	assert.False(t, ok)
+}
+
+func TestChatInputCommandInteractionData_Subcommands(t *testing.T) {
+	// 1. direct subcommand: /tag get name:foo
+	directSub := ChatInputCommandInteractionData{
+		Options: []ChatInputInteractionCommandOption{
+			{
+				Name: "get",
+				Type: ApplicationCommandOptionTypeSubCommand,
+				Options: []ChatInputInteractionCommandOption{
+					{
+						Name:  "name",
+						Type:  ApplicationCommandOptionTypeString,
+						Value: []byte(`"foo"`),
+					},
+				},
+			},
+		},
+	}
+	sub, ok := directSub.Subcommand()
+	assert.True(t, ok)
+	assert.Equal(t, "get", sub)
+	group, ok := directSub.SubcommandGroup()
+	assert.False(t, ok)
+	assert.Empty(t, group)
+
+	// 2. nested subcommand group: /settings logs set channel:#general
+	groupSub := ChatInputCommandInteractionData{
+		Options: []ChatInputInteractionCommandOption{
+			{
+				Name: "logs",
+				Type: ApplicationCommandOptionTypeSubCommandGroup,
+				Options: []ChatInputInteractionCommandOption{
+					{
+						Name: "set",
+						Type: ApplicationCommandOptionTypeSubCommand,
+						Options: []ChatInputInteractionCommandOption{
+							{
+								Name:  "channel",
+								Type:  ApplicationCommandOptionTypeChannel,
+								Value: []byte(`"123"`),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	sub, ok = groupSub.Subcommand()
+	assert.True(t, ok)
+	assert.Equal(t, "set", sub)
+	group, ok = groupSub.SubcommandGroup()
+	assert.True(t, ok)
+	assert.Equal(t, "logs", group)
+
+	// 3. no subcommands (top-level command): /ping
+	topLevel := ChatInputCommandInteractionData{
+		Options: []ChatInputInteractionCommandOption{
+			{
+				Name:  "verbose",
+				Type:  ApplicationCommandOptionTypeBool,
+				Value: []byte(`true`),
+			},
+		},
+	}
+	sub, ok = topLevel.Subcommand()
+	assert.False(t, ok)
+	assert.Empty(t, sub)
+	group, ok = topLevel.SubcommandGroup()
+	assert.False(t, ok)
+	assert.Empty(t, group)
+}
+
+func TestPartialMember_Helpers(t *testing.T) {
+	future := time.Now().Add(10 * time.Minute)
+	past := time.Now().Add(-10 * time.Minute)
+	boostTime := time.Now().Add(-24 * time.Hour)
+
+	pm := PartialMember{
+		Nickname:                   "CoolNick",
+		Avatar:                     "avatarhash",
+		Banner:                     "bannerhash",
+		RoleIDs:                    []Snowflake{100, 200, 300},
+		PremiumSince:               &boostTime,
+		Permissions:                PermissionAdministrator | PermissionManageMessages,
+		CommunicationDisabledUntil: &future,
+		AvatarDecorationData: &AvatarDecorationData{
+			Asset: "decohash",
+		},
+	}
+
+	assert.Equal(t, "CoolNick", pm.DisplayName())
+	assert.True(t, pm.HasRole(200))
+	assert.False(t, pm.HasRole(999))
+	assert.True(t, pm.IsBoosting())
+	assert.True(t, pm.IsTimedOut())
+	assert.True(t, pm.HasPermission(PermissionAdministrator))
+	assert.True(t, pm.HasPermission(PermissionManageMessages))
+	// administrator implicitly grants all permissions
+	assert.True(t, pm.HasPermission(PermissionBanMembers))
+
+	// without Administrator:
+	pmNormal := PartialMember{Permissions: PermissionManageMessages}
+	assert.True(t, pmNormal.HasPermission(PermissionManageMessages))
+	assert.False(t, pmNormal.HasPermission(PermissionBanMembers))
+
+	assert.Contains(t, pm.AvatarURL(1, 2), "avatarhash")
+	assert.Contains(t, pm.BannerURL(1, 2), "bannerhash")
+	assert.Contains(t, pm.AvatarDecorationURL(), "decohash")
+
+	// expired timeout
+	pmPast := PartialMember{CommunicationDisabledUntil: &past}
+	assert.False(t, pmPast.IsTimedOut())
+}
+
+func TestMember_Helpers(t *testing.T) {
+	future := time.Now().Add(10 * time.Minute)
+	boostTime := time.Now().Add(-24 * time.Hour)
+
+	m := Member{
+		ID:                         2,
+		GuildID:                    1,
+		Nickname:                   "Nick",
+		Avatar:                     "avhash",
+		Banner:                     "banhash",
+		RoleIDs:                    []Snowflake{100, 200},
+		PremiumSince:               &boostTime,
+		CommunicationDisabledUntil: &future,
+		AvatarDecorationData: &AvatarDecorationData{
+			Asset: "decohash",
+		},
+	}
+
+	assert.True(t, m.HasRole(100))
+	assert.False(t, m.HasRole(300))
+	assert.True(t, m.IsBoosting())
+	assert.True(t, m.IsTimedOut())
+	assert.Contains(t, m.AvatarURL(), "avhash")
+	assert.Contains(t, m.BannerURL(), "banhash")
+	assert.Contains(t, m.AvatarDecorationURL(), "decohash")
 }
