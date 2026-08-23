@@ -1220,61 +1220,63 @@ func UnmarshalChannel(buf []byte) (Channel, error) {
 	}
 }
 
+// ResolvedChannel represents a partial channel object returned in interaction resolved data
+// (data.resolved.channels) and interaction root channel payload.
+//
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object-resolved-data-structure
 type ResolvedChannel struct {
-	Channel
+	ChannelFields
+
+	// Name is the name of the channel.
+	Name string `json:"name"`
+
+	// Permissions contains the computed permissions for the invoking user in this channel.
 	Permissions Permissions `json:"permissions"`
+
+	// AppPermissions contains the permissions the app has in this channel.
+	AppPermissions Permissions `json:"app_permissions,omitempty"`
+
+	// LastMessageID is the ID of the last message sent in this channel.
+	LastMessageID Snowflake `json:"last_message_id,omitempty"`
+
+	// LastPinTimestamp is when the last pinned message was pinned.
+	LastPinTimestamp *time.Time `json:"last_pin_timestamp,omitzero"`
+
+	// NSFW indicates whether the channel is marked as NSFW.
+	NSFW bool `json:"nsfw,omitempty"`
+
+	// ParentID is the ID of the parent category or parent text channel (for threads).
+	ParentID Snowflake `json:"parent_id,omitempty"`
+
+	// GuildID is the ID of the guild the channel belongs to.
+	GuildID Snowflake `json:"guild_id,omitempty"`
+
+	// Flags contains channel flags.
+	Flags ChannelFlags `json:"flags,omitempty"`
+
+	// RateLimitPerUser is the amount of seconds a user has to wait before sending another message.
+	RateLimitPerUser int `json:"rate_limit_per_user,omitempty"`
+
+	// Topic is the channel topic.
+	Topic string `json:"topic,omitempty"`
+
+	// Position is the explicit position of the channel in the channel list.
+	Position int `json:"position,omitempty"`
+
+	// ThreadMetadata contains thread-specific metadata if this channel is a thread.
+	ThreadMetadata *ThreadMetaData `json:"thread_metadata,omitempty"`
 }
 
-var _ json.Unmarshaler = (*ResolvedChannel)(nil)
-
-// UnmarshalJSON implements json.Unmarshaler for ResolvedChannel.
-func (c *ResolvedChannel) UnmarshalJSON(buf []byte) error {
-	var t struct {
-		Permissions Permissions `json:"permissions"`
-	}
-	if err := json.Unmarshal(buf, &t); err != nil {
-		return err
-	}
-	c.Permissions = t.Permissions
-
-	channel, err := UnmarshalChannel(buf)
-	if err != nil {
-		return err
-	}
-	c.Channel = channel
-
-	return nil
+func (c *ResolvedChannel) GetName() string {
+	return c.Name
 }
 
-type ResolvedMessageChannel struct {
-	MessageChannel
-	Permissions Permissions `json:"permissions"`
+func (c *ResolvedChannel) MarshalJSON() ([]byte, error) {
+	type alias ResolvedChannel
+	return json.Marshal((*alias)(c))
 }
 
-var _ json.Unmarshaler = (*ResolvedMessageChannel)(nil)
-
-// UnmarshalJSON implements json.Unmarshaler for ResolvedMessageChannel.
-func (c *ResolvedMessageChannel) UnmarshalJSON(buf []byte) error {
-	var t struct {
-		Permissions Permissions `json:"permissions"`
-	}
-	if err := json.Unmarshal(buf, &t); err != nil {
-		return err
-	}
-	c.Permissions = t.Permissions
-
-	channel, err := UnmarshalChannel(buf)
-	if err != nil {
-		return err
-	}
-	if messageCh, ok := channel.(MessageChannel); ok {
-		c.MessageChannel = messageCh
-	} else {
-		return errors.New("cannot unmarshal non-MessageChannel into ResolvedMessageChannel")
-	}
-
-	return nil
-}
+var _ Channel = (*ResolvedChannel)(nil)
 
 type ResolvedThread struct {
 	ThreadChannel

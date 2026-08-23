@@ -177,14 +177,17 @@ func (m *Member) AvatarURLWith(format ImageFormat, size ImageSize) string {
 // BannerURL returns the URL to the member's banner image.
 //
 // If the member has a custom banner set, it returns the URL to that banner, otherwise empty string.
+// BannerURL returns the URL to the member's banner image.
+//
+// If the member has a custom banner set, it returns the URL to that banner, otherwise empty string.
 // By default, it uses GIF format if the banner is animated, otherwise PNG.
 //
 // Example usage:
 //
 //	url := member.BannerURL()
 func (m *Member) BannerURL() string {
-	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+	if m.Banner != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Banner, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
@@ -192,14 +195,14 @@ func (m *Member) BannerURL() string {
 // BannerURLWith returns the URL to the member's banner image,
 // allowing explicit specification of image format and size.
 //
-// If the user has a custom banner set, it returns the URL to that avatar, otherwise empty string.
+// If the user has a custom banner set, it returns the URL to that banner, otherwise empty string.
 //
 // Example usage:
 //
 //	url := member.BannerURLWith(ImageFormatWebP, ImageSize512)
 func (m *Member) BannerURLWith(format ImageFormat, size ImageSize) string {
-	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
+	if m.Banner != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Banner, format, size)
 	}
 	return ""
 }
@@ -213,7 +216,7 @@ func (m *Member) BannerURLWith(format ImageFormat, size ImageSize) string {
 //	url := member.AvatarDecorationURL()
 func (m *Member) AvatarDecorationURL() string {
 	if m.AvatarDecorationData != nil {
-		AvatarDecorationURL(m.AvatarDecorationData.Asset, ImageSizeDefault)
+		return AvatarDecorationURL(m.AvatarDecorationData.Asset, ImageSizeDefault)
 	}
 	return ""
 }
@@ -228,9 +231,29 @@ func (m *Member) AvatarDecorationURL() string {
 //	url := member.AvatarDecorationURLWith(ImageSize512)
 func (m *Member) AvatarDecorationURLWith(size ImageSize) string {
 	if m.AvatarDecorationData != nil {
-		AvatarDecorationURL(m.AvatarDecorationData.Asset, size)
+		return AvatarDecorationURL(m.AvatarDecorationData.Asset, size)
 	}
 	return ""
+}
+
+// HasRole returns true if the member has the specified role.
+func (m *Member) HasRole(roleID Snowflake) bool {
+	for _, id := range m.RoleIDs {
+		if id == roleID {
+			return true
+		}
+	}
+	return false
+}
+
+// IsTimedOut returns true if the member is currently timed out.
+func (m *Member) IsTimedOut() bool {
+	return m.CommunicationDisabledUntil != nil && m.CommunicationDisabledUntil.After(time.Now())
+}
+
+// IsBoosting returns true if the member is currently server boosting.
+func (m *Member) IsBoosting() bool {
+	return m.PremiumSince != nil
 }
 
 // FullMember represents a complete guild member with their associated user information.
@@ -304,8 +327,8 @@ func (m *FullMember) AvatarURLWith(format ImageFormat, size ImageSize) string {
 //
 //	url := member.BannerURL()
 func (m *FullMember) BannerURL() string {
-	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+	if m.Banner != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Banner, ImageFormatDefault, ImageSizeDefault)
 	}
 	return m.User.BannerURL()
 }
@@ -320,134 +343,146 @@ func (m *FullMember) BannerURL() string {
 //
 //	url := member.BannerURLWith(ImageFormatWebP, ImageSize512)
 func (m *FullMember) BannerURLWith(format ImageFormat, size ImageSize) string {
-	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
+	if m.Banner != "" {
+		return GuildMemberBannerURL(m.GuildID, m.ID, m.Banner, format, size)
 	}
 	return m.User.BannerURLWith(format, size)
 }
 
-// ResolvedMember represents a member with their computed permissions.
+// InteractionMember represents the invoking guild member sent at the root of an interaction.
+// It contains full member details, the nested User object, and channel permissions.
 //
-// This is typically used in interaction contexts where you need to know
-// what permissions the member has in the channel where the interaction occurred.
-type ResolvedMember struct {
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object
+type InteractionMember struct {
 	FullMember
 
-	// Permissions contains all permissions the member has in a specific channel,
-	// including role permissions and permission overwrites.
+	// Permissions contains all permissions the member has in the channel where the interaction occurred.
 	Permissions Permissions `json:"permissions,omitempty"`
 }
 
+// PartialMember represents a partial member object in interaction resolved data (data.resolved.members).
+//
+// Discord explicitly omits user, deaf, and mute fields from resolved.members.
+// The corresponding user object is provided separately in resolved.users.
+//
+// Reference: https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object-resolved-data-structure
 type PartialMember struct {
-	// ID is the user's unique Discord ID.
-	ID Snowflake `json:"id"`
-
-	// GuildID is the ID of the guild this member belongs to.
-	GuildID Snowflake `json:"guild_id"`
-
 	// Nickname is the member's guild-specific nickname.
 	// Empty if no nickname is set.
 	Nickname string `json:"nick"`
 
 	// Avatar is the member's guild-specific avatar hash.
-	// This is different from the user's global avatar.
 	// Empty if the member hasn't set a guild avatar.
 	Avatar string `json:"avatar"`
 
 	// Banner is the member's guild-specific banner hash.
-	// This is different from the user's global banner.
 	// Empty if the member hasn't set a guild banner.
 	Banner string `json:"banner"`
 
 	// RoleIDs contains the IDs of all roles assigned to this member.
 	RoleIDs []Snowflake `json:"roles,omitempty"`
+
+	// JoinedAt is the timestamp when the user joined the guild.
+	// May be nil if the member was invited as a guest.
+	JoinedAt *time.Time `json:"joined_at,omitzero"`
+
+	// PremiumSince is the timestamp when the user started boosting the guild.
+	// Nil if the member is not currently boosting.
+	PremiumSince *time.Time `json:"premium_since,omitzero"`
+
+	// Permissions contains all permissions the member has in the channel where the interaction occurred.
+	Permissions Permissions `json:"permissions,omitempty"`
+
+	// Flags contains the member's guild-specific flags.
+	Flags MemberFlags `json:"flags"`
+
+	// Pending indicates whether the user has completed the guild's Membership Screening.
+	Pending bool `json:"pending"`
+
+	// CommunicationDisabledUntil is when the member's timeout expires.
+	// Nil or a past time if the member is not currently timed out.
+	CommunicationDisabledUntil *time.Time `json:"communication_disabled_until,omitzero"`
+
+	// AvatarDecorationData contains information about the member's avatar decoration.
+	AvatarDecorationData *AvatarDecorationData `json:"avatar_decoration_data"`
 }
 
-// Mention returns a Discord mention string for the user.
-//
-// Example output: "<@123456789012345678>"
-func (m *PartialMember) Mention() string {
-	return "<@" + m.ID.String() + ">"
+// DisplayName returns the member's nickname if set, or empty string.
+func (m *PartialMember) DisplayName() string {
+	return m.Nickname
 }
 
-// String implements the fmt.Stringer interface.
-func (m *PartialMember) String() string {
-	return m.Mention()
+// HasRole returns true if the member has the specified role ID.
+func (m *PartialMember) HasRole(roleID Snowflake) bool {
+	for _, id := range m.RoleIDs {
+		if id == roleID {
+			return true
+		}
+	}
+	return false
 }
 
-// CreatedAt returns the time when this member account is created.
-func (m *PartialMember) CreatedAt() time.Time {
-	return m.ID.Timestamp()
+// IsTimedOut returns true if the member is currently timed out.
+func (m *PartialMember) IsTimedOut() bool {
+	return m.CommunicationDisabledUntil != nil && m.CommunicationDisabledUntil.After(time.Now())
 }
 
-// AvatarURL returns the URL to the members's avatar image.
-//
-// If the member has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
-// By default, it uses GIF format if the avatar is animated, otherwise PNG.
-//
-// Example usage:
-//
-//	url := member.AvatarURL()
-func (m *PartialMember) AvatarURL() string {
+// IsBoosting returns true if the member is currently server boosting.
+func (m *PartialMember) IsBoosting() bool {
+	return m.PremiumSince != nil
+}
+
+// HasPermission returns true if the member has the specified permission in the interaction channel.
+func (m *PartialMember) HasPermission(perm Permissions) bool {
+	return m.Permissions.Has(perm)
+}
+
+// AvatarURL returns the URL to the member's guild avatar image for the given guild and user.
+func (m *PartialMember) AvatarURL(guildID, userID Snowflake) string {
 	if m.Avatar != "" {
-		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+		return GuildMemberAvatarURL(guildID, userID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
 
-// AvatarURLWith returns the URL to the member's avatar image,
-// allowing explicit specification of image format and size.
-//
-// If the user has a custom avatar set, it returns the URL to that avatar, otherwise empty string.
-//
-// Example usage:
-//
-//	url := member.AvatarURLWith(ImageFormatWebP, ImageSize512)
-func (m *PartialMember) AvatarURLWith(format ImageFormat, size ImageSize) string {
+// AvatarURLWith returns the URL to the member's guild avatar image with custom format and size.
+func (m *PartialMember) AvatarURLWith(guildID, userID Snowflake, format ImageFormat, size ImageSize) string {
 	if m.Avatar != "" {
-		return GuildMemberAvatarURL(m.GuildID, m.ID, m.Avatar, format, size)
+		return GuildMemberAvatarURL(guildID, userID, m.Avatar, format, size)
 	}
 	return ""
 }
 
-// BannerURL returns the URL to the member's banner image.
-//
-// If the member has a custom banner set, it returns the URL to that banner, otherwise empty string.
-// By default, it uses GIF format if the banner is animated, otherwise PNG.
-//
-// Example usage:
-//
-//	url := member.BannerURL()
-func (m *PartialMember) BannerURL() string {
-	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, ImageFormatDefault, ImageSizeDefault)
+// BannerURL returns the URL to the member's guild banner image for the given guild and user.
+func (m *PartialMember) BannerURL(guildID, userID Snowflake) string {
+	if m.Banner != "" {
+		return GuildMemberBannerURL(guildID, userID, m.Banner, ImageFormatDefault, ImageSizeDefault)
 	}
 	return ""
 }
 
-// BannerURLWith returns the URL to the member's banner image,
-// allowing explicit specification of image format and size.
-//
-// If the user has a custom banner set, it returns the URL to that avatar, otherwise empty string.
-//
-// Example usage:
-//
-//	url := member.BannerURLWith(ImageFormatWebP, ImageSize512)
-func (m *PartialMember) BannerURLWith(format ImageFormat, size ImageSize) string {
-	if m.Avatar != "" {
-		return GuildMemberBannerURL(m.GuildID, m.ID, m.Avatar, format, size)
+// BannerURLWith returns the URL to the member's guild banner image with custom format and size.
+func (m *PartialMember) BannerURLWith(guildID, userID Snowflake, format ImageFormat, size ImageSize) string {
+	if m.Banner != "" {
+		return GuildMemberBannerURL(guildID, userID, m.Banner, format, size)
 	}
 	return ""
 }
 
-// Mention returns a Discord mention string for the member.
-func (m *FullMember) Mention() string {
-	return m.Member.Mention()
+// AvatarDecorationURL returns the URL to the member's avatar decoration image.
+func (m *PartialMember) AvatarDecorationURL() string {
+	if m.AvatarDecorationData != nil {
+		return AvatarDecorationURL(m.AvatarDecorationData.Asset, ImageSizeDefault)
+	}
+	return ""
 }
 
-// String implements the fmt.Stringer interface.
-func (m *FullMember) String() string {
-	return m.Mention()
+// AvatarDecorationURLWith returns the URL to the member's avatar decoration image with custom size.
+func (m *PartialMember) AvatarDecorationURLWith(size ImageSize) string {
+	if m.AvatarDecorationData != nil {
+		return AvatarDecorationURL(m.AvatarDecorationData.Asset, size)
+	}
+	return ""
 }
 
 var (
